@@ -1,0 +1,21 @@
+name = "ftops"
+compatibility_date = "2026-01-01"
+main = "src/index.ts"
+
+# D1 database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "ftops-db"
+database_id = "0df8f7bd-69a2-460d-809f-f92a3c634ea6"
+
+migrations_dir = "migrations"
+migrations_table = "d1_migrations"
+
+# Queue producer (HTTP → queue)
+[[queues.producers]]
+binding = "EVENT_QUEUE"
+queue = "ftops-events"
+
+# Queue consumer (queue → processing)
+[[queues.consumers]]
+queue = "ftops-events"

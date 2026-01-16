@@ -1,0 +1,34 @@
+{
+  "name": "ftops",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "cf:login": "wrangler login",
+    "cf:deploy": "wrangler deploy",
+    "db:execute": "wrangler d1 execute ftops-db --command",
+    "db:execute:remote": "wrangler d1 execute --remote ftops-db --command",
+    "db:migrations:create": "wrangler d1 migrations create ftops-db",
+    "db:migrations:list:local": "wrangler d1 migrations list ftops-db --local",
+    "db:migrations:list:remote": "wrangler d1 migrations list ftops-db --remote",
+    "db:migrate:local": "wrangler d1 migrations apply ftops-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply ftops-db --remote"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/noahpeters/ftops.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/noahpeters/ftops/issues"
+  },
+  "homepage": "https://github.com/noahpeters/ftops#readme",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260116.0",
+    "wrangler": "^4.59.2"
+  }
+}
