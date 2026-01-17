@@ -30,6 +30,28 @@ Plan preview (requires seeded data):
 curl -s "http://localhost:8787/plan/preview?record_uri=manual://proposal/demo"
 ```
 
+### CORS checks (local)
+
+Preflight:
+
+```sh
+curl -i -X OPTIONS "http://localhost:8787/plan/preview" \
+  -H "Origin: http://localhost:5173" \
+  -H "Access-Control-Request-Method: GET"
+```
+
+Actual request:
+
+```sh
+curl -i "http://localhost:8787/health" -H "Origin: http://localhost:5173"
+```
+
+Disallowed origin:
+
+```sh
+curl -i "http://localhost:8787/health" -H "Origin: https://evil.example"
+```
+
 ### Example seed SQL
 
 ```sql

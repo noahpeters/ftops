@@ -1,10 +1,16 @@
+import { corsPreflight, withCors } from "./lib/cors";
 import { route } from "./lib/router";
 import type { Env, EventQueuePayload } from "./lib/types";
 import { nowISO } from "./lib/utils";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    return route(request, env, ctx);
+    if (request.method === "OPTIONS") {
+      return corsPreflight(request);
+    }
+
+    const response = await route(request, env, ctx);
+    return withCors(request, response);
   },
 
   async queue(batch: MessageBatch<EventQueuePayload>, env: Env, _ctx: ExecutionContext) {

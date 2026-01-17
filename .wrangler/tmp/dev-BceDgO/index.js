@@ -1,6 +1,43 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
+// src/lib/cors.ts
+var ALLOWED_ORIGINS = /* @__PURE__ */ new Set(["https://ops.from-trees.com", "http://localhost:5173"]);
+function getCorsHeaders(request) {
+  const origin = request.headers.get("Origin");
+  if (!origin || !ALLOWED_ORIGINS.has(origin)) {
+    return {};
+  }
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "content-type",
+    Vary: "Origin"
+  };
+}
+__name(getCorsHeaders, "getCorsHeaders");
+function withCors(request, response) {
+  const corsHeaders = getCorsHeaders(request);
+  if (Object.keys(corsHeaders).length === 0) {
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(corsHeaders)) {
+    headers.set(key, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+__name(withCors, "withCors");
+function corsPreflight(request) {
+  return withCors(request, new Response(null, { status: 204 }));
+}
+__name(corsPreflight, "corsPreflight");
+
 // src/lib/http.ts
 var JSON_HEADERS = { "content-type": "application/json" };
 function json(data, status = 200, headers = {}) {
@@ -557,7 +594,11 @@ __name(routesRoot, "routesRoot");
 // src/index.ts
 var src_default = {
   async fetch(request, env, ctx) {
-    return route(request, env, ctx);
+    if (request.method === "OPTIONS") {
+      return corsPreflight(request);
+    }
+    const response = await route(request, env, ctx);
+    return withCors(request, response);
   },
   async queue(batch, env, _ctx) {
     for (const msg of batch.messages) {
