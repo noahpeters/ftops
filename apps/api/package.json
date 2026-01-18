@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "wrangler dev",
-    "gen:migrations": "node scripts/generate-migrations-manifest.ts",
+    "gen:migrations": "node scripts/generate-migrations-manifest.js",
     "prebuild": "npm run gen:migrations",
     "build": "wrangler build",
     "test": "vitest run -c vitest.unit.config.ts",
