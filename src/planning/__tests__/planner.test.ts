@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { derivePlan } from "../planner";
+import { derivePlanWithTemplates } from "../planner";
 import type { PlanInput } from "../types";
+import type { TemplateConfig, TemplateRow } from "../../config/templatesRepo";
 
 describe("derivePlan", () => {
   it("builds deterministic groups and candidates", () => {
@@ -58,10 +59,123 @@ describe("derivePlan", () => {
       ],
     };
 
-    const preview = derivePlan(planInput, {
-      workspace_config_version: "v0",
-      samples_default_group: "project",
-    });
+    const baseTemplate: Omit<TemplateRow, "key" | "title" | "scope"> = {
+      id: "id",
+      workspace_id: "default",
+      category_key: null,
+      deliverable_key: null,
+      is_active: 1,
+      created_at: "now",
+      updated_at: "now",
+    };
+
+    const templateConfig: TemplateConfig = {
+      templatesByKey: new Map([
+        [
+          "core.project.intake",
+          { ...baseTemplate, key: "core.project.intake", title: "Intake", scope: "project" },
+        ],
+        [
+          "core.shared.samples",
+          { ...baseTemplate, key: "core.shared.samples", title: "Samples", scope: "shared" },
+        ],
+        [
+          "core.shared.install_planning",
+          {
+            ...baseTemplate,
+            key: "core.shared.install_planning",
+            title: "Install Planning",
+            scope: "shared",
+          },
+        ],
+        [
+          "furniture.dining_table.base",
+          {
+            ...baseTemplate,
+            key: "furniture.dining_table.base",
+            title: "Base",
+            scope: "deliverable",
+            category_key: "furniture",
+            deliverable_key: "dining_table",
+          },
+        ],
+        [
+          "furniture.dining_table.design",
+          {
+            ...baseTemplate,
+            key: "furniture.dining_table.design",
+            title: "Design",
+            scope: "deliverable",
+            category_key: "furniture",
+            deliverable_key: "dining_table",
+          },
+        ],
+      ]),
+      rules: [
+        {
+          id: "r1",
+          template_key: "core.project.intake",
+          priority: 100,
+          match: { attach_to: "project" },
+          match_json: '{"attach_to":"project"}',
+        },
+        {
+          id: "r2",
+          template_key: "core.shared.samples",
+          priority: 90,
+          match: {
+            attach_to: "shared",
+            flags_any: ["requiresSamples"],
+            group_key_present: true,
+          },
+          match_json:
+            '{"attach_to":"shared","flags_any":["requiresSamples"],"group_key_present":true}',
+        },
+        {
+          id: "r3",
+          template_key: "core.shared.install_planning",
+          priority: 70,
+          match: { attach_to: "shared", flags_any: ["installRequired"] },
+          match_json: '{"attach_to":"shared","flags_any":["installRequired"]}',
+        },
+        {
+          id: "r4",
+          template_key: "furniture.dining_table.base",
+          priority: 60,
+          match: {
+            attach_to: "deliverable",
+            category_key: "furniture",
+            deliverable_key: "dining_table",
+          },
+          match_json:
+            '{"attach_to":"deliverable","category_key":"furniture","deliverable_key":"dining_table"}',
+        },
+        {
+          id: "r5",
+          template_key: "furniture.dining_table.design",
+          priority: 50,
+          match: {
+            attach_to: "deliverable",
+            category_key: "furniture",
+            deliverable_key: "dining_table",
+            flags_any: ["requiresDesign"],
+          },
+          match_json:
+            '{"attach_to":"deliverable","category_key":"furniture","deliverable_key":"dining_table","flags_any":["requiresDesign"]}',
+        },
+      ],
+      warnings: [],
+    };
+
+    const preview = derivePlanWithTemplates(
+      planInput,
+      {
+        workspace_id: "default",
+        workspace_config_version: "v0",
+        samples_default_group: "project",
+      },
+      templateConfig
+    );
 
     const groupIds = preview.groups.map((group) => group.id);
     expect(groupIds).toEqual([
@@ -81,10 +195,13 @@ describe("derivePlan", () => {
     const sharedGroup = preview.groups.find(
       (group) => group.id === "shared::record://1::kitchen"
     );
-    expect(sharedGroup?.template_candidates).toEqual(["core.shared.samples"]);
+    expect(sharedGroup?.template_candidates).toEqual([
+      "core.shared.samples",
+      "core.shared.install_planning",
+    ]);
 
     const projectGroup = preview.groups.find((group) => group.kind === "project");
     expect(projectGroup?.template_candidates).toContain("core.project.intake");
-    expect(projectGroup?.template_candidates).toContain("core.shared.install_planning");
+    expect(projectGroup?.template_candidates).not.toContain("core.shared.install_planning");
   });
 });

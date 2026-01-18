@@ -30,6 +30,39 @@ Plan preview (requires seeded data):
 curl -s "http://localhost:8787/plan/preview?record_uri=manual://proposal/demo"
 ```
 
+### Commercial record ingestion (local)
+
+```sh
+curl -s -X POST http://localhost:8787/events/test \
+  -H 'content-type: application/json' \
+  -d '{"source":"manual","type":"commercial_record_upserted","externalId":"demo-1","payload":{"record":{"uri":"manual://proposal/demo-1","kind":"proposal","customer":{"display":"Jane Smith"},"commitments":{"quotedDeliveryDate":"2026-03-15","quotedInstallDate":"2026-03-20"},"currency":"USD"},"line_items":[{"uri":"manual://proposal/demo-1/line/table","title":"Ash Dining Table","category_key":"furniture","deliverable_key":"dining_table","quantity":1,"position":1,"config":{"requiresDesign":true}}]}}'
+```
+
+```sql
+SELECT * FROM commercial_records ORDER BY updated_at DESC;
+SELECT * FROM commercial_line_items WHERE record_uri = 'manual://proposal/demo-1';
+```
+
+Templates CRUD:
+
+```sh
+curl -s -X POST http://localhost:8787/templates \\
+  -H 'content-type: application/json' \\
+  -d '{\"key\":\"custom.project.example\",\"title\":\"Example\",\"scope\":\"project\",\"is_active\":true}'
+
+curl -s -X POST http://localhost:8787/templates/custom.project.example/rules \\
+  -H 'content-type: application/json' \\
+  -d '{\"priority\":100,\"match_json\":{\"attach_to\":\"project\"},\"is_active\":true}'
+
+curl -s -X PUT http://localhost:8787/templates/custom.project.example/steps \\
+  -H 'content-type: application/json' \\
+  -d '{\"steps\":[{\"step_key\":\"step_one\",\"title\":\"Step one\",\"kind\":\"task\",\"is_active\":true}]}'
+
+curl -s -X DELETE http://localhost:8787/templates/custom.project.example/rules/<RULE_ID>
+
+curl -s -X DELETE http://localhost:8787/templates/custom.project.example
+```
+
 ### CORS checks (local)
 
 Preflight:

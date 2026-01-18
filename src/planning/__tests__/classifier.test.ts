@@ -36,7 +36,7 @@ describe("classifyLineItem", () => {
         updated_at: "now",
       },
       registries,
-      { workspace_config_version: "v0", samples_default_group: "project" }
+      { workspace_id: "default", workspace_config_version: "v0", samples_default_group: "project" }
     );
 
     expect(result.flags.requiresDesign).toBe(false);
@@ -78,7 +78,7 @@ describe("classifyLineItem", () => {
         updated_at: "now",
       },
       mismatchRegistries,
-      { workspace_config_version: "v0", samples_default_group: "project" }
+      { workspace_id: "default", workspace_config_version: "v0", samples_default_group: "project" }
     );
 
     expect(result.warnings.join("|")).toContain("deliverable category mismatch");

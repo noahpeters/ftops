@@ -96,7 +96,7 @@ export async function getPlanPreview(
     line_items: planLineItems,
   };
 
-  const planPreview = derivePlan(planInput, config);
+  const planPreview = await derivePlan(planInput, config, env);
   if (planPreview.warnings.length > 0) {
     warnings.push(...planPreview.warnings);
   }

@@ -1,4 +1,5 @@
 export type WorkspaceConfig = {
+  workspace_id: string;
   workspace_config_version: string;
   samples_default_group: "project" | "shared";
 };
@@ -69,6 +70,7 @@ export type PlanGroup = {
   title?: string;
   line_item_uris: string[];
   template_candidates: string[];
+  template_candidate_details?: { key: string; title: string }[];
   warnings: string[];
 };
 
