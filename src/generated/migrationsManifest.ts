@@ -14,7 +14,7 @@ export const MIGRATIONS = [
   "0011_create_tasks_materializations.sql",
   "0012_create_task_notes.sql",
   "0013_create_ingest_requests.sql",
-  "0014_workspaces_integrations.sql",
+  "0014_workspaces_integrations.sql"
 ] as const;
 export const LATEST_MIGRATION = "0014_workspaces_integrations.sql";
 export const MIGRATIONS_COUNT = 15;
