@@ -6,6 +6,7 @@ import { handlePlan } from "../routes/plan";
 import { handleProjects } from "../routes/projects";
 import { handleTemplates } from "../routes/templates";
 import { handleCommercialRecords } from "../routes/commercialRecords";
+import { handleTasks } from "../routes/tasks";
 
 export type SegmentHandler = (
   segments: string[],
@@ -69,6 +70,7 @@ async function routesRoot(
       plan: handlePlan,
       templates: handleTemplates,
       "commercial-records": handleCommercialRecords,
+      tasks: handleTasks,
     },
     () => notFound("Route not found")
   );

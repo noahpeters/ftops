@@ -9,6 +9,8 @@ function makeEnv(data: {
   lineItems: unknown[];
   categories: unknown[];
   deliverables: unknown[];
+  templates?: unknown[];
+  rules?: unknown[];
 }): Env {
   const db = {
     prepare(sql: string) {
@@ -22,6 +24,12 @@ function makeEnv(data: {
           }
           if (sql.includes("FROM commercial_line_items")) {
             return { results: data.lineItems };
+          }
+          if (sql.includes("FROM templates")) {
+            return { results: data.templates ?? [] };
+          }
+          if (sql.includes("FROM template_rules")) {
+            return { results: data.rules ?? [] };
           }
           return { results: [] };
         },

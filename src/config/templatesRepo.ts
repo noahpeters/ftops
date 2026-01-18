@@ -460,6 +460,33 @@ export async function loadTemplateConfig(
   };
 }
 
+export async function loadTemplateConfigRows(
+  env: Env,
+  workspaceId = DEFAULT_WORKSPACE_ID
+) {
+  const templatesResult = await env.DB.prepare(
+    `SELECT id, workspace_id, key, title, kind, scope, category_key, deliverable_key,
+            default_state_json, default_position, is_active, created_at, updated_at
+     FROM templates
+     WHERE workspace_id = ? AND is_active = 1`
+  )
+    .bind(workspaceId)
+    .all<TemplateRow>();
+
+  const rulesResult = await env.DB.prepare(
+    `SELECT id, workspace_id, template_key, priority, match_json, is_active, created_at, updated_at
+     FROM template_rules
+     WHERE workspace_id = ? AND is_active = 1`
+  )
+    .bind(workspaceId)
+    .all<TemplateRuleRow>();
+
+  return {
+    templates: (templatesResult.results ?? []) as TemplateRow[],
+    rules: (rulesResult.results ?? []) as TemplateRuleRow[],
+  };
+}
+
 async function getRuleById(
   env: Env,
   templateKey: string,

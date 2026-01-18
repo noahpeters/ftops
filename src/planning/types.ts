@@ -150,6 +150,7 @@ export type PlanPreviewMatchedTemplate = {
   title: string | null;
   kind: string;
   default_position: number | null;
+  default_state_json?: string | null;
   rulePriority: number;
   ruleId: string;
 };

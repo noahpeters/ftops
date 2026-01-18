@@ -9,8 +9,8 @@ export function getCorsHeaders(request: Request): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "content-type",
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
+    "Access-Control-Allow-Headers": "content-type,x-debug-user-email",
     Vary: "Origin",
   };
 }

@@ -11,7 +11,8 @@ export const MIGRATIONS = [
   "0008_create_templates.sql",
   "0009_seed_templates.sql",
   "0010_update_templates_projects.sql",
-  "0011_create_tasks_materializations.sql"
+  "0011_create_tasks_materializations.sql",
+  "0012_create_task_notes.sql"
 ] as const;
-export const LATEST_MIGRATION = "0011_create_tasks_materializations.sql";
-export const MIGRATIONS_COUNT = 12;
+export const LATEST_MIGRATION = "0012_create_task_notes.sql";
+export const MIGRATIONS_COUNT = 13;
