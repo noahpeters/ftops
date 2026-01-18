@@ -1,7 +1,6 @@
-node_modules/
-dist/
-coverage/
-.wrangler/
+node_modules
+dist
+.DS_Store
 .terraform/
 **/.terraform/
 *.tfstate

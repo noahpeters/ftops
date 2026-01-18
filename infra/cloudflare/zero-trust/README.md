@@ -3,7 +3,8 @@
 This directory codifies Access configuration for:
 
 - api.from-trees.com (Access application)
-- shared Access policy used by api.from-trees.com and ops.from-trees.com
+- ops.from-trees.com (Access application)
+- shared Access policy used by both apps
 
 ## Authenticate
 
@@ -28,11 +29,9 @@ terraform init
 terraform fmt
 terraform validate
 terraform plan \
-  -var "account_id=YOUR_ACCOUNT_ID" \
-  -var "environment=prod"
+  -var "account_id=YOUR_ACCOUNT_ID"
 terraform apply \
-  -var "account_id=YOUR_ACCOUNT_ID" \
-  -var "environment=prod"
+  -var "account_id=YOUR_ACCOUNT_ID"
 ```
 
 ## Discovery
@@ -41,6 +40,7 @@ To inspect the current Access configuration:
 
 ```sh
 node tools/discover-access.mjs --host api.from-trees.com
+node tools/discover-access.mjs --host ops.from-trees.com
 ```
 
 Add `--out ./.discovery.json` to save a local report.
@@ -59,6 +59,7 @@ Terraform 1.5+ supports import blocks (see `imports.tf`). Run `terraform plan` o
 
 ```sh
 terraform import cloudflare_zero_trust_access_application.api 125d8016e23830dcaf86de127ce90576/9cbec375-71cf-48f0-b4c6-e93760644d13
+terraform import cloudflare_zero_trust_access_application.ops 125d8016e23830dcaf86de127ce90576/2ff0566a-c5d5-4b3a-871a-222203a7ef73
 terraform import cloudflare_zero_trust_access_policy.admin account/125d8016e23830dcaf86de127ce90576/26d82360-264b-4102-84ea-690dfe3411f8
 ```
 
