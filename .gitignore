@@ -141,3 +141,7 @@ vite.config.ts.timestamp-*
 # Wrangler dev artifacts
 .wrangler/
 .wrangler/*
+.terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.*
