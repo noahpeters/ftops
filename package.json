@@ -22,6 +22,9 @@
     "pre-commit": "npm run fmt:check",
     "pre-push": "npm run verify"
   },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.55.1"
+  },
   "devDependencies": {
     "concurrently": "^9.2.0",
     "simple-git-hooks": "^2.10.0"
