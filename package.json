@@ -16,11 +16,12 @@
     "deploy": "npm run deploy:api && npm run deploy:ui",
     "deploy:api": "npm --workspace apps/api run deploy",
     "deploy:ui": "npm --workspace apps/ui run deploy",
+    "check:remote-migrations": "node scripts/check-remote-migrations.cjs",
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
     "pre-commit": "npm run fmt:check",
-    "pre-push": "npm run verify"
+    "pre-push": "npm run verify && npm run check:remote-migrations"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "4.55.1"

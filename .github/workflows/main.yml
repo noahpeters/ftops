@@ -39,6 +39,8 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
+      - name: Check remote migrations
+        run: npm run check:remote-migrations
       - name: Deploy API
         run: npm run deploy:api
 
