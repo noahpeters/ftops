@@ -84,9 +84,89 @@ export type PlanPreview = {
   warnings: string[];
 };
 
+export type PlanPreviewContextProject = {
+  type: "project";
+  key: string;
+  record_uri: string;
+  customer_display: string | null;
+  quoted_delivery_date: string | null;
+  quoted_install_date: string | null;
+  snapshot_hash: string;
+};
+
+export type PlanPreviewContextDeliverable = {
+  type: "deliverable";
+  key: string;
+  record_uri: string;
+  line_item_uri: string;
+  title: string | null;
+  category_key: string;
+  deliverable_key: string;
+  group_key: string | null;
+  quantity: number;
+  position: number;
+  config: Record<string, unknown> | null;
+  config_hash: string | null;
+  configParseError?: string;
+};
+
+export type PlanPreviewContextShared = {
+  type: "shared";
+  key: string;
+  record_uri: string;
+  group_key: string;
+  line_items: Array<{
+    line_item_uri: string;
+    title: string | null;
+    category_key: string;
+    deliverable_key: string;
+    position: number;
+  }>;
+  derived: {
+    requiresSamples: boolean;
+    installRequired: boolean;
+    deliveryRequired: boolean;
+  };
+};
+
+export type PlanPreviewContexts = {
+  project: PlanPreviewContextProject;
+  shared: PlanPreviewContextShared[];
+  deliverables: PlanPreviewContextDeliverable[];
+};
+
+export type PlanPreviewMatch = {
+  contextType: "project" | "shared" | "deliverable";
+  contextKey: string;
+  templateKey: string;
+  rule: {
+    id: string;
+    priority: number;
+  };
+};
+
+export type PlanPreviewMatchedTemplate = {
+  templateKey: string;
+  title: string | null;
+  kind: string;
+  default_position: number | null;
+  rulePriority: number;
+  ruleId: string;
+};
+
 export type PlanPreviewResponse = {
   plan_input: PlanInput;
   plan_preview: PlanPreview;
+  record: {
+    uri: string;
+    customer_display: string | null;
+    quoted_delivery_date: string | null;
+    quoted_install_date: string | null;
+    snapshot_hash: string;
+  };
+  contexts: PlanPreviewContexts;
+  matches: PlanPreviewMatch[];
+  matchedTemplatesByContext: Record<string, PlanPreviewMatchedTemplate[]>;
   versions: {
     workspace_config_version: string;
     classifier_version: string;
