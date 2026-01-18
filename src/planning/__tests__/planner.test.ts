@@ -62,8 +62,11 @@ describe("derivePlan", () => {
     const baseTemplate: Omit<TemplateRow, "key" | "title" | "scope"> = {
       id: "id",
       workspace_id: "default",
+      kind: "task",
       category_key: null,
       deliverable_key: null,
+      default_state_json: null,
+      default_position: null,
       is_active: 1,
       created_at: "now",
       updated_at: "now",

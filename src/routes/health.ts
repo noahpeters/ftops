@@ -1,10 +1,11 @@
 import { json, methodNotAllowed, notFound } from "../lib/http";
 import type { Env } from "../lib/types";
+import { getMigrationStatus } from "../lib/migrationStatus";
 
 export async function handleHealth(
   segments: string[],
   request: Request,
-  _env: Env,
+  env: Env,
   _ctx: ExecutionContext,
   _url: URL
 ) {
@@ -16,5 +17,16 @@ export async function handleHealth(
     return methodNotAllowed(["GET"]);
   }
 
-  return json({ status: "ok" });
+  const migrations = await getMigrationStatus(env);
+  return json({
+    status: "ok",
+    migrations: {
+      ok: migrations.ok,
+      appliedLatest: migrations.appliedLatest,
+      expectedLatest: migrations.expectedLatest,
+      missingCount: migrations.missingCount,
+      missing: migrations.missing,
+      checkedAt: migrations.checkedAt,
+    },
+  });
 }

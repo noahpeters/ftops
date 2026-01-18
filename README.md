@@ -1,5 +1,69 @@
 # ftops
 
+## Dev Workflow Cheat Sheet
+
+One-time setup:
+
+```sh
+npm install
+```
+
+Git hooks are installed automatically via `npm run prepare` (runs on install).
+
+Daily loop:
+
+```sh
+wrangler dev
+```
+
+Migrations:
+
+```sh
+npm run gen:migrations
+npm run db:migrations:create
+npm run db:migrations:list:local
+npm run db:migrations:list:remote
+npm run db:migrate:local
+npm run db:migrate:remote
+```
+
+Tests:
+
+```sh
+npm run test:unit
+npm run test:int
+npm run test:watch
+npm run tidy
+npm run verify
+```
+
+Deploy (guarded):
+
+```sh
+npm run deploy
+npm run deploy:dev
+npm run deploy:prod
+```
+
+Deploy (unsafe, skips tests):
+
+```sh
+npm run deploy:unsafe
+```
+
+DB execute:
+
+```sh
+npm run db:execute -- "<SQL>"
+npm run db:execute:remote -- "<SQL>"
+```
+
+Migration manifest:
+
+- `src/generated/migrationsManifest.ts` is generated from `migrations/*.sql`.
+- It runs automatically via `prebuild` and `pretest` hooks.
+- Unit tests fail if it is stale; run `npm run gen:migrations`.
+
 ## Local testing
 
 Health:
@@ -53,10 +117,6 @@ curl -s -X POST http://localhost:8787/templates \\
 curl -s -X POST http://localhost:8787/templates/custom.project.example/rules \\
   -H 'content-type: application/json' \\
   -d '{\"priority\":100,\"match_json\":{\"attach_to\":\"project\"},\"is_active\":true}'
-
-curl -s -X PUT http://localhost:8787/templates/custom.project.example/steps \\
-  -H 'content-type: application/json' \\
-  -d '{\"steps\":[{\"step_key\":\"step_one\",\"title\":\"Step one\",\"kind\":\"task\",\"is_active\":true}]}'
 
 curl -s -X DELETE http://localhost:8787/templates/custom.project.example/rules/<RULE_ID>
 

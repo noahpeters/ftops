@@ -7,7 +7,6 @@ import {
   deleteTemplate,
   getTemplateDetailByKey,
   listTemplates,
-  replaceSteps,
   updateRule,
   updateTemplate,
 } from "../config/templatesRepo";
@@ -16,13 +15,17 @@ import { parseJsonInput, stableStringify } from "../lib/jsonStable";
 const TEMPLATE_KEY_RE = /^[a-z0-9]+(\.[a-z0-9_]+)+$/;
 const VALID_SCOPES = new Set(["project", "shared", "deliverable"] as const);
 const VALID_ATTACH_TO = new Set(["project", "shared", "deliverable"] as const);
+const VALID_TEMPLATE_KINDS = new Set(["task", "checklist", "milestone"] as const);
 
 type TemplateBody = {
   key?: string;
   title?: string;
+  kind?: "task" | "checklist" | "milestone";
   scope?: "project" | "shared" | "deliverable";
   category_key?: string | null;
   deliverable_key?: string | null;
+  default_state_json?: unknown;
+  default_position?: number | null;
   is_active?: boolean | number;
 };
 
@@ -30,17 +33,6 @@ type RuleBody = {
   priority?: number;
   match_json?: unknown;
   is_active?: boolean | number;
-};
-
-type StepsBody = {
-  steps?: Array<{
-    step_key?: string;
-    title?: string;
-    kind?: string;
-    is_active?: boolean | number;
-    default_state_json?: unknown;
-    position?: number;
-  }>;
 };
 
 export async function handleTemplates(
@@ -57,10 +49,13 @@ export async function handleTemplates(
         templates.map((template) => ({
           key: template.key,
           title: template.title,
+          kind: template.kind,
           scope: template.scope,
           is_active: template.is_active,
           category_key: template.category_key,
           deliverable_key: template.deliverable_key,
+          default_state_json: template.default_state_json,
+          default_position: template.default_position,
         }))
       );
     }
@@ -73,20 +68,30 @@ export async function handleTemplates(
 
       const key = body.key?.trim();
       const title = body.title?.trim();
+      const kind = body.kind ?? "task";
       const scope = body.scope;
       const categoryKey = normalizeNullable(body.category_key);
       const deliverableKey = normalizeNullable(body.deliverable_key);
+      const defaultStateJson = parseOptionalJson(body.default_state_json);
+      if (defaultStateJson.error) {
+        return badRequest("invalid_template", { details: "default_state_json_invalid" });
+      }
+      const defaultPosition = normalizeOptionalInt(body.default_position);
       const isActive = normalizeIsActive(body.is_active, true);
 
       const validationError = validateTemplateInput({
         key,
         title,
+        kind,
         scope,
         category_key: categoryKey,
         deliverable_key: deliverableKey,
       });
       if (validationError) {
         return badRequest("invalid_template", { details: validationError });
+      }
+      if (defaultPosition.error) {
+        return badRequest("invalid_template", { details: "default_position_invalid" });
       }
 
       const existing = await getTemplateDetailByKey(env, key!);
@@ -97,9 +102,12 @@ export async function handleTemplates(
       const detail = await createTemplate(env, {
         key: key!,
         title: title!,
+        kind,
         scope: scope!,
         category_key: categoryKey,
         deliverable_key: deliverableKey,
+        default_state_json: defaultStateJson.value,
+        default_position: defaultPosition.value ?? null,
         is_active: isActive,
       });
 
@@ -128,7 +136,6 @@ export async function handleTemplates(
             match: rule.match,
             match_json: rule.match_json,
           })),
-          steps: detail.steps,
         });
       }
 
@@ -138,8 +145,14 @@ export async function handleTemplates(
           return badRequest("invalid_json");
         }
 
+        const defaultStateJson = parseOptionalJson(body.default_state_json);
+        if (defaultStateJson.error) {
+          return badRequest("invalid_template", { details: "default_state_json_invalid" });
+        }
+        const defaultPosition = normalizeOptionalInt(body.default_position);
         const patch = {
           title: body.title?.trim(),
+          kind: body.kind,
           scope: body.scope,
           category_key:
             body.category_key !== undefined
@@ -149,6 +162,8 @@ export async function handleTemplates(
             body.deliverable_key !== undefined
               ? normalizeNullable(body.deliverable_key)
               : undefined,
+          default_state_json: defaultStateJson.value ?? undefined,
+          default_position: defaultPosition.value ?? undefined,
           is_active: normalizeIsActive(body.is_active, undefined),
         };
 
@@ -160,6 +175,7 @@ export async function handleTemplates(
         const validationError = validateTemplateInput({
           key: templateKey,
           title: patch.title ?? existing.template.title,
+          kind: patch.kind ?? existing.template.kind,
           scope: patch.scope ?? existing.template.scope,
           category_key:
             patch.category_key !== undefined
@@ -172,6 +188,9 @@ export async function handleTemplates(
         });
         if (validationError) {
           return badRequest("invalid_template", { details: validationError });
+        }
+        if (defaultPosition.error) {
+          return badRequest("invalid_template", { details: "default_position_invalid" });
         }
 
         const detail = await updateTemplate(env, templateKey, patch);
@@ -276,63 +295,7 @@ export async function handleTemplates(
     }
 
     if (next === "steps") {
-      if (segments.length !== 2) {
-        return notFound("Route not found");
-      }
-
-      if (request.method !== "PUT") {
-        return methodNotAllowed(["PUT"]);
-      }
-
-      const body = await readJsonBody<StepsBody>(request);
-      if (!body) {
-        return badRequest("invalid_json");
-      }
-
-      if (!Array.isArray(body.steps)) {
-        return badRequest("invalid_steps", { details: "steps_required" });
-      }
-
-      const template = await getTemplateDetailByKey(env, templateKey);
-      if (!template) {
-        return notFound("Template not found");
-      }
-
-      const steps = [] as Parameters<typeof replaceSteps>[2];
-      for (let index = 0; index < body.steps.length; index += 1) {
-        const step = body.steps[index];
-        const stepKey = step.step_key?.trim();
-        const title = step.title?.trim();
-        const kind = step.kind?.trim();
-        if (!stepKey || !title || !kind) {
-          return badRequest("invalid_steps", { details: `step_${index}` });
-        }
-
-        let defaultStateJson: string | null = null;
-        if (step.default_state_json !== undefined && step.default_state_json !== null) {
-          try {
-            const parsed = parseJsonInput(step.default_state_json);
-            defaultStateJson = stableStringify(parsed);
-          } catch (error) {
-            return badRequest("invalid_steps", {
-              details: `step_${index}_default_state_json`,
-            });
-          }
-        }
-
-        steps.push({
-          position:
-            typeof step.position === "number" ? step.position : index + 1,
-          step_key: stepKey,
-          title,
-          kind,
-          default_state_json: defaultStateJson,
-          is_active: normalizeIsActive(step.is_active, true),
-        });
-      }
-
-      const inserted = await replaceSteps(env, templateKey, steps);
-      return json({ steps: inserted });
+      return json({ error: "steps_deprecated" }, 410);
     }
 
     return notFound("Route not found");
@@ -367,9 +330,41 @@ function normalizeNullable(value: string | null | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
+function parseOptionalJson(value: unknown): {
+  value: string | null | undefined;
+  error: boolean;
+} {
+  if (value === undefined) {
+    return { value: undefined, error: false };
+  }
+  if (value === null) {
+    return { value: null, error: false };
+  }
+  try {
+    const parsed = parseJsonInput(value);
+    if (parsed === null || parsed === undefined) {
+      return { value: null, error: false };
+    }
+    return { value: stableStringify(parsed), error: false };
+  } catch {
+    return { value: undefined, error: true };
+  }
+}
+
+function normalizeOptionalInt(value: number | null | undefined): {
+  value: number | null | undefined;
+  error: boolean;
+} {
+  if (value === undefined) return { value: undefined, error: false };
+  if (value === null) return { value: null, error: false };
+  if (Number.isInteger(value)) return { value, error: false };
+  return { value: undefined, error: true };
+}
+
 function validateTemplateInput(input: {
   key?: string;
   title?: string;
+  kind?: string;
   scope?: string;
   category_key?: string | null;
   deliverable_key?: string | null;
@@ -379,6 +374,9 @@ function validateTemplateInput(input: {
   }
   if (!input.title) {
     return "title_required";
+  }
+  if (!input.kind || !VALID_TEMPLATE_KINDS.has(input.kind as never)) {
+    return "invalid_kind";
   }
   if (!input.scope || !VALID_SCOPES.has(input.scope as never)) {
     return "invalid_scope";

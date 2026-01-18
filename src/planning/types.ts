@@ -70,7 +70,12 @@ export type PlanGroup = {
   title?: string;
   line_item_uris: string[];
   template_candidates: string[];
-  template_candidate_details?: { key: string; title: string }[];
+  template_candidate_details?: {
+    key: string;
+    title: string;
+    kind: string;
+    default_position: number | null;
+  }[];
   warnings: string[];
 };
 

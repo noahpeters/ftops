@@ -124,7 +124,12 @@ function addCandidate(group: PlanGroup, key: string, templateConfig: TemplateCon
     if (!group.template_candidate_details) {
       group.template_candidate_details = [];
     }
-    group.template_candidate_details.push({ key, title: template.title });
+    group.template_candidate_details.push({
+      key,
+      title: template.title,
+      kind: template.kind,
+      default_position: template.default_position ?? null,
+    });
   }
 }
 

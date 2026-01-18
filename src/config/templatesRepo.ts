@@ -6,9 +6,12 @@ export type TemplateRow = {
   workspace_id: string;
   key: string;
   title: string;
+  kind: "task" | "checklist" | "milestone";
   scope: "project" | "shared" | "deliverable";
   category_key: string | null;
   deliverable_key: string | null;
+  default_state_json: string | null;
+  default_position: number | null;
   is_active: number;
   created_at: string;
   updated_at: string;
@@ -20,20 +23,6 @@ export type TemplateRuleRow = {
   template_key: string;
   priority: number;
   match_json: string;
-  is_active: number;
-  created_at: string;
-  updated_at: string;
-};
-
-export type TemplateStepRow = {
-  id: string;
-  workspace_id: string;
-  template_key: string;
-  position: number;
-  step_key: string;
-  title: string;
-  kind: string;
-  default_state_json: string | null;
   is_active: number;
   created_at: string;
   updated_at: string;
@@ -67,17 +56,23 @@ export type TemplateConfig = {
 export type TemplateCreateInput = {
   key: string;
   title: string;
+  kind: "task" | "checklist" | "milestone";
   scope: "project" | "shared" | "deliverable";
   category_key: string | null;
   deliverable_key: string | null;
+  default_state_json: string | null;
+  default_position: number | null;
   is_active: number;
 };
 
 export type TemplateUpdatePatch = {
   title?: string;
+  kind?: "task" | "checklist" | "milestone";
   scope?: "project" | "shared" | "deliverable";
   category_key?: string | null;
   deliverable_key?: string | null;
+  default_state_json?: string | null;
+  default_position?: number | null;
   is_active?: number;
 };
 
@@ -93,15 +88,6 @@ export type RuleUpdatePatch = {
   is_active?: number;
 };
 
-export type StepInsertInput = {
-  position: number;
-  step_key: string;
-  title: string;
-  kind: string;
-  default_state_json: string | null;
-  is_active: number;
-};
-
 const DEFAULT_WORKSPACE_ID = "default";
 
 export function getDefaultWorkspaceId() {
@@ -110,8 +96,8 @@ export function getDefaultWorkspaceId() {
 
 export async function listTemplates(env: Env, workspaceId = DEFAULT_WORKSPACE_ID) {
   const result = await env.DB.prepare(
-    `SELECT id, workspace_id, key, title, scope, category_key, deliverable_key, is_active,
-            created_at, updated_at
+    `SELECT id, workspace_id, key, title, kind, scope, category_key, deliverable_key,
+            default_state_json, default_position, is_active, created_at, updated_at
      FROM templates
      WHERE workspace_id = ?
      ORDER BY key`
@@ -128,8 +114,8 @@ export async function getTemplateDetailByKey(
   workspaceId = DEFAULT_WORKSPACE_ID
 ) {
   const template = await env.DB.prepare(
-    `SELECT id, workspace_id, key, title, scope, category_key, deliverable_key, is_active,
-            created_at, updated_at
+    `SELECT id, workspace_id, key, title, kind, scope, category_key, deliverable_key,
+            default_state_json, default_position, is_active, created_at, updated_at
      FROM templates
      WHERE workspace_id = ? AND key = ?`
   )
@@ -149,22 +135,12 @@ export async function getTemplateDetailByKey(
     .bind(workspaceId, templateKey)
     .all<TemplateRuleRow>();
 
-  const stepsResult = await env.DB.prepare(
-    `SELECT id, workspace_id, template_key, position, step_key, title, kind, default_state_json,
-            is_active, created_at, updated_at
-     FROM template_steps
-     WHERE workspace_id = ? AND template_key = ?
-     ORDER BY position ASC, step_key ASC`
-  )
-    .bind(workspaceId, templateKey)
-    .all<TemplateStepRow>();
-
   const parsedRules = parseRules(rulesResult.results ?? []);
 
   return {
     template,
     rules: parsedRules.rules,
-    steps: (stepsResult.results ?? []) as TemplateStepRow[],
+    steps: [],
   };
 }
 
@@ -178,17 +154,21 @@ export async function createTemplate(
 
   await env.DB.prepare(
     `INSERT INTO templates
-      (id, workspace_id, key, title, scope, category_key, deliverable_key, is_active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      (id, workspace_id, key, title, kind, scope, category_key, deliverable_key,
+       default_state_json, default_position, is_active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
       workspaceId,
       input.key,
       input.title,
+      input.kind,
       input.scope,
       input.category_key,
       input.deliverable_key,
+      input.default_state_json,
+      input.default_position,
       input.is_active,
       now,
       now
@@ -213,8 +193,8 @@ export async function updateTemplate(
   workspaceId = DEFAULT_WORKSPACE_ID
 ) {
   const existing = await env.DB.prepare(
-    `SELECT id, workspace_id, key, title, scope, category_key, deliverable_key, is_active,
-            created_at, updated_at
+    `SELECT id, workspace_id, key, title, kind, scope, category_key, deliverable_key,
+            default_state_json, default_position, is_active, created_at, updated_at
      FROM templates
      WHERE workspace_id = ? AND key = ?`
   )
@@ -227,6 +207,7 @@ export async function updateTemplate(
 
   const next = {
     title: patch.title ?? existing.title,
+    kind: patch.kind ?? existing.kind,
     scope: patch.scope ?? existing.scope,
     category_key:
       patch.category_key !== undefined ? patch.category_key : existing.category_key,
@@ -234,6 +215,14 @@ export async function updateTemplate(
       patch.deliverable_key !== undefined
         ? patch.deliverable_key
         : existing.deliverable_key,
+    default_state_json:
+      patch.default_state_json !== undefined
+        ? patch.default_state_json
+        : existing.default_state_json,
+    default_position:
+      patch.default_position !== undefined
+        ? patch.default_position
+        : existing.default_position,
     is_active: patch.is_active ?? existing.is_active,
   };
 
@@ -241,14 +230,18 @@ export async function updateTemplate(
 
   await env.DB.prepare(
     `UPDATE templates
-     SET title = ?, scope = ?, category_key = ?, deliverable_key = ?, is_active = ?, updated_at = ?
+     SET title = ?, kind = ?, scope = ?, category_key = ?, deliverable_key = ?,
+         default_state_json = ?, default_position = ?, is_active = ?, updated_at = ?
      WHERE workspace_id = ? AND key = ?`
   )
     .bind(
       next.title,
+      next.kind,
       next.scope,
       next.category_key,
       next.deliverable_key,
+      next.default_state_json,
+      next.default_position,
       next.is_active,
       now,
       workspaceId,
@@ -281,12 +274,6 @@ export async function deleteTemplate(
   if (!existing) {
     return false;
   }
-
-  await env.DB.prepare(
-    `DELETE FROM template_steps WHERE workspace_id = ? AND template_key = ?`
-  )
-    .bind(workspaceId, templateKey)
-    .run();
 
   await env.DB.prepare(
     `DELETE FROM template_rules WHERE workspace_id = ? AND template_key = ?`
@@ -424,72 +411,13 @@ export async function deleteRule(
   return deleted;
 }
 
-export async function replaceSteps(
-  env: Env,
-  templateKey: string,
-  steps: StepInsertInput[],
-  workspaceId = DEFAULT_WORKSPACE_ID
-) {
-  await env.DB.prepare(
-    `DELETE FROM template_steps WHERE workspace_id = ? AND template_key = ?`
-  )
-    .bind(workspaceId, templateKey)
-    .run();
-
-  const now = nowISO();
-
-  for (const step of steps) {
-    await env.DB.prepare(
-      `INSERT INTO template_steps
-        (id, workspace_id, template_key, position, step_key, title, kind, default_state_json,
-         is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        crypto.randomUUID(),
-        workspaceId,
-        templateKey,
-        step.position,
-        step.step_key,
-        step.title,
-        step.kind,
-        step.default_state_json,
-        step.is_active,
-        now,
-        now
-      )
-      .run();
-  }
-
-  console.log(
-    JSON.stringify({
-      action: "template.steps.replace",
-      template_key: templateKey,
-      workspace_id: workspaceId,
-      count: steps.length,
-    })
-  );
-
-  const stepsResult = await env.DB.prepare(
-    `SELECT id, workspace_id, template_key, position, step_key, title, kind, default_state_json,
-            is_active, created_at, updated_at
-     FROM template_steps
-     WHERE workspace_id = ? AND template_key = ?
-     ORDER BY position ASC, step_key ASC`
-  )
-    .bind(workspaceId, templateKey)
-    .all<TemplateStepRow>();
-
-  return (stepsResult.results ?? []) as TemplateStepRow[];
-}
-
 export async function loadTemplateConfig(
   env: Env,
   workspaceId = DEFAULT_WORKSPACE_ID
 ): Promise<TemplateConfig> {
   const templatesResult = await env.DB.prepare(
-    `SELECT id, workspace_id, key, title, scope, category_key, deliverable_key, is_active,
-            created_at, updated_at
+    `SELECT id, workspace_id, key, title, kind, scope, category_key, deliverable_key,
+            default_state_json, default_position, is_active, created_at, updated_at
      FROM templates
      WHERE workspace_id = ? AND is_active = 1`
   )
