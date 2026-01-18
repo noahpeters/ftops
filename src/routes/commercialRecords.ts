@@ -58,7 +58,9 @@ async function listCommercialRecords(env: Env, url: URL) {
   binds.push(limit, offset);
 
   try {
-    const result = await env.DB.prepare(sql).bind(...binds).all();
+    const result = await env.DB.prepare(sql)
+      .bind(...binds)
+      .all();
     return json({
       records: result.results ?? [],
       limit,
@@ -82,9 +84,7 @@ async function getCommercialRecord(env: Env, encodedUri: string) {
   }
 
   try {
-    const record = await env.DB.prepare(
-      `SELECT * FROM commercial_records WHERE uri = ?`
-    )
+    const record = await env.DB.prepare(`SELECT * FROM commercial_records WHERE uri = ?`)
       .bind(uri)
       .first();
 
@@ -125,12 +125,7 @@ function clampNumber(value: number, min: number, max: number) {
 
 function isMissingCommercialSchema(error: unknown) {
   if (!error) return false;
-  const message =
-    typeof error === "string"
-      ? error
-      : error instanceof Error
-      ? error.message
-      : "";
+  const message = typeof error === "string" ? error : error instanceof Error ? error.message : "";
   return (
     message.includes("no such table: commercial_records") ||
     message.includes("no such table: commercial_line_items")

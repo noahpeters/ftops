@@ -6,8 +6,8 @@ import { MIGRATIONS } from "../../src/generated/migrationsManifest";
 function scanMigrations(dir: string) {
   return fs
     .readdirSync(dir)
-    .filter((name) => name.endsWith(".sql"))
-    .sort((a, b) => a.localeCompare(b));
+    .filter((name: string) => name.endsWith(".sql"))
+    .sort((a: string, b: string) => a.localeCompare(b));
 }
 
 describe("migrations manifest", () => {
@@ -15,9 +15,7 @@ describe("migrations manifest", () => {
     const migrationsDir = path.resolve(process.cwd(), "migrations");
     const expected = scanMigrations(migrationsDir);
     if (JSON.stringify(MIGRATIONS) !== JSON.stringify(expected)) {
-      throw new Error(
-        "migrations manifest out of date; run npm run gen:migrations"
-      );
+      throw new Error("migrations manifest out of date; run npm run gen:migrations");
     }
     expect(MIGRATIONS).toEqual(expected);
   });

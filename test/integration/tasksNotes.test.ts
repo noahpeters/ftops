@@ -44,10 +44,9 @@ async function createProjectFromRecord(env: unknown, recordUri: string) {
 }
 
 async function materialize(env: unknown, projectId: string) {
-  const request = new Request(
-    `http://localhost/projects/${projectId}/materialize`,
-    { method: "POST" }
-  );
+  const request = new Request(`http://localhost/projects/${projectId}/materialize`, {
+    method: "POST",
+  });
   return route(request, env as never, {} as ExecutionContext);
 }
 

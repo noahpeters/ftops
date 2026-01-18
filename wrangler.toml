@@ -19,3 +19,7 @@ queue = "ftops-events"
 # Queue consumer (queue → processing)
 [[queues.consumers]]
 queue = "ftops-events"
+
+[vars]
+INTEGRATIONS_KEY_ID = "v1"
+# INTEGRATIONS_MASTER_KEY should be set via `wrangler secret` or .dev.vars

@@ -9,8 +9,7 @@ export function getActorEmail(request: Request): string {
   }
 
   const debugEmail =
-    request.headers.get("X-Debug-User-Email") ??
-    request.headers.get("x-debug-user-email");
+    request.headers.get("X-Debug-User-Email") ?? request.headers.get("x-debug-user-email");
   if (debugEmail) {
     return debugEmail;
   }

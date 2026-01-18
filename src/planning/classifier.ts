@@ -61,10 +61,7 @@ export function classifyLineItem(
     if (!deliverableEntry.is_active) {
       warnings.push(`inactive deliverable_key: ${lineItem.deliverable_key}`);
     }
-    if (
-      deliverableEntry.category_key &&
-      deliverableEntry.category_key !== lineItem.category_key
-    ) {
+    if (deliverableEntry.category_key && deliverableEntry.category_key !== lineItem.category_key) {
       warnings.push(
         `deliverable category mismatch: ${lineItem.deliverable_key} -> ${deliverableEntry.category_key}`
       );
@@ -93,10 +90,7 @@ export function classifyLineItem(
   };
 }
 
-function safeParseConfig(
-  configJson: string,
-  warnings: string[]
-): Record<string, unknown> {
+function safeParseConfig(configJson: string, warnings: string[]): Record<string, unknown> {
   try {
     const parsed = JSON.parse(configJson);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
@@ -131,8 +125,6 @@ function extractFacts(config: Record<string, unknown>): ClassificationFacts {
     dimensions: (config.dimensions as string | undefined) ?? null,
     room: (config.room as string | undefined) ?? null,
     revisionLimit: (config.revisionLimit as number | undefined) ?? null,
-    deliverables: Array.isArray(config.deliverables)
-      ? (config.deliverables as string[])
-      : null,
+    deliverables: Array.isArray(config.deliverables) ? (config.deliverables as string[]) : null,
   };
 }

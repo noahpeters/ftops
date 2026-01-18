@@ -71,15 +71,11 @@ describe("commercial_record_upserted integration", () => {
     expect(record.snapshot_hash).toBeTruthy();
 
     const lineResult = await db
-      .prepare(
-        "SELECT * FROM commercial_line_items WHERE record_uri = ? ORDER BY position ASC"
-      )
+      .prepare("SELECT * FROM commercial_line_items WHERE record_uri = ? ORDER BY position ASC")
       .bind(baseMessage.payload.record.uri)
       .all();
     expect(lineResult.results?.length).toBe(2);
-    expect(lineResult.results?.[0]?.uri).toBe(
-      "manual://proposal/proposal-demo-001/line/table"
-    );
+    expect(lineResult.results?.[0]?.uri).toBe("manual://proposal/proposal-demo-001/line/table");
 
     await mf.dispose();
   });
@@ -196,9 +192,7 @@ describe("commercial_record_upserted integration", () => {
     expect(first?.snapshot_hash).not.toEqual(second?.snapshot_hash);
 
     const line = await db
-      .prepare(
-        "SELECT config_hash FROM commercial_line_items WHERE record_uri = ?"
-      )
+      .prepare("SELECT config_hash FROM commercial_line_items WHERE record_uri = ?")
       .bind("manual://proposal/proposal-demo-002")
       .first<{ config_hash: string }>();
     expect(line?.config_hash).toBeTruthy();
@@ -234,10 +228,7 @@ describe("commercial_record_upserted integration", () => {
     await processEventMessage(baseMessage, env);
 
     const encoded = encodeURIComponent(baseMessage.payload.record.uri);
-    const response = await dispatchRequest(
-      `http://localhost/commercial-records/${encoded}`,
-      env
-    );
+    const response = await dispatchRequest(`http://localhost/commercial-records/${encoded}`, env);
     const body = (await response.json()) as {
       record: Record<string, unknown>;
       line_items: unknown[];

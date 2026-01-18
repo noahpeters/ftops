@@ -35,13 +35,10 @@ export async function getMigrationStatus(env: Env): Promise<MigrationStatus> {
        ORDER BY name ASC`
     ).all<{ name: string }>();
 
-    const appliedNames = (appliedResult.results ?? [])
-      .map((row) => row.name)
-      .filter(Boolean);
+    const appliedNames = (appliedResult.results ?? []).map((row) => row.name).filter(Boolean);
     const appliedSet = new Set(appliedNames);
     const missing = MIGRATIONS.filter((name) => !appliedSet.has(name));
-    const appliedLatest =
-      appliedNames.length > 0 ? appliedNames[appliedNames.length - 1] : null;
+    const appliedLatest = appliedNames.length > 0 ? appliedNames[appliedNames.length - 1] : null;
     const ok = missing.length === 0;
     const status: MigrationStatus = {
       ok,
@@ -92,7 +89,6 @@ function getTtlMs() {
   const isDev =
     (globalThis as { __MINIFLARE__?: boolean }).__MINIFLARE__ ||
     (globalThis as { MINIFLARE?: boolean }).MINIFLARE ||
-    (globalThis as { location?: { hostname?: string } }).location?.hostname ===
-      "localhost";
+    (globalThis as { location?: { hostname?: string } }).location?.hostname === "localhost";
   return isDev ? 5_000 : 30_000;
 }

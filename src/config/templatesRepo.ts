@@ -209,20 +209,15 @@ export async function updateTemplate(
     title: patch.title ?? existing.title,
     kind: patch.kind ?? existing.kind,
     scope: patch.scope ?? existing.scope,
-    category_key:
-      patch.category_key !== undefined ? patch.category_key : existing.category_key,
+    category_key: patch.category_key !== undefined ? patch.category_key : existing.category_key,
     deliverable_key:
-      patch.deliverable_key !== undefined
-        ? patch.deliverable_key
-        : existing.deliverable_key,
+      patch.deliverable_key !== undefined ? patch.deliverable_key : existing.deliverable_key,
     default_state_json:
       patch.default_state_json !== undefined
         ? patch.default_state_json
         : existing.default_state_json,
     default_position:
-      patch.default_position !== undefined
-        ? patch.default_position
-        : existing.default_position,
+      patch.default_position !== undefined ? patch.default_position : existing.default_position,
     is_active: patch.is_active ?? existing.is_active,
   };
 
@@ -275,9 +270,7 @@ export async function deleteTemplate(
     return false;
   }
 
-  await env.DB.prepare(
-    `DELETE FROM template_rules WHERE workspace_id = ? AND template_key = ?`
-  )
+  await env.DB.prepare(`DELETE FROM template_rules WHERE workspace_id = ? AND template_key = ?`)
     .bind(workspaceId, templateKey)
     .run();
 
@@ -310,16 +303,7 @@ export async function createRule(
       (id, workspace_id, template_key, priority, match_json, is_active, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   )
-    .bind(
-      id,
-      workspaceId,
-      templateKey,
-      input.priority,
-      input.match_json,
-      input.is_active,
-      now,
-      now
-    )
+    .bind(id, workspaceId, templateKey, input.priority, input.match_json, input.is_active, now, now)
     .run();
 
   console.log(
@@ -359,15 +343,7 @@ export async function updateRule(
      SET priority = ?, match_json = ?, is_active = ?, updated_at = ?
      WHERE workspace_id = ? AND template_key = ? AND id = ?`
   )
-    .bind(
-      next.priority,
-      next.match_json,
-      next.is_active,
-      now,
-      workspaceId,
-      templateKey,
-      ruleId
-    )
+    .bind(next.priority, next.match_json, next.is_active, now, workspaceId, templateKey, ruleId)
     .run();
 
   console.log(
@@ -395,7 +371,7 @@ export async function deleteRule(
     .bind(workspaceId, templateKey, ruleId)
     .run();
 
-  const deleted = Boolean(result.success && result.changes && result.changes > 0);
+  const deleted = Boolean(result.success);
 
   if (deleted) {
     console.log(
@@ -438,9 +414,7 @@ export async function loadTemplateConfig(
   }
 
   const parsed = parseRules(rulesResult.results ?? []);
-  const activeRules = parsed.rules.filter((rule) =>
-    templatesByKey.has(rule.template_key)
-  );
+  const activeRules = parsed.rules.filter((rule) => templatesByKey.has(rule.template_key));
 
   activeRules.sort((a, b) => {
     if (b.priority !== a.priority) {
@@ -460,10 +434,7 @@ export async function loadTemplateConfig(
   };
 }
 
-export async function loadTemplateConfigRows(
-  env: Env,
-  workspaceId = DEFAULT_WORKSPACE_ID
-) {
+export async function loadTemplateConfigRows(env: Env, workspaceId = DEFAULT_WORKSPACE_ID) {
   const templatesResult = await env.DB.prepare(
     `SELECT id, workspace_id, key, title, kind, scope, category_key, deliverable_key,
             default_state_json, default_position, is_active, created_at, updated_at

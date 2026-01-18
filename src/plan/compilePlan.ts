@@ -95,16 +95,12 @@ export async function compilePlanForRecord(
     );
     if (classification.warnings.length > 0) {
       warnings.push(
-        ...classification.warnings.map(
-          (warning) => `line_item ${lineItem.uri}: ${warning}`
-        )
+        ...classification.warnings.map((warning) => `line_item ${lineItem.uri}: ${warning}`)
       );
     }
 
-    const categoryLabel =
-      registries.categories.get(lineItem.category_key)?.label ?? null;
-    const deliverableLabel =
-      registries.deliverables.get(lineItem.deliverable_key)?.label ?? null;
+    const categoryLabel = registries.categories.get(lineItem.category_key)?.label ?? null;
+    const deliverableLabel = registries.deliverables.get(lineItem.deliverable_key)?.label ?? null;
 
     return {
       uri: lineItem.uri,
@@ -146,12 +142,7 @@ export async function compilePlanForRecord(
     warnings.push(...planPreview.warnings);
   }
 
-  const contexts = buildContexts(
-    record,
-    lineItems,
-    planLineItems,
-    parsedConfigByUri
-  );
+  const contexts = buildContexts(record, lineItems, planLineItems, parsedConfigByUri);
   const { matches, matchedTemplatesByContext } = buildMatches(
     contexts,
     planLineItems,
@@ -367,9 +358,7 @@ function buildContexts(
     }
   }
 
-  const shared = Array.from(sharedByKey.values()).sort((a, b) =>
-    a.key.localeCompare(b.key)
-  );
+  const shared = Array.from(sharedByKey.values()).sort((a, b) => a.key.localeCompare(b.key));
 
   return {
     project: projectContext,

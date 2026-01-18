@@ -12,8 +12,6 @@ describe("stableStringify", () => {
 describe("sha256Hex", () => {
   it("hashes deterministically", async () => {
     const hash = await sha256Hex("hello");
-    expect(hash).toBe(
-      "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
-    );
+    expect(hash).toBe("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
   });
 });

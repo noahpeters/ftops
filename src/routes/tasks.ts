@@ -3,13 +3,7 @@ import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { getActorEmail } from "../lib/identity";
 
-const ALLOWED_STATUSES = new Set([
-  "todo",
-  "doing",
-  "blocked",
-  "done",
-  "canceled",
-]);
+const ALLOWED_STATUSES = new Set(["todo", "doing", "blocked", "done", "canceled"]);
 
 export async function handleTasks(
   segments: string[],
@@ -40,9 +34,7 @@ export async function handleTasks(
       return badRequest("missing_status");
     }
 
-    const existing = await env.DB.prepare("SELECT id FROM tasks WHERE id = ?")
-      .bind(taskId)
-      .first();
+    const existing = await env.DB.prepare("SELECT id FROM tasks WHERE id = ?").bind(taskId).first();
     if (!existing) {
       return notFound("Task not found");
     }
@@ -59,9 +51,7 @@ export async function handleTasks(
       return notFound("Task not found");
     }
 
-    const task = await env.DB.prepare("SELECT * FROM tasks WHERE id = ?")
-      .bind(taskId)
-      .first();
+    const task = await env.DB.prepare("SELECT * FROM tasks WHERE id = ?").bind(taskId).first();
 
     return json(task);
   }
@@ -92,9 +82,7 @@ export async function handleTasks(
         return badRequest("missing_body");
       }
 
-      const workspaceRow = await env.DB.prepare(
-        "SELECT workspace_id FROM tasks WHERE id = ?"
-      )
+      const workspaceRow = await env.DB.prepare("SELECT workspace_id FROM tasks WHERE id = ?")
         .bind(taskId)
         .first<{ workspace_id: string }>();
 

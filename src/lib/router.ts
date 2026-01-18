@@ -7,6 +7,9 @@ import { handleProjects } from "../routes/projects";
 import { handleTemplates } from "../routes/templates";
 import { handleCommercialRecords } from "../routes/commercialRecords";
 import { handleTasks } from "../routes/tasks";
+import { handleIngest } from "../routes/ingest";
+import { handleWorkspaces } from "../routes/workspaces";
+import { handleIntegrations } from "../routes/integrations";
 
 export type SegmentHandler = (
   segments: string[],
@@ -14,7 +17,7 @@ export type SegmentHandler = (
   env: Env,
   ctx: ExecutionContext,
   url: URL
-) => Promise<Response>;
+) => Response | Promise<Response>;
 
 export async function route(request: Request, env: Env, ctx: ExecutionContext) {
   const url = new URL(request.url);
@@ -37,17 +40,17 @@ export async function handleSegment(
   fallback: SegmentHandler
 ) {
   if (segments.length === 0) {
-    return fallback(segments, request, env, ctx, url);
+    return await fallback(segments, request, env, ctx, url);
   }
 
   const [head, ...tail] = segments;
   const handler = handlers[head];
 
   if (!handler) {
-    return fallback(tail, request, env, ctx, url);
+    return await fallback(tail, request, env, ctx, url);
   }
 
-  return handler(tail, request, env, ctx, url);
+  return await handler(tail, request, env, ctx, url);
 }
 
 async function routesRoot(
@@ -71,6 +74,9 @@ async function routesRoot(
       templates: handleTemplates,
       "commercial-records": handleCommercialRecords,
       tasks: handleTasks,
+      ingest: handleIngest,
+      workspaces: handleWorkspaces,
+      integrations: handleIntegrations,
     },
     () => notFound("Route not found")
   );

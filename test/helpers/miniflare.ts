@@ -8,7 +8,7 @@ import { route } from "../../src/lib/router";
 
 const migrationsDir = join(process.cwd(), "migrations");
 
-export async function createTestEnv() {
+export async function createTestEnv(options?: { env?: Record<string, unknown> }) {
   const canListen = await canListenOnLocalhost();
   if (!canListen) {
     return null;
@@ -24,12 +24,11 @@ export async function createTestEnv() {
     const db = await mf.getD1Database("DB");
     await runMigrations(db);
 
-    const env = { DB: db } as unknown as Env;
+    const env = { DB: db, ...(options?.env ?? {}) } as unknown as Env;
 
     return { mf, db, env };
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : String(error ?? "");
+    const message = error instanceof Error ? error.message : String(error ?? "");
     if (message.includes("listen EPERM") || message.includes("EACCES")) {
       return null;
     }
@@ -44,7 +43,7 @@ export async function dispatchRequest(url: string, env: Env) {
 
 async function runMigrations(db: D1Database) {
   const files = readdirSync(migrationsDir)
-    .filter((file) => file.endsWith(".sql"))
+    .filter((file: string) => file.endsWith(".sql"))
     .sort();
 
   for (const file of files) {

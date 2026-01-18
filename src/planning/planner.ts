@@ -3,7 +3,13 @@ import { loadTemplateConfig } from "../config/templatesRepo";
 import type { TemplateConfig } from "../config/templatesRepo";
 import { matchRule } from "./ruleMatcher";
 import type { GroupContext } from "./ruleMatcher";
-import type { ClassificationFlags, PlanGroup, PlanInput, PlanPreview, WorkspaceConfig } from "./types";
+import type {
+  ClassificationFlags,
+  PlanGroup,
+  PlanInput,
+  PlanPreview,
+  WorkspaceConfig,
+} from "./types";
 
 export const plannerVersion = "v1";
 
@@ -66,7 +72,6 @@ export function derivePlanWithTemplates(
       });
       sharedGroup.line_item_uris.push(lineItem.uri);
     }
-
   }
 
   const lineItemByUri = new Map(planInput.line_items.map((item) => [item.uri, item]));
@@ -88,9 +93,7 @@ export function derivePlanWithTemplates(
     }
   }
 
-  const sortedGroups = Array.from(groups.values()).sort((a, b) =>
-    a.id.localeCompare(b.id)
-  );
+  const sortedGroups = Array.from(groups.values()).sort((a, b) => a.id.localeCompare(b.id));
 
   for (const group of sortedGroups) {
     group.line_item_uris = Array.from(new Set(group.line_item_uris)).sort();
@@ -133,10 +136,7 @@ function addCandidate(group: PlanGroup, key: string, templateConfig: TemplateCon
   }
 }
 
-function buildGroupContext(
-  group: PlanGroup,
-  lineItems: PlanInput["line_items"]
-): GroupContext {
+function buildGroupContext(group: PlanGroup, lineItems: PlanInput["line_items"]): GroupContext {
   const flags = mergeFlags(lineItems.map((item) => item.classification.flags));
   const quantityTotal = lineItems.reduce((total, item) => total + item.quantity, 0);
   const groupKeyPresent = group.kind === "shared";

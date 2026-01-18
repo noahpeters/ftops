@@ -187,17 +187,13 @@ describe("derivePlan", () => {
       "shared::record://1::kitchen",
     ]);
 
-    const deliverableGroup = preview.groups.find(
-      (group) => group.id === "deliverable::line://a"
-    );
+    const deliverableGroup = preview.groups.find((group) => group.id === "deliverable::line://a");
     expect(deliverableGroup?.template_candidates).toEqual([
       "furniture.dining_table.base",
       "furniture.dining_table.design",
     ]);
 
-    const sharedGroup = preview.groups.find(
-      (group) => group.id === "shared::record://1::kitchen"
-    );
+    const sharedGroup = preview.groups.find((group) => group.id === "shared::record://1::kitchen");
     expect(sharedGroup?.template_candidates).toEqual([
       "core.shared.samples",
       "core.shared.install_planning",

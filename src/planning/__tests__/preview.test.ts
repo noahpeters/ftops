@@ -62,9 +62,7 @@ describe("getPlanPreview", () => {
       deliverables: [],
     });
 
-    await expect(getPlanPreview(env, "missing://record")).rejects.toBeInstanceOf(
-      NotFoundError
-    );
+    await expect(getPlanPreview(env, "missing://record")).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("returns a deterministic preview payload", async () => {

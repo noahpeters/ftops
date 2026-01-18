@@ -85,9 +85,7 @@ export async function processCommercialRecordUpserted(
       .run();
   }
 
-  await env.DB.prepare(
-    `DELETE FROM commercial_line_items WHERE record_uri = ?`
-  )
+  await env.DB.prepare(`DELETE FROM commercial_line_items WHERE record_uri = ?`)
     .bind(normalized.recordRow.uri)
     .run();
 
@@ -130,10 +128,6 @@ export async function processCommercialRecordUpserted(
   );
 }
 
-export function deriveLineItemUri(
-  recordUri: string,
-  itemUri: string | undefined,
-  index: number
-) {
+export function deriveLineItemUri(recordUri: string, itemUri: string | undefined, index: number) {
   return itemUri ?? `${recordUri}/line/${index + 1}`;
 }

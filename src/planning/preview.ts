@@ -7,10 +7,7 @@ import { compilePlanForRecord } from "../plan/compilePlan";
 
 export class NotFoundError extends Error {}
 
-export async function getPlanPreview(
-  env: Env,
-  recordUri: string
-): Promise<PlanPreviewResponse> {
+export async function getPlanPreview(env: Env, recordUri: string): Promise<PlanPreviewResponse> {
   let compiled;
   try {
     compiled = await compilePlanForRecord(env, {

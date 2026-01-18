@@ -13,9 +13,7 @@ export async function handleProjects(
 ) {
   if (segments.length === 0) {
     if (request.method === "GET") {
-      const result = await env.DB.prepare(
-        "SELECT * FROM projects ORDER BY created_at DESC"
-      ).all();
+      const result = await env.DB.prepare("SELECT * FROM projects ORDER BY created_at DESC").all();
 
       return json(result.results);
     }
@@ -78,8 +76,7 @@ export async function handleProjects(
     }
 
     const title =
-      body.title?.trim() ||
-      `${record.customer_display ?? "Customer"} — ${shorten(recordUri)}`;
+      body.title?.trim() || `${record.customer_display ?? "Customer"} — ${shorten(recordUri)}`;
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
 
@@ -90,21 +87,10 @@ export async function handleProjects(
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `
     )
-      .bind(
-        id,
-        title,
-        "commercial",
-        "intake",
-        workspaceId,
-        recordUri,
-        now,
-        now
-      )
+      .bind(id, title, "commercial", "intake", workspaceId, recordUri, now, now)
       .run();
 
-    const project = await env.DB.prepare("SELECT * FROM projects WHERE id = ?")
-      .bind(id)
-      .first();
+    const project = await env.DB.prepare("SELECT * FROM projects WHERE id = ?").bind(id).first();
 
     return json({ ok: true, project, created: true });
   }
@@ -156,11 +142,7 @@ export async function handleProjects(
     return json(result.results ?? []);
   }
 
-  if (
-    segments.length === 2 &&
-    segments[1] === "materialize" &&
-    request.method === "POST"
-  ) {
+  if (segments.length === 2 && segments[1] === "materialize" && request.method === "POST") {
     const projectId = segments[0];
     const project = await env.DB.prepare("SELECT * FROM projects WHERE id = ?")
       .bind(projectId)
@@ -170,8 +152,7 @@ export async function handleProjects(
       return notFound("Project not found");
     }
 
-    const recordUri = (project as { commercial_record_uri?: string | null })
-      .commercial_record_uri;
+    const recordUri = (project as { commercial_record_uri?: string | null }).commercial_record_uri;
     if (!recordUri) {
       return badRequest("project_missing_commercial_record_uri");
     }
@@ -190,7 +171,7 @@ export async function handleProjects(
         workspaceId: (project as { workspace_id?: string | null }).workspace_id ?? "default",
         recordUri,
       });
-    } catch (error) {
+    } catch {
       return badRequest("commercial_record_not_found");
     }
 
@@ -200,8 +181,7 @@ export async function handleProjects(
 
     const tasksPreview = buildTasksPreview(compiled);
 
-    const workspaceId =
-      (project as { workspace_id?: string | null }).workspace_id ?? "default";
+    const workspaceId = (project as { workspace_id?: string | null }).workspace_id ?? "default";
 
     const existingMaterialization = await env.DB.prepare(
       `SELECT id FROM project_materializations
@@ -309,7 +289,7 @@ export async function handleProjects(
         )
           .bind(debugJson, debugHash, new Date().toISOString(), projectId)
           .run();
-      } catch (error) {
+      } catch {
         return serverError("Failed to materialize tasks");
       }
 
@@ -366,9 +346,7 @@ function buildTasksPreview(compiled: Awaited<ReturnType<typeof compilePlanForRec
   const tasks: TaskPreview[] = [];
   const matched = compiled.matchedTemplatesByContext;
 
-  const projectMatches = dedupeMatches(
-    matched[`project::${compiled.record.uri}`] ?? []
-  );
+  const projectMatches = dedupeMatches(matched[`project::${compiled.record.uri}`] ?? []);
   tasks.push(
     ...buildTasksForContext({
       scope: "project",
@@ -393,9 +371,7 @@ function buildTasksPreview(compiled: Awaited<ReturnType<typeof compilePlanForRec
   }
 
   for (const deliverable of compiled.contexts.deliverables) {
-    const matchesForDeliverable = dedupeMatches(
-      matched[`deliverable::${deliverable.key}`] ?? []
-    );
+    const matchesForDeliverable = dedupeMatches(matched[`deliverable::${deliverable.key}`] ?? []);
     tasks.push(
       ...buildTasksForContext({
         scope: "deliverable",
@@ -425,8 +401,7 @@ function buildTasksForContext(args: {
     ruleId: string;
   }>;
 }): TaskPreview[] {
-  const base =
-    args.scope === "project" ? 1000 : args.scope === "shared" ? 2000 : 3000;
+  const base = args.scope === "project" ? 1000 : args.scope === "shared" ? 2000 : 3000;
   const lineItemOffset = args.lineItemPosition * 10;
 
   const sorted = [...args.matches].sort((a, b) => {

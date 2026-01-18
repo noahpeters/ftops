@@ -77,7 +77,7 @@ export async function handleTemplates(
         return badRequest("invalid_template", { details: "default_state_json_invalid" });
       }
       const defaultPosition = normalizeOptionalInt(body.default_position);
-      const isActive = normalizeIsActive(body.is_active, true);
+      const isActive = normalizeIsActive(body.is_active, true) ?? 1;
 
       const validationError = validateTemplateInput({
         key,
@@ -106,7 +106,7 @@ export async function handleTemplates(
         scope: scope!,
         category_key: categoryKey,
         deliverable_key: deliverableKey,
-        default_state_json: defaultStateJson.value,
+        default_state_json: defaultStateJson.value ?? null,
         default_position: defaultPosition.value ?? null,
         is_active: isActive,
       });
@@ -155,15 +155,14 @@ export async function handleTemplates(
           kind: body.kind,
           scope: body.scope,
           category_key:
-            body.category_key !== undefined
-              ? normalizeNullable(body.category_key)
-              : undefined,
+            body.category_key !== undefined ? normalizeNullable(body.category_key) : undefined,
           deliverable_key:
             body.deliverable_key !== undefined
               ? normalizeNullable(body.deliverable_key)
               : undefined,
-          default_state_json: defaultStateJson.value ?? undefined,
-          default_position: defaultPosition.value ?? undefined,
+          default_state_json:
+            defaultStateJson.value === undefined ? undefined : defaultStateJson.value,
+          default_position: defaultPosition.value === undefined ? undefined : defaultPosition.value,
           is_active: normalizeIsActive(body.is_active, undefined),
         };
 
@@ -178,9 +177,7 @@ export async function handleTemplates(
           kind: patch.kind ?? existing.template.kind,
           scope: patch.scope ?? existing.template.scope,
           category_key:
-            patch.category_key !== undefined
-              ? patch.category_key
-              : existing.template.category_key,
+            patch.category_key !== undefined ? patch.category_key : existing.template.category_key,
           deliverable_key:
             patch.deliverable_key !== undefined
               ? patch.deliverable_key
@@ -224,7 +221,7 @@ export async function handleTemplates(
         }
 
         const priority = body.priority;
-        const isActive = normalizeIsActive(body.is_active, true);
+        const isActive = normalizeIsActive(body.is_active, true) ?? 1;
         if (typeof priority !== "number") {
           return badRequest("invalid_rule", { details: "priority_required" });
         }
@@ -389,9 +386,9 @@ function validateTemplateInput(input: {
   return null;
 }
 
-function parseMatchJson(value: unknown):
-  | { ok: true; matchJson: string }
-  | { ok: false; error: string } {
+function parseMatchJson(
+  value: unknown
+): { ok: true; matchJson: string } | { ok: false; error: string } {
   try {
     const parsed = parseJsonInput(value);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {

@@ -2,10 +2,7 @@ import type { Env, EventQueuePayload } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { processCommercialRecordUpserted } from "./commercialRecordUpserted";
 
-export async function processEventMessage(
-  msg: EventQueuePayload,
-  env: Env
-): Promise<void> {
+export async function processEventMessage(msg: EventQueuePayload, env: Env): Promise<void> {
   const now = nowISO();
   const eventId = crypto.randomUUID();
 

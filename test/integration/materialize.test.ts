@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { processEventMessage } from "../../src/processors/eventProcessor";
 import { createTestEnv } from "../helpers/miniflare";
 import { route } from "../../src/lib/router";
-import type { ExecutionContext } from "@cloudflare/workers-types";
+import type { D1Database, ExecutionContext } from "@cloudflare/workers-types";
 
 const baseMessage = {
   source: "manual",
@@ -49,11 +49,7 @@ const baseMessage = {
   },
 };
 
-async function createProject(
-  db: { prepare: (sql: string) => { bind: (...args: unknown[]) => { run: () => Promise<void> } } },
-  projectId: string,
-  recordUri: string
-) {
+async function createProject(db: D1Database, projectId: string, recordUri: string) {
   const now = "2026-01-17T00:00:00.000Z";
   await db
     .prepare(
@@ -74,11 +70,7 @@ async function createProject(
     .run();
 }
 
-async function materialize(
-  env: unknown,
-  projectId: string,
-  body?: Record<string, unknown>
-) {
+async function materialize(env: unknown, projectId: string, body?: Record<string, unknown>) {
   const request = new Request(`http://localhost/projects/${projectId}/materialize`, {
     method: "POST",
     headers: body ? { "content-type": "application/json" } : undefined,
@@ -113,9 +105,7 @@ describe("materialize tasks integration", () => {
     expect(task.status).toBe("todo");
 
     const materializedResult = await db
-      .prepare(
-        "SELECT * FROM project_materializations WHERE project_id = ? AND workspace_id = ?"
-      )
+      .prepare("SELECT * FROM project_materializations WHERE project_id = ? AND workspace_id = ?")
       .bind(projectId, "default")
       .all();
     expect(materializedResult.results?.length).toBe(1);

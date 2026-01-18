@@ -3,9 +3,7 @@ import { classifyLineItem } from "../classifier";
 import type { Registries } from "../classifier";
 
 const registries: Registries = {
-  categories: new Map([
-    ["furniture", { key: "furniture", label: "Furniture", is_active: 1 }],
-  ]),
+  categories: new Map([["furniture", { key: "furniture", label: "Furniture", is_active: 1 }]]),
   deliverables: new Map([
     [
       "dining_table",
@@ -47,9 +45,7 @@ describe("classifyLineItem", () => {
 
   it("warns when deliverable category mismatches", () => {
     const mismatchRegistries: Registries = {
-      categories: new Map([
-        ["furniture", { key: "furniture", label: "Furniture", is_active: 1 }],
-      ]),
+      categories: new Map([["furniture", { key: "furniture", label: "Furniture", is_active: 1 }]]),
       deliverables: new Map([
         [
           "cabinet_run",

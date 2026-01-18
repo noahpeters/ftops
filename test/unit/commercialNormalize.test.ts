@@ -39,9 +39,7 @@ describe("normalizeCommercialUpsert", () => {
 
     expect(result.recordUri).toBe("manual://proposal/demo-123");
     expect(result.lineItemRows).toHaveLength(1);
-    expect(result.lineItemRows[0]?.uri).toBe(
-      "manual://proposal/demo-123/line/1"
-    );
+    expect(result.lineItemRows[0]?.uri).toBe("manual://proposal/demo-123/line/1");
     expect(result.recordRow.quoted_delivery_date).toBe("2026-03-15");
     expect(result.recordRow.quoted_install_date).toBe("2026-03-20");
 
