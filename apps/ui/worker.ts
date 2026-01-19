@@ -1,4 +1,9 @@
 import { createRequestHandler } from "@react-router/cloudflare";
+import { handleApiProxyRequest } from "./src/worker/apiProxy";
+
+type Env = {
+  API?: Fetcher;
+};
 
 let handlerPromise: Promise<ReturnType<typeof createRequestHandler>> | null = null;
 
@@ -32,8 +37,11 @@ async function getHandler() {
 }
 
 export default {
-  async fetch(request: Request, env: Record<string, unknown>, ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     try {
+      if (new URL(request.url).pathname.startsWith("/api/")) {
+        return await handleApiProxyRequest(request, env);
+      }
       const handler = await getHandler();
       return await handler({
         request,

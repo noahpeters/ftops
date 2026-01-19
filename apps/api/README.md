@@ -45,6 +45,11 @@ npm run deploy:dev
 npm run deploy:prod
 ```
 
+Production notes:
+
+- This worker is internal-only (service binding). Disable the `workers.dev` route in the
+  Cloudflare dashboard and ensure no public routes are configured for `api.from-trees.com/*`.
+
 Deploy (unsafe, skips tests):
 
 ```sh

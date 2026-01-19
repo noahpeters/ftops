@@ -1,6 +1,11 @@
 name = "ftops"
 compatibility_date = "2026-01-01"
 main = "src/index.ts"
+workers_dev = false
+
+[dev]
+inspector_port = 9230
+port = 8787
 
 # D1 database binding
 [[d1_databases]]

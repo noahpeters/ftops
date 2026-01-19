@@ -14,10 +14,14 @@ export function setDebugEmailHeader(value: string): void {
 }
 
 export function getApiBase(): string {
-  if (import.meta.env.DEV) {
-    return import.meta.env.VITE_FTOPS_API_BASE_URL || "http://localhost:8787";
+  const override = import.meta.env.VITE_FTOPS_API_BASE_URL;
+  if (override) {
+    return override;
   }
-  return import.meta.env.VITE_FTOPS_API_BASE_URL || "https://api.from-trees.com";
+  if (import.meta.env.DEV) {
+    return "http://localhost:8787";
+  }
+  return "/api";
 }
 
 export function buildUrl(
@@ -26,7 +30,7 @@ export function buildUrl(
 ): string {
   const base = getApiBase().replace(/\/$/, "");
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = new URL(`${base}${normalizedPath}`);
+  const url = new URL(`${base}${normalizedPath}`, "http://local");
 
   if (params) {
     for (const [key, value] of Object.entries(params)) {
@@ -35,7 +39,10 @@ export function buildUrl(
     }
   }
 
-  return url.toString();
+  if (base.startsWith("http")) {
+    return url.toString();
+  }
+  return `${url.pathname}${url.search}`;
 }
 
 export async function fetchJson<T>(

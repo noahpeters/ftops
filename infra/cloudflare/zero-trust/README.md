@@ -2,9 +2,8 @@
 
 This directory codifies Access configuration for:
 
-- api.from-trees.com (Access application)
 - ops.from-trees.com (Access application)
-- shared Access policy used by both apps
+- shared Access policy used by the app
 
 ## Authenticate
 
@@ -39,7 +38,6 @@ terraform apply \
 To inspect the current Access configuration:
 
 ```sh
-node tools/discover-access.mjs --host api.from-trees.com
 node tools/discover-access.mjs --host ops.from-trees.com
 ```
 
@@ -58,7 +56,6 @@ node tools/state-audit.mjs
 Terraform 1.5+ supports import blocks (see `imports.tf`). Run `terraform plan` or `terraform apply` to execute the imports. If you prefer manual imports, use:
 
 ```sh
-terraform import cloudflare_zero_trust_access_application.api 125d8016e23830dcaf86de127ce90576/9cbec375-71cf-48f0-b4c6-e93760644d13
 terraform import cloudflare_zero_trust_access_application.ops 125d8016e23830dcaf86de127ce90576/2ff0566a-c5d5-4b3a-871a-222203a7ef73
 terraform import cloudflare_zero_trust_access_policy.admin account/125d8016e23830dcaf86de127ce90576/26d82360-264b-4102-84ea-690dfe3411f8
 ```

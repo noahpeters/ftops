@@ -24,7 +24,7 @@ for (let i = 0; i < args.length; i += 1) {
   }
 }
 
-const defaultHosts = ["api.from-trees.com", "ops.from-trees.com"];
+const defaultHosts = ["ops.from-trees.com"];
 const targetHosts = hosts.length > 0 ? hosts : defaultHosts;
 
 const apiToken = process.env.CLOUDFLARE_API_TOKEN;

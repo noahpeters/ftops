@@ -2,6 +2,11 @@ name = "ftops-webhooks"
 compatibility_date = "2026-01-01"
 main = "src/index.ts"
 
+routes = [
+  { pattern = "api.from-trees.com/ingest/shopify/webhook*", zone_name = "from-trees.com" },
+  { pattern = "api.from-trees.com/ingest/qbo/webhook*", zone_name = "from-trees.com" }
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "ftops-db"
@@ -18,3 +23,6 @@ invocation_logs = true
 
 [vars]
 INTEGRATIONS_KEY_ID = "v1"
+
+[dev]
+port = 8788

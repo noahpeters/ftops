@@ -3,6 +3,14 @@ compatibility_date = "2026-01-01"
 compatibility_flags = ["nodejs_compat"]
 main = "worker.ts"
 
+routes = [
+  { pattern = "ops.from-trees.com/*", zone_name = "from-trees.com" }
+]
+
+[[services]]
+binding = "API"
+service = "ftops"
+
 [assets]
 directory = "./build/client"
 

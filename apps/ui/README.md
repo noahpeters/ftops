@@ -12,13 +12,14 @@ npm run dev
 ## Configure API base URL
 
 Set `VITE_FTOPS_API_BASE_URL` before running `npm run dev` or `npm run build`.
+In production, the UI defaults to the internal `/api` proxy on `ops.from-trees.com`.
 
 ```bash
 # Local API (default)
 VITE_FTOPS_API_BASE_URL=http://localhost:8787 npm run dev
 
-# Production API
-VITE_FTOPS_API_BASE_URL=https://api.from-trees.com npm run dev
+# Production API (optional override)
+VITE_FTOPS_API_BASE_URL=/api npm run dev
 ```
 
 ## Dev identity (local auth bypass)
