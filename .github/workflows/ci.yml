@@ -18,9 +18,7 @@ jobs:
           node-version: 20
           cache: npm
       - name: Use npm 10
-        run: |
-          corepack enable
-          corepack prepare npm@10.5.0 --activate
+        run: npm install -g npm@10.5.0
       - name: Install
         run: npm ci
       - name: Verify
