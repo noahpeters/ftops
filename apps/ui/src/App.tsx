@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { NavLink, Outlet, useNavigate, useParams } from "react-router";
 import stylex from "~/lib/stylex";
 import { colors, spacing, radius } from "./theme/tokens.stylex";
 import { buildUrl, fetchJson } from "./lib/api";
@@ -19,7 +28,6 @@ import { WorkspacesPanel } from "./features/workspaces/WorkspacesPanel";
 
 const EXAMPLE_URIS = ["manual://proposal/demo", "shopify://order/example", "qbo://invoice/example"];
 
-const TAB_STORAGE_KEY = "ftops-ui:tab";
 const RECORD_URI_STORAGE_KEY = "ftops-ui:record-uri";
 const AUTO_RUN_STORAGE_KEY = "ftops-ui:auto-run-preview";
 const DEBUG_EMAIL_STORAGE_KEY = "ftops-ui:debug-email";
@@ -216,11 +224,65 @@ type EventsTestState = {
   error?: string;
 };
 
+type AppContextValue = {
+  recordUri: string;
+  setRecordUri: (value: string) => void;
+  autoRunOnSelect: boolean;
+  setAutoRunOnSelect: (value: boolean) => void;
+  previewState: PlanPreviewState;
+  previewLoading: boolean;
+  materializeMessage: string | null;
+  materializeLoading: boolean;
+  runPreview: (nextUri?: string) => Promise<void>;
+  materializeTasks: () => Promise<void>;
+  previewUrl: string;
+  planId?: string;
+  warnings?: string[];
+  contextLookup: Record<string, { title?: string | null }>;
+  eventsState: EventsState;
+  eventsLoading: boolean;
+  refreshEvents: () => Promise<void>;
+  expandedRowIndex: number | null;
+  setExpandedRowIndex: (value: number | null) => void;
+  events: unknown[];
+  testSource: string;
+  setTestSource: (value: string) => void;
+  testType: string;
+  setTestType: (value: string) => void;
+  testExternalId: string;
+  setTestExternalId: (value: string) => void;
+  testPayload: string;
+  setTestPayload: (value: string) => void;
+  testState: EventsTestState;
+  testLoading: boolean;
+  runEventsTest: () => Promise<void>;
+  idempotencyKey?: string;
+  copyToClipboard: (label: string, value: string) => Promise<void>;
+  selectedProjectId: string | null;
+  setSelectedProjectId: (value: string | null) => void;
+  debugEmail: string;
+  setDebugEmail: (value: string) => void;
+  workspaces: WorkspaceRow[];
+  workspaceLoading: boolean;
+  selectedWorkspaceId: string | null;
+  setSelectedWorkspaceId: (value: string | null) => void;
+};
+
+const AppContext = createContext<AppContextValue | null>(null);
+
+export function useAppState(): AppContextValue {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error("useAppState must be used within AppContext provider.");
+  }
+  return context;
+}
+
 const canUseStorage = () =>
   typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 
 export default function App(): JSX.Element {
-  const [activeTab, setActiveTab] = useState<string>("preview");
+  const navigate = useNavigate();
 
   const [recordUri, setRecordUri] = useState<string>("");
   const [autoRunOnSelect, setAutoRunOnSelect] = useState<boolean>(true);
@@ -249,7 +311,6 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     if (!canUseStorage()) return;
-    setActiveTab(localStorage.getItem(TAB_STORAGE_KEY) || "preview");
     setRecordUri(localStorage.getItem(RECORD_URI_STORAGE_KEY) || "");
     const storedAutoRun = localStorage.getItem(AUTO_RUN_STORAGE_KEY);
     setAutoRunOnSelect(storedAutoRun ? storedAutoRun === "true" : true);
@@ -257,10 +318,6 @@ export default function App(): JSX.Element {
     setDebugEmail(localStorage.getItem(DEBUG_EMAIL_STORAGE_KEY) || "");
     setSelectedWorkspaceId(localStorage.getItem(WORKSPACE_STORAGE_KEY));
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(TAB_STORAGE_KEY, activeTab);
-  }, [activeTab]);
 
   useEffect(() => {
     localStorage.setItem(RECORD_URI_STORAGE_KEY, recordUri);
@@ -402,7 +459,7 @@ export default function App(): JSX.Element {
           : `Created ${tasksCreated} tasks.`
       );
       setSelectedProjectId(projectId);
-      setActiveTab("projects");
+      navigate("/projects");
     } catch (error) {
       setMaterializeMessage(error instanceof Error ? error.message : "Materialize failed.");
     } finally {
@@ -524,459 +581,644 @@ export default function App(): JSX.Element {
     }
   }
 
+  const appContextValue: AppContextValue = {
+    recordUri,
+    setRecordUri,
+    autoRunOnSelect,
+    setAutoRunOnSelect,
+    previewState,
+    previewLoading,
+    materializeMessage,
+    materializeLoading,
+    runPreview,
+    materializeTasks,
+    previewUrl,
+    planId,
+    warnings,
+    contextLookup,
+    eventsState,
+    eventsLoading,
+    refreshEvents,
+    expandedRowIndex,
+    setExpandedRowIndex,
+    events,
+    testSource,
+    setTestSource,
+    testType,
+    setTestType,
+    testExternalId,
+    setTestExternalId,
+    testPayload,
+    setTestPayload,
+    testState,
+    testLoading,
+    runEventsTest,
+    idempotencyKey,
+    copyToClipboard,
+    selectedProjectId,
+    setSelectedProjectId,
+    debugEmail,
+    setDebugEmail,
+    workspaces,
+    workspaceLoading,
+    selectedWorkspaceId,
+    setSelectedWorkspaceId,
+  };
+
   return (
-    <div className={stylex(styles.app)}>
-      <header className={stylex(styles.appHeader)}>
-        <div>
-          <h1>ftops internal UI</h1>
-          <p>Plan preview + events viewer for ftops endpoints.</p>
-        </div>
-        <div className={stylex(styles.headerControls)}>
-          <div className={stylex(styles.workspaceSelect)}>
-            <label htmlFor="workspace-select">Workspace</label>
-            <select
-              id="workspace-select"
-              value={selectedWorkspaceId ?? ""}
-              onChange={(event) => setSelectedWorkspaceId(event.target.value)}
-              disabled={workspaceLoading}
-            >
-              {workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name}
-                </option>
-              ))}
-            </select>
+    <AppContext.Provider value={appContextValue}>
+      <div className={stylex(styles.app)}>
+        <header className={stylex(styles.appHeader)}>
+          <div>
+            <h1>ftops internal UI</h1>
+            <p>Plan preview + events viewer for ftops endpoints.</p>
           </div>
-          {import.meta.env.DEV && (
-            <div className={stylex(styles.devIdentity)}>
-              <label htmlFor="debug-email">Dev identity</label>
-              <input
-                id="debug-email"
-                type="email"
-                placeholder="you@example.com"
-                value={debugEmail}
-                onChange={(event) => setDebugEmail(event.target.value)}
-              />
+          <div className={stylex(styles.headerControls)}>
+            <div className={stylex(styles.workspaceSelect)}>
+              <label htmlFor="workspace-select">Workspace</label>
+              <select
+                id="workspace-select"
+                value={selectedWorkspaceId ?? ""}
+                onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+                disabled={workspaceLoading}
+              >
+                {workspaces.map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspace.name}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
-        </div>
-      </header>
-      <DevMigrationBanner />
+            {import.meta.env.DEV && (
+              <div className={stylex(styles.devIdentity)}>
+                <label htmlFor="debug-email">Dev identity</label>
+                <input
+                  id="debug-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={debugEmail}
+                  onChange={(event) => setDebugEmail(event.target.value)}
+                />
+              </div>
+            )}
+          </div>
+        </header>
+        <DevMigrationBanner />
 
-      <nav className={stylex(styles.tabs)}>
-        <button
-          className={stylex(styles.tabButton, activeTab === "preview" && styles.tabButtonActive)}
-          onClick={() => setActiveTab("preview")}
-          type="button"
-        >
-          Plan Preview
-        </button>
-        <button
-          className={stylex(styles.tabButton, activeTab === "events" && styles.tabButtonActive)}
-          onClick={() => setActiveTab("events")}
-          type="button"
-        >
-          Events Viewer
-        </button>
-        <button
-          className={stylex(styles.tabButton, activeTab === "demo" && styles.tabButtonActive)}
-          onClick={() => setActiveTab("demo")}
-          type="button"
-        >
-          Demo
-        </button>
-        <button
-          className={stylex(styles.tabButton, activeTab === "templates" && styles.tabButtonActive)}
-          onClick={() => setActiveTab("templates")}
-          type="button"
-        >
-          Templates
-        </button>
-        <button
-          className={stylex(styles.tabButton, activeTab === "projects" && styles.tabButtonActive)}
-          onClick={() => setActiveTab("projects")}
-          type="button"
-        >
-          Projects
-        </button>
-        <button
-          className={stylex(
-            styles.tabButton,
-            activeTab === "integrations" && styles.tabButtonActive
-          )}
-          onClick={() => setActiveTab("integrations")}
-          type="button"
-        >
-          Integrations
-        </button>
-        <button
-          className={stylex(styles.tabButton, activeTab === "ingest" && styles.tabButtonActive)}
-          onClick={() => setActiveTab("ingest")}
-          type="button"
-        >
-          Ingest
-        </button>
-        <button
-          className={stylex(styles.tabButton, activeTab === "workspaces" && styles.tabButtonActive)}
-          onClick={() => setActiveTab("workspaces")}
-          type="button"
-        >
-          Workspaces
-        </button>
-      </nav>
+        <nav className={stylex(styles.tabs)}>
+          <NavLink
+            className={({ isActive }) =>
+              stylex(styles.tabButton, isActive && styles.tabButtonActive)
+            }
+            to="/plan-preview"
+          >
+            Plan Preview
+          </NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              stylex(styles.tabButton, isActive && styles.tabButtonActive)
+            }
+            to="/events"
+          >
+            Events Viewer
+          </NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              stylex(styles.tabButton, isActive && styles.tabButtonActive)
+            }
+            to="/demo"
+          >
+            Demo
+          </NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              stylex(styles.tabButton, isActive && styles.tabButtonActive)
+            }
+            to="/templates"
+          >
+            Templates
+          </NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              stylex(styles.tabButton, isActive && styles.tabButtonActive)
+            }
+            to="/projects"
+          >
+            Projects
+          </NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              stylex(styles.tabButton, isActive && styles.tabButtonActive)
+            }
+            to="/integrations"
+          >
+            Integrations
+          </NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              stylex(styles.tabButton, isActive && styles.tabButtonActive)
+            }
+            to="/ingest"
+          >
+            Ingest
+          </NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              stylex(styles.tabButton, isActive && styles.tabButtonActive)
+            }
+            to="/workspaces"
+          >
+            Workspaces
+          </NavLink>
+        </nav>
 
-      {activeTab === "preview" && (
-        <section className={stylex(styles.panel)}>
-          <h2>Plan Preview</h2>
-          <div className={stylex(styles.previewLayout)}>
-            <RecordSidebar
-              selectedUri={recordUri}
-              onSelect={(uri) => {
-                setRecordUri(uri);
-                if (autoRunOnSelect) {
-                  void runPreview(uri);
+        <Outlet />
+      </div>
+    </AppContext.Provider>
+  );
+}
+
+export function PlanPreviewRoute(): JSX.Element {
+  const {
+    recordUri,
+    setRecordUri,
+    autoRunOnSelect,
+    setAutoRunOnSelect,
+    previewState,
+    previewLoading,
+    materializeMessage,
+    materializeLoading,
+    runPreview,
+    materializeTasks,
+    previewUrl,
+    planId,
+    warnings,
+    copyToClipboard,
+  } = useAppState();
+  const navigate = useNavigate();
+  const { recordUri: recordUriParam } = useParams();
+  const lastParamRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!recordUriParam) return;
+    const decoded = decodeURIComponent(recordUriParam);
+    if (decoded && decoded !== recordUri) {
+      setRecordUri(decoded);
+    }
+    if (decoded && autoRunOnSelect && lastParamRef.current !== decoded) {
+      lastParamRef.current = decoded;
+      void runPreview(decoded);
+    }
+  }, [autoRunOnSelect, recordUri, recordUriParam, runPreview, setRecordUri]);
+
+  const navigateToRecord = useCallback(
+    (nextUri: string, shouldRun: boolean) => {
+      const trimmed = nextUri.trim();
+      if (!trimmed) return;
+      const decodedCurrent = recordUriParam ? decodeURIComponent(recordUriParam) : "";
+      setRecordUri(trimmed);
+      if (trimmed !== decodedCurrent) {
+        navigate(`/plan-preview/${encodeURIComponent(trimmed)}`);
+      }
+      if (shouldRun) {
+        void runPreview(trimmed);
+      }
+    },
+    [navigate, recordUriParam, runPreview, setRecordUri]
+  );
+
+  return (
+    <section className={stylex(styles.panel)}>
+      <h2>Plan Preview</h2>
+      <div className={stylex(styles.previewLayout)}>
+        <RecordSidebar
+          selectedUri={recordUri}
+          onSelect={(uri) => {
+            navigateToRecord(uri, autoRunOnSelect);
+          }}
+        />
+        <div className={stylex(styles.previewMain)}>
+          <div className={stylex(styles.formRow)}>
+            <label htmlFor="record-uri">Record URI</label>
+            <input
+              id="record-uri"
+              type="text"
+              value={recordUri}
+              onChange={(event) => setRecordUri(event.target.value)}
+              placeholder="manual://proposal/demo"
+            />
+          </div>
+
+          <div className={stylex(styles.exampleRow)}>
+            <span>Example URIs:</span>
+            {EXAMPLE_URIS.map((uri) => (
+              <button key={uri} type="button" onClick={() => navigateToRecord(uri, false)}>
+                {uri}
+              </button>
+            ))}
+          </div>
+
+          <div className={stylex(styles.actions)}>
+            <button
+              type="button"
+              onClick={() => {
+                void runPreview();
+                const trimmed = recordUri.trim();
+                if (trimmed) {
+                  const decodedCurrent = recordUriParam ? decodeURIComponent(recordUriParam) : "";
+                  if (trimmed !== decodedCurrent) {
+                    navigate(`/plan-preview/${encodeURIComponent(trimmed)}`);
+                  }
                 }
               }}
-            />
-            <div className={stylex(styles.previewMain)}>
-              <div className={stylex(styles.formRow)}>
-                <label htmlFor="record-uri">Record URI</label>
-                <input
-                  id="record-uri"
-                  type="text"
-                  value={recordUri}
-                  onChange={(event) => setRecordUri(event.target.value)}
-                  placeholder="manual://proposal/demo"
-                />
-              </div>
-
-              <div className={stylex(styles.exampleRow)}>
-                <span>Example URIs:</span>
-                {EXAMPLE_URIS.map((uri) => (
-                  <button key={uri} type="button" onClick={() => setRecordUri(uri)}>
-                    {uri}
-                  </button>
-                ))}
-              </div>
-
-              <div className={stylex(styles.actions)}>
-                <button type="button" onClick={() => runPreview()} disabled={previewLoading}>
-                  {previewLoading ? "Running..." : "Run Preview"}
-                </button>
-                <button
-                  type="button"
-                  className={stylex(styles.secondaryButton)}
-                  onClick={materializeTasks}
-                  disabled={materializeLoading || !recordUri.trim()}
-                >
-                  {materializeLoading ? "Materializing..." : "Create Project + Materialize Tasks"}
-                </button>
-                <label className={stylex(styles.checkbox)}>
-                  <input
-                    type="checkbox"
-                    checked={autoRunOnSelect}
-                    onChange={(event) => setAutoRunOnSelect(event.target.checked)}
-                  />
-                  Auto-run on select
-                </label>
-                {previewUrl && <span className={stylex(styles.urlHint)}>{previewUrl}</span>}
-              </div>
-
-              {materializeMessage && (
-                <div className={stylex(styles.highlight)}>
-                  <strong>Materialize:</strong> {materializeMessage}
-                </div>
-              )}
-
-              <div className={stylex(styles.results)}>
-                {previewState.error && (
-                  <div className={stylex(styles.error)}>{previewState.error}</div>
-                )}
-
-                {previewState.status !== undefined && (
-                  <div className={stylex(styles.meta)}>
-                    <div>
-                      <strong>Status:</strong> {previewState.status}
-                    </div>
-                    <div>
-                      <strong>Duration:</strong> {previewState.durationMs} ms
-                    </div>
-                    <div>
-                      <strong>Request URL:</strong> {previewState.url}
-                    </div>
-                  </div>
-                )}
-
-                {planId && (
-                  <div className={stylex(styles.highlight)}>
-                    <div>
-                      <strong>plan_id:</strong> {planId}
-                    </div>
-                    <button type="button" onClick={() => copyToClipboard("plan_id", planId)}>
-                      Copy plan_id
-                    </button>
-                  </div>
-                )}
-
-                {warnings && warnings.length > 0 && (
-                  <div className={stylex(styles.highlight, styles.highlightWarning)}>
-                    <strong>Warnings:</strong>
-                    <ul>
-                      {warnings.map((warning) => (
-                        <li key={warning}>{warning}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                <ContextViewer data={previewState.data} />
-
-                {previewState.data !== undefined && (
-                  <div className={stylex(styles.jsonBlock)}>
-                    <div className={stylex(styles.jsonHeader)}>
-                      <strong>Response JSON</strong>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          copyToClipboard(
-                            "response JSON",
-                            previewState.text || JSON.stringify(previewState.data, null, 2)
-                          )
-                        }
-                      >
-                        Copy JSON
-                      </button>
-                    </div>
-                    <JsonView data={previewState.data} />
-                  </div>
-                )}
-
-                {previewState.data === undefined && previewState.text && (
-                  <div className={stylex(styles.jsonBlock)}>
-                    <div className={stylex(styles.jsonHeader)}>
-                      <strong>Response Text</strong>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard("response text", previewState.text || "")}
-                      >
-                        Copy text
-                      </button>
-                    </div>
-                    <pre>{previewState.text}</pre>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {activeTab === "events" && (
-        <section className={stylex(styles.panel)}>
-          <h2>Events Viewer</h2>
-          <div className={stylex(styles.actions)}>
-            <button type="button" onClick={refreshEvents} disabled={eventsLoading}>
-              {eventsLoading ? "Refreshing..." : "Refresh"}
+              disabled={previewLoading}
+            >
+              {previewLoading ? "Running..." : "Run Preview"}
             </button>
-            {eventsState.url && <span className={stylex(styles.urlHint)}>{eventsState.url}</span>}
+            <button
+              type="button"
+              className={stylex(styles.secondaryButton)}
+              onClick={materializeTasks}
+              disabled={materializeLoading || !recordUri.trim()}
+            >
+              {materializeLoading ? "Materializing..." : "Create Project + Materialize Tasks"}
+            </button>
+            <label className={stylex(styles.checkbox)}>
+              <input
+                type="checkbox"
+                checked={autoRunOnSelect}
+                onChange={(event) => setAutoRunOnSelect(event.target.checked)}
+              />
+              Auto-run on select
+            </label>
+            {previewUrl && <span className={stylex(styles.urlHint)}>{previewUrl}</span>}
           </div>
+
+          {materializeMessage && (
+            <div className={stylex(styles.highlight)}>
+              <strong>Materialize:</strong> {materializeMessage}
+            </div>
+          )}
 
           <div className={stylex(styles.results)}>
-            {eventsState.error && <div className={stylex(styles.error)}>{eventsState.error}</div>}
+            {previewState.error && <div className={stylex(styles.error)}>{previewState.error}</div>}
 
-            {eventsState.status !== undefined && (
+            {previewState.status !== undefined && (
               <div className={stylex(styles.meta)}>
                 <div>
-                  <strong>Status:</strong> {eventsState.status}
+                  <strong>Status:</strong> {previewState.status}
                 </div>
                 <div>
-                  <strong>Duration:</strong> {eventsState.durationMs} ms
+                  <strong>Duration:</strong> {previewState.durationMs} ms
+                </div>
+                <div>
+                  <strong>Request URL:</strong> {previewState.url}
                 </div>
               </div>
             )}
 
-            <div className={stylex(styles.tableWrap)}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>source</th>
-                    <th>type</th>
-                    <th>external_id</th>
-                    <th>received_at</th>
-                    <th>processed_at</th>
-                    <th>process_error</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className={stylex(styles.empty)}>
-                        No events loaded yet.
-                      </td>
-                    </tr>
-                  )}
-                  {events.map((event, index) => {
-                    const row = event as Record<string, unknown>;
-                    const isExpanded = expandedRowIndex === index;
-                    return (
-                      <tr
-                        key={index}
-                        className={stylex(isExpanded && styles.highlight)}
-                        onClick={() => setExpandedRowIndex(isExpanded ? null : index)}
-                      >
-                        <td>{String(row.source ?? "")}</td>
-                        <td>{String(row.type ?? "")}</td>
-                        <td>{String(row.external_id ?? row.externalId ?? "")}</td>
-                        <td>{String(row.received_at ?? row.receivedAt ?? "")}</td>
-                        <td>{String(row.processed_at ?? row.processedAt ?? "")}</td>
-                        <td>{String(row.process_error ?? row.processError ?? "")}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {expandedRowIndex !== null && events[expandedRowIndex] !== undefined && (
-              <div className={stylex(styles.jsonBlock)}>
-                <div className={stylex(styles.jsonHeader)}>
-                  <strong>Event Details</strong>
-                </div>
-                <JsonView data={events[expandedRowIndex]} />
-              </div>
-            )}
-          </div>
-
-          <div className={stylex(styles.divider)} />
-
-          <div className={stylex(styles.panelSub)}>
-            <h3>POST /events/test</h3>
-            <div className={stylex(styles.formGrid)}>
-              <label>
-                Source
-                <input
-                  type="text"
-                  value={testSource}
-                  onChange={(event) => setTestSource(event.target.value)}
-                />
-              </label>
-              <label>
-                Type
-                <input
-                  type="text"
-                  value={testType}
-                  onChange={(event) => setTestType(event.target.value)}
-                />
-              </label>
-              <label>
-                External ID
-                <input
-                  type="text"
-                  value={testExternalId}
-                  onChange={(event) => setTestExternalId(event.target.value)}
-                />
-              </label>
-            </div>
-
-            <label className={stylex(styles.fullWidth)}>
-              Payload JSON
-              <textarea
-                rows={6}
-                value={testPayload}
-                onChange={(event) => setTestPayload(event.target.value)}
-              />
-            </label>
-
-            <div className={stylex(styles.actions)}>
-              <button type="button" onClick={runEventsTest} disabled={testLoading}>
-                {testLoading ? "Sending..." : "Send Test Event"}
-              </button>
-              {testState.url && <span className={stylex(styles.urlHint)}>{testState.url}</span>}
-            </div>
-
-            {testState.error && <div className={stylex(styles.error)}>{testState.error}</div>}
-
-            {testState.status !== undefined && (
-              <div className={stylex(styles.meta)}>
-                <div>
-                  <strong>Status:</strong> {testState.status}
-                </div>
-                <div>
-                  <strong>Duration:</strong> {testState.durationMs} ms
-                </div>
-              </div>
-            )}
-
-            {idempotencyKey && (
+            {planId && (
               <div className={stylex(styles.highlight)}>
                 <div>
-                  <strong>idempotencyKey:</strong> {idempotencyKey}
+                  <strong>plan_id:</strong> {planId}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard("idempotencyKey", idempotencyKey)}
-                >
-                  Copy idempotencyKey
+                <button type="button" onClick={() => copyToClipboard("plan_id", planId)}>
+                  Copy plan_id
                 </button>
               </div>
             )}
 
-            {testState.data !== undefined && (
-              <div className={stylex(styles.jsonBlock)}>
-                <div className={stylex(styles.jsonHeader)}>
-                  <strong>Response</strong>
-                </div>
-                <JsonView data={testState.data} />
+            {warnings && warnings.length > 0 && (
+              <div className={stylex(styles.highlight, styles.highlightWarning)}>
+                <strong>Warnings:</strong>
+                <ul>
+                  {warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
               </div>
             )}
 
-            {testState.data === undefined && testState.text && (
+            <ContextViewer data={previewState.data} />
+
+            {previewState.data !== undefined && (
+              <div className={stylex(styles.jsonBlock)}>
+                <div className={stylex(styles.jsonHeader)}>
+                  <strong>Response JSON</strong>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      copyToClipboard(
+                        "response JSON",
+                        previewState.text || JSON.stringify(previewState.data, null, 2)
+                      )
+                    }
+                  >
+                    Copy JSON
+                  </button>
+                </div>
+                <JsonView data={previewState.data} />
+              </div>
+            )}
+
+            {previewState.data === undefined && previewState.text && (
               <div className={stylex(styles.jsonBlock)}>
                 <div className={stylex(styles.jsonHeader)}>
                   <strong>Response Text</strong>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard("response text", previewState.text || "")}
+                  >
+                    Copy text
+                  </button>
                 </div>
-                <pre>{testState.text}</pre>
+                <pre>{previewState.text}</pre>
               </div>
             )}
           </div>
-        </section>
-      )}
+        </div>
+      </div>
+    </section>
+  );
+}
 
-      {activeTab === "demo" && (
-        <section className={stylex(styles.panel)}>
-          <DemoPanel />
-        </section>
-      )}
+export function EventsRoute(): JSX.Element {
+  const {
+    eventsState,
+    eventsLoading,
+    refreshEvents,
+    events,
+    expandedRowIndex,
+    setExpandedRowIndex,
+    testSource,
+    setTestSource,
+    testType,
+    setTestType,
+    testExternalId,
+    setTestExternalId,
+    testPayload,
+    setTestPayload,
+    testState,
+    testLoading,
+    runEventsTest,
+    idempotencyKey,
+    copyToClipboard,
+  } = useAppState();
 
-      {activeTab === "templates" && (
-        <section className={stylex(styles.panel)}>
-          <h2>Templates</h2>
-          <TemplatesPanel />
-        </section>
-      )}
+  return (
+    <section className={stylex(styles.panel)}>
+      <h2>Events Viewer</h2>
+      <div className={stylex(styles.actions)}>
+        <button type="button" onClick={refreshEvents} disabled={eventsLoading}>
+          {eventsLoading ? "Refreshing..." : "Refresh"}
+        </button>
+        {eventsState.url && <span className={stylex(styles.urlHint)}>{eventsState.url}</span>}
+      </div>
 
-      {activeTab === "projects" && (
-        <ProjectsPanel
-          selectedProjectId={selectedProjectId}
-          onSelectProject={setSelectedProjectId}
-          contextLookup={contextLookup}
-        />
-      )}
+      <div className={stylex(styles.results)}>
+        {eventsState.error && <div className={stylex(styles.error)}>{eventsState.error}</div>}
 
-      {activeTab === "integrations" && (
-        <IntegrationsPanel workspaceId={selectedWorkspaceId} workspaces={workspaces} />
-      )}
+        {eventsState.status !== undefined && (
+          <div className={stylex(styles.meta)}>
+            <div>
+              <strong>Status:</strong> {eventsState.status}
+            </div>
+            <div>
+              <strong>Duration:</strong> {eventsState.durationMs} ms
+            </div>
+          </div>
+        )}
 
-      {activeTab === "ingest" && (
-        <IngestPanel workspaceId={selectedWorkspaceId} workspaces={workspaces} />
-      )}
+        <div className={stylex(styles.tableWrap)}>
+          <table>
+            <thead>
+              <tr>
+                <th>source</th>
+                <th>type</th>
+                <th>external_id</th>
+                <th>received_at</th>
+                <th>processed_at</th>
+                <th>process_error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.length === 0 && (
+                <tr>
+                  <td colSpan={6} className={stylex(styles.empty)}>
+                    No events loaded yet.
+                  </td>
+                </tr>
+              )}
+              {events.map((event, index) => {
+                const row = event as Record<string, unknown>;
+                const isExpanded = expandedRowIndex === index;
+                return (
+                  <tr
+                    key={index}
+                    className={stylex(isExpanded && styles.highlight)}
+                    onClick={() => setExpandedRowIndex(isExpanded ? null : index)}
+                  >
+                    <td>{String(row.source ?? "")}</td>
+                    <td>{String(row.type ?? "")}</td>
+                    <td>{String(row.external_id ?? row.externalId ?? "")}</td>
+                    <td>{String(row.received_at ?? row.receivedAt ?? "")}</td>
+                    <td>{String(row.processed_at ?? row.processedAt ?? "")}</td>
+                    <td>{String(row.process_error ?? row.processError ?? "")}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
-      {activeTab === "workspaces" && (
-        <WorkspacesPanel
-          selectedWorkspaceId={selectedWorkspaceId}
-          onSelectWorkspace={setSelectedWorkspaceId}
-        />
-      )}
-    </div>
+        {expandedRowIndex !== null && events[expandedRowIndex] !== undefined && (
+          <div className={stylex(styles.jsonBlock)}>
+            <div className={stylex(styles.jsonHeader)}>
+              <strong>Event Details</strong>
+            </div>
+            <JsonView data={events[expandedRowIndex]} />
+          </div>
+        )}
+      </div>
+
+      <div className={stylex(styles.divider)} />
+
+      <div className={stylex(styles.panelSub)}>
+        <h3>POST /events/test</h3>
+        <div className={stylex(styles.formGrid)}>
+          <label>
+            Source
+            <input
+              type="text"
+              value={testSource}
+              onChange={(event) => setTestSource(event.target.value)}
+            />
+          </label>
+          <label>
+            Type
+            <input
+              type="text"
+              value={testType}
+              onChange={(event) => setTestType(event.target.value)}
+            />
+          </label>
+          <label>
+            External ID
+            <input
+              type="text"
+              value={testExternalId}
+              onChange={(event) => setTestExternalId(event.target.value)}
+            />
+          </label>
+        </div>
+
+        <label className={stylex(styles.fullWidth)}>
+          Payload JSON
+          <textarea
+            rows={6}
+            value={testPayload}
+            onChange={(event) => setTestPayload(event.target.value)}
+          />
+        </label>
+
+        <div className={stylex(styles.actions)}>
+          <button type="button" onClick={runEventsTest} disabled={testLoading}>
+            {testLoading ? "Sending..." : "Send Test Event"}
+          </button>
+          {testState.url && <span className={stylex(styles.urlHint)}>{testState.url}</span>}
+        </div>
+
+        {testState.error && <div className={stylex(styles.error)}>{testState.error}</div>}
+
+        {testState.status !== undefined && (
+          <div className={stylex(styles.meta)}>
+            <div>
+              <strong>Status:</strong> {testState.status}
+            </div>
+            <div>
+              <strong>Duration:</strong> {testState.durationMs} ms
+            </div>
+          </div>
+        )}
+
+        {idempotencyKey && (
+          <div className={stylex(styles.highlight)}>
+            <div>
+              <strong>idempotencyKey:</strong> {idempotencyKey}
+            </div>
+            <button type="button" onClick={() => copyToClipboard("idempotencyKey", idempotencyKey)}>
+              Copy idempotencyKey
+            </button>
+          </div>
+        )}
+
+        {testState.data !== undefined && (
+          <div className={stylex(styles.jsonBlock)}>
+            <div className={stylex(styles.jsonHeader)}>
+              <strong>Response</strong>
+            </div>
+            <JsonView data={testState.data} />
+          </div>
+        )}
+
+        {testState.data === undefined && testState.text && (
+          <div className={stylex(styles.jsonBlock)}>
+            <div className={stylex(styles.jsonHeader)}>
+              <strong>Response Text</strong>
+            </div>
+            <pre>{testState.text}</pre>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export function DemoRoute(): JSX.Element {
+  return (
+    <section className={stylex(styles.panel)}>
+      <DemoPanel />
+    </section>
+  );
+}
+
+export function TemplatesRoute(): JSX.Element {
+  const { templateKey } = useParams();
+  const navigate = useNavigate();
+  const selectedKey = templateKey ? decodeURIComponent(templateKey) : undefined;
+
+  return (
+    <section className={stylex(styles.panel)}>
+      <h2>Templates</h2>
+      <TemplatesPanel
+        selectedTemplateKeyOverride={selectedKey}
+        onSelectedTemplateKeyChange={(nextKey) => {
+          if (nextKey) {
+            navigate(`/templates/${encodeURIComponent(nextKey)}`);
+          } else {
+            navigate("/templates");
+          }
+        }}
+      />
+    </section>
+  );
+}
+
+export function ProjectsRoute(): JSX.Element {
+  const { selectedProjectId, setSelectedProjectId, contextLookup } = useAppState();
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!projectId) return;
+    const decoded = decodeURIComponent(projectId);
+    if (decoded && decoded !== selectedProjectId) {
+      setSelectedProjectId(decoded);
+    }
+  }, [projectId, selectedProjectId, setSelectedProjectId]);
+
+  const handleSelectProject = useCallback(
+    (nextId: string | null) => {
+      const decodedCurrent = projectId ? decodeURIComponent(projectId) : "";
+      if (nextId === decodedCurrent) {
+        setSelectedProjectId(nextId);
+        return;
+      }
+      setSelectedProjectId(nextId);
+      if (nextId) {
+        navigate(`/projects/${encodeURIComponent(nextId)}`);
+      } else {
+        navigate("/projects");
+      }
+    },
+    [navigate, projectId, setSelectedProjectId]
+  );
+
+  return (
+    <ProjectsPanel
+      selectedProjectId={selectedProjectId}
+      onSelectProject={handleSelectProject}
+      contextLookup={contextLookup}
+    />
+  );
+}
+
+export function IntegrationsRoute(): JSX.Element {
+  const { selectedWorkspaceId, workspaces } = useAppState();
+  return <IntegrationsPanel workspaceId={selectedWorkspaceId} workspaces={workspaces} />;
+}
+
+export function IngestRoute(): JSX.Element {
+  const { selectedWorkspaceId, workspaces } = useAppState();
+  return <IngestPanel workspaceId={selectedWorkspaceId} workspaces={workspaces} />;
+}
+
+export function WorkspacesRoute(): JSX.Element {
+  const { selectedWorkspaceId, setSelectedWorkspaceId } = useAppState();
+  return (
+    <WorkspacesPanel
+      selectedWorkspaceId={selectedWorkspaceId}
+      onSelectWorkspace={setSelectedWorkspaceId}
+    />
   );
 }

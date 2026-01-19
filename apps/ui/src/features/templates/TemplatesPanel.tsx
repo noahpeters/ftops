@@ -252,7 +252,15 @@ type NewTemplateFormState = TemplateFormState & {
   key: string;
 };
 
-export function TemplatesPanel(): JSX.Element {
+type TemplatesPanelProps = {
+  selectedTemplateKeyOverride?: string;
+  onSelectedTemplateKeyChange?: (key: string) => void;
+};
+
+export function TemplatesPanel({
+  selectedTemplateKeyOverride,
+  onSelectedTemplateKeyChange,
+}: TemplatesPanelProps): JSX.Element {
   const [templatesState, setTemplatesState] = useState<TemplatesState>({});
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templateDetailState, setTemplateDetailState] = useState<TemplateDetailState>({});
@@ -304,6 +312,16 @@ export function TemplatesPanel(): JSX.Element {
   const [savingRuleId, setSavingRuleId] = useState<string | null>(null);
   const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
 
+  const updateSelectedTemplateKey = useCallback(
+    (nextKey: string, syncRoute = true) => {
+      setSelectedTemplateKey(nextKey);
+      if (syncRoute) {
+        onSelectedTemplateKeyChange?.(nextKey);
+      }
+    },
+    [onSelectedTemplateKeyChange]
+  );
+
   useEffect(() => {
     localStorage.setItem(TEMPLATE_SELECTED_KEY, selectedTemplateKey);
   }, [selectedTemplateKey]);
@@ -311,6 +329,12 @@ export function TemplatesPanel(): JSX.Element {
   useEffect(() => {
     localStorage.setItem(TEMPLATE_SEARCH_KEY, searchTerm);
   }, [searchTerm]);
+
+  useEffect(() => {
+    if (selectedTemplateKeyOverride === undefined) return;
+    if (selectedTemplateKeyOverride === selectedTemplateKey) return;
+    updateSelectedTemplateKey(selectedTemplateKeyOverride || "", false);
+  }, [selectedTemplateKey, selectedTemplateKeyOverride, updateSelectedTemplateKey]);
 
   const refreshTemplates = useCallback(async (): Promise<void> => {
     setTemplatesLoading(true);
@@ -327,11 +351,11 @@ export function TemplatesPanel(): JSX.Element {
     if (result.ok && Array.isArray(result.data)) {
       const keys = result.data.map((item) => item.key);
       if (!selectedTemplateKey || !keys.includes(selectedTemplateKey)) {
-        setSelectedTemplateKey(keys[0] || "");
+        updateSelectedTemplateKey(keys[0] || "", !selectedTemplateKeyOverride);
       }
     }
     setTemplatesLoading(false);
-  }, [selectedTemplateKey]);
+  }, [selectedTemplateKey, selectedTemplateKeyOverride, updateSelectedTemplateKey]);
 
   const loadTemplateDetail = useCallback(async (key: string): Promise<void> => {
     if (!key) {
@@ -458,7 +482,7 @@ export function TemplatesPanel(): JSX.Element {
     });
 
     if (result.data?.template?.key) {
-      setSelectedTemplateKey(result.data.template.key);
+      updateSelectedTemplateKey(result.data.template.key);
       setTemplateDetailState({
         status: result.status,
         durationMs: result.durationMs,
@@ -529,7 +553,7 @@ export function TemplatesPanel(): JSX.Element {
     }
 
     setTemplateDetailState({});
-    setSelectedTemplateKey("");
+    updateSelectedTemplateKey("");
     await refreshTemplates();
     setDeletingTemplate(false);
   }
@@ -675,7 +699,7 @@ export function TemplatesPanel(): JSX.Element {
                 key={template.key}
                 type="button"
                 className={stylex(styles.listItem, isSelected && styles.listItemActive)}
-                onClick={() => setSelectedTemplateKey(template.key)}
+                onClick={() => updateSelectedTemplateKey(template.key)}
               >
                 <div className={stylex(styles.templateKey)}>{template.key}</div>
                 <div className={stylex(styles.templateMeta)}>

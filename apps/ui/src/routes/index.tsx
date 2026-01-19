@@ -1,11 +1,9 @@
-import App from "@/App";
-import { ServerStatus } from "@/components/ServerStatus";
+import { redirect } from "react-router";
 
-export default function Index(): JSX.Element {
-  return (
-    <>
-      <ServerStatus />
-      <App />
-    </>
-  );
+export function loader() {
+  return redirect("/projects");
+}
+
+export default function Index(): null {
+  return null;
 }

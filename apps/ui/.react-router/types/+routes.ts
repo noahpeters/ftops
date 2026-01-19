@@ -14,20 +14,129 @@ type Pages = {
   "/": {
     params: {};
   };
+  "/plan-preview": {
+    params: {};
+  };
+  "/plan-preview/:recordUri": {
+    params: {
+      "recordUri": string;
+    };
+  };
+  "/events": {
+    params: {};
+  };
+  "/demo": {
+    params: {};
+  };
+  "/templates": {
+    params: {};
+  };
+  "/templates/:templateKey": {
+    params: {
+      "templateKey": string;
+    };
+  };
+  "/projects": {
+    params: {};
+  };
+  "/projects/:projectId": {
+    params: {
+      "projectId": string;
+    };
+  };
+  "/integrations": {
+    params: {};
+  };
+  "/ingest": {
+    params: {};
+  };
+  "/workspaces": {
+    params: {};
+  };
+  "/*": {
+    params: {
+      "*": string;
+    };
+  };
 };
 
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/";
+    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/integrations" | "/ingest" | "/workspaces" | "/*";
+  };
+  "routes/root.tsx": {
+    id: "routes/root";
+    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/integrations" | "/ingest" | "/workspaces" | "/*";
   };
   "routes/index.tsx": {
     id: "routes/index";
     page: "/";
   };
+  "routes/plan-preview.tsx": {
+    id: "routes/plan-preview";
+    page: "/plan-preview";
+  };
+  "routes/plan-preview-record.tsx": {
+    id: "routes/plan-preview-record";
+    page: "/plan-preview/:recordUri";
+  };
+  "routes/events.tsx": {
+    id: "routes/events";
+    page: "/events";
+  };
+  "routes/demo.tsx": {
+    id: "routes/demo";
+    page: "/demo";
+  };
+  "routes/templates.tsx": {
+    id: "routes/templates";
+    page: "/templates";
+  };
+  "routes/templates-template.tsx": {
+    id: "routes/templates-template";
+    page: "/templates/:templateKey";
+  };
+  "routes/projects.tsx": {
+    id: "routes/projects";
+    page: "/projects";
+  };
+  "routes/projects-project.tsx": {
+    id: "routes/projects-project";
+    page: "/projects/:projectId";
+  };
+  "routes/integrations.tsx": {
+    id: "routes/integrations";
+    page: "/integrations";
+  };
+  "routes/ingest.tsx": {
+    id: "routes/ingest";
+    page: "/ingest";
+  };
+  "routes/workspaces.tsx": {
+    id: "routes/workspaces";
+    page: "/workspaces";
+  };
+  "routes/not-found.tsx": {
+    id: "routes/not-found";
+    page: "/*";
+  };
 };
 
 type RouteModules = {
   "root": typeof import("./src/root.tsx");
+  "routes/root": typeof import("./src/routes/root.tsx");
   "routes/index": typeof import("./src/routes/index.tsx");
+  "routes/plan-preview": typeof import("./src/routes/plan-preview.tsx");
+  "routes/plan-preview-record": typeof import("./src/routes/plan-preview-record.tsx");
+  "routes/events": typeof import("./src/routes/events.tsx");
+  "routes/demo": typeof import("./src/routes/demo.tsx");
+  "routes/templates": typeof import("./src/routes/templates.tsx");
+  "routes/templates-template": typeof import("./src/routes/templates-template.tsx");
+  "routes/projects": typeof import("./src/routes/projects.tsx");
+  "routes/projects-project": typeof import("./src/routes/projects-project.tsx");
+  "routes/integrations": typeof import("./src/routes/integrations.tsx");
+  "routes/ingest": typeof import("./src/routes/ingest.tsx");
+  "routes/workspaces": typeof import("./src/routes/workspaces.tsx");
+  "routes/not-found": typeof import("./src/routes/not-found.tsx");
 };
