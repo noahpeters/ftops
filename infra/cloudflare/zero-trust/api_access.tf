@@ -29,4 +29,34 @@ resource "cloudflare_zero_trust_access_application" "api" {
     type = "public"
     uri  = "api.from-trees.com/plan/*"
   }
+
+  destinations {
+    type = "public"
+    uri  = "api.from-trees.com/integrations*"
+  }
+
+  destinations {
+    type = "public"
+    uri  = "api.from-trees.com/projects*"
+  }
+
+  destinations {
+    type = "public"
+    uri  = "api.from-trees.com/tasks*"
+  }
+
+  destinations {
+    type = "public"
+    uri  = "api.from-trees.com/workspaces*"
+  }
+
+  destinations {
+    type = "public"
+    uri  = "api.from-trees.com/templates*"
+  }
+
+  destinations {
+    type = "public"
+    uri  = "api.from-trees.com/commercial-records*"
+  }
 }
