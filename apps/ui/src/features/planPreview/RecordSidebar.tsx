@@ -1,6 +1,66 @@
+"use client";
+
 import { useEffect, useState } from "react";
+import stylex from "~/lib/stylex";
 import { listCommercialRecords } from "../api/commercialRecords";
 import type { CommercialRecordListItem } from "../api/commercialRecords";
+
+const styles = stylex.create({
+  sidebar: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "12px",
+    backgroundColor: "#ffffff",
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  search: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    fontSize: "12px",
+  },
+  empty: {
+    color: "#94a3b8",
+  },
+  error: {
+    color: "#b91c1c",
+  },
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  listItem: {
+    textAlign: "left",
+    border: "1px solid #e2e8f0",
+    borderRadius: "10px",
+    padding: "10px",
+    backgroundColor: "#f8fafc",
+    cursor: "pointer",
+  },
+  listItemActive: {
+    borderColor: "#6366f1",
+    backgroundColor: "#eef2ff",
+  },
+  recordUri: {
+    fontWeight: 600,
+    fontSize: "12px",
+  },
+  recordMeta: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+    fontSize: "11px",
+    color: "#475569",
+  },
+});
 
 type RecordSidebarProps = {
   selectedUri: string;
@@ -54,14 +114,14 @@ export function RecordSidebar({ selectedUri, onSelect }: RecordSidebarProps): JS
   }
 
   return (
-    <aside className="record-sidebar">
-      <div className="record-sidebar-header">
+    <aside className={stylex(styles.sidebar)}>
+      <div className={stylex(styles.header)}>
         <h3>Commercial Records</h3>
         <button type="button" onClick={() => fetchRecords(query)}>
           Refresh
         </button>
       </div>
-      <label className="record-search">
+      <label className={stylex(styles.search)}>
         Search
         <input
           type="text"
@@ -71,23 +131,25 @@ export function RecordSidebar({ selectedUri, onSelect }: RecordSidebarProps): JS
         />
       </label>
 
-      {loading && <div className="empty">Loading records...</div>}
-      {error && <div className="error">{error}</div>}
+      {loading && <div className={stylex(styles.empty)}>Loading records...</div>}
+      {error && <div className={stylex(styles.error)}>{error}</div>}
 
-      {!loading && !error && records.length === 0 && <div className="empty">No records found.</div>}
+      {!loading && !error && records.length === 0 && (
+        <div className={stylex(styles.empty)}>No records found.</div>
+      )}
 
-      <div className="record-list">
+      <div className={stylex(styles.list)}>
         {records.map((record) => {
           const isSelected = record.uri === selectedUri;
           return (
             <button
               key={record.uri}
               type="button"
-              className={isSelected ? "active" : ""}
+              className={stylex(styles.listItem, isSelected && styles.listItemActive)}
               onClick={() => onSelect(record.uri)}
             >
-              <div className="record-uri">{shorten(record.uri)}</div>
-              <div className="record-meta">
+              <div className={stylex(styles.recordUri)}>{shorten(record.uri)}</div>
+              <div className={stylex(styles.recordMeta)}>
                 <span>
                   {record.source}/{record.kind}
                 </span>

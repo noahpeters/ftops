@@ -1,4 +1,7 @@
+"use client";
+
 import { useCallback, useEffect, useState } from "react";
+import stylex from "~/lib/stylex";
 import {
   getIngestRequest,
   listIngestRequests,
@@ -9,6 +12,45 @@ import type { WorkspaceRow } from "../workspaces/api";
 
 const PROVIDERS = ["shopify", "qbo"] as const;
 const ENVIRONMENTS = ["production", "sandbox"] as const;
+
+const styles = stylex.create({
+  panel: {
+    padding: "24px 32px",
+  },
+  actions: {
+    display: "flex",
+    gap: "8px",
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+  error: {
+    color: "#b91c1c",
+  },
+  layout: {
+    display: "grid",
+    gridTemplateColumns: "2fr 1fr",
+    gap: "16px",
+    marginTop: "16px",
+  },
+  list: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    overflowX: "auto",
+    backgroundColor: "#ffffff",
+  },
+  detail: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "12px",
+    backgroundColor: "#ffffff",
+  },
+  empty: {
+    color: "#94a3b8",
+  },
+  muted: {
+    color: "#94a3b8",
+  },
+});
 
 export function IngestPanel({
   workspaceId,
@@ -57,9 +99,9 @@ export function IngestPanel({
   }
 
   return (
-    <section className="panel">
+    <section className={stylex(styles.panel)}>
       <h2>Ingest</h2>
-      <div className="actions">
+      <div className={stylex(styles.actions)}>
         <select value={provider} onChange={(event) => setProvider(event.target.value)}>
           {PROVIDERS.map((item) => (
             <option key={item} value={item}>
@@ -86,10 +128,10 @@ export function IngestPanel({
         </button>
       </div>
 
-      {error && <div className="error">{error}</div>}
+      {error && <div className={stylex(styles.error)}>{error}</div>}
 
-      <div className="ingest-layout">
-        <div className="ingest-list">
+      <div className={stylex(styles.layout)}>
+        <div className={stylex(styles.list)}>
           <table>
             <thead>
               <tr>
@@ -120,7 +162,7 @@ export function IngestPanel({
               ))}
               {requests.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="empty">
+                  <td colSpan={10} className={stylex(styles.empty)}>
                     No requests.
                   </td>
                 </tr>
@@ -128,14 +170,14 @@ export function IngestPanel({
             </tbody>
           </table>
         </div>
-        <div className="ingest-detail">
+        <div className={stylex(styles.detail)}>
           {selected ? (
             <>
               <h3>Request Detail</h3>
               <pre>{JSON.stringify(selected, null, 2)}</pre>
             </>
           ) : (
-            <p className="muted">Select a request to inspect.</p>
+            <p className={stylex(styles.muted)}>Select a request to inspect.</p>
           )}
         </div>
       </div>

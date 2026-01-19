@@ -1,4 +1,7 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
+import stylex from "~/lib/stylex";
 import { buildUrl, fetchJson } from "../../lib/api";
 import { PayloadEditor } from "./PayloadEditor";
 import { ScenarioDetails } from "./ScenarioDetails";
@@ -43,6 +46,84 @@ const DEFAULT_STATE: DemoState = {
   repeatCount: 3,
   delayMs: 300,
 };
+
+const styles = stylex.create({
+  panel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "16px",
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+  },
+  controls: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "12px",
+    alignItems: "center",
+  },
+  actions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    alignItems: "center",
+  },
+  secondaryButton: {
+    border: "1px solid #94a3b8",
+    backgroundColor: "#ffffff",
+    color: "#0f172a",
+    padding: "6px 12px",
+    borderRadius: "8px",
+    cursor: "pointer",
+  },
+  formGrid: {
+    display: "grid",
+    gap: "12px",
+  },
+  variantToggle: {
+    display: "flex",
+    gap: "12px",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  radio: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+  },
+  error: {
+    color: "#b91c1c",
+  },
+  demoLog: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "12px",
+    backgroundColor: "#ffffff",
+  },
+  demoLogHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "8px",
+  },
+  empty: {
+    color: "#94a3b8",
+  },
+  tableWrap: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    overflowX: "auto",
+  },
+  linkButton: {
+    color: "#2563eb",
+    textDecoration: "underline",
+    background: "none",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+  },
+});
 
 export function DemoPanel(): JSX.Element {
   const [state, setState] = useState<DemoState>(() => {
@@ -243,25 +324,29 @@ export function DemoPanel(): JSX.Element {
   }
 
   return (
-    <div className="demo-panel">
-      <div className="demo-header">
+    <div className={stylex(styles.panel)}>
+      <div className={stylex(styles.header)}>
         <div>
           <h2>Demo</h2>
           <p>Trigger example events via POST /events/test.</p>
         </div>
       </div>
 
-      <div className="demo-controls">
+      <div className={stylex(styles.controls)}>
         <ScenarioPicker
           scenarios={DEFAULT_SCENARIOS}
           selectedId={scenario.id}
           onSelect={handleScenarioSelect}
         />
-        <div className="demo-actions">
+        <div className={stylex(styles.actions)}>
           <button type="button" onClick={handleLoadScenario}>
             Load scenario
           </button>
-          <button type="button" className="secondary" onClick={handleResetScenario}>
+          <button
+            type="button"
+            className={stylex(styles.secondaryButton)}
+            onClick={handleResetScenario}
+          >
             Reset to defaults
           </button>
         </div>
@@ -269,7 +354,7 @@ export function DemoPanel(): JSX.Element {
 
       <ScenarioDetails scenario={scenario} />
 
-      <div className="form-grid">
+      <div className={stylex(styles.formGrid)}>
         <label>
           Source
           <input type="text" value={scenario.defaultRequest.source} disabled />
@@ -320,9 +405,9 @@ export function DemoPanel(): JSX.Element {
       </div>
 
       {scenario.id === "idempotency-variant" && (
-        <div className="variant-toggle">
+        <div className={stylex(styles.variantToggle)}>
           <span>Variant</span>
-          <label className="radio">
+          <label className={stylex(styles.radio)}>
             <input
               type="radio"
               name="variant"
@@ -331,7 +416,7 @@ export function DemoPanel(): JSX.Element {
             />
             requiresDesign false
           </label>
-          <label className="radio">
+          <label className={stylex(styles.radio)}>
             <input
               type="radio"
               name="variant"
@@ -344,29 +429,29 @@ export function DemoPanel(): JSX.Element {
       )}
 
       <PayloadEditor payloadText={payloadText} onChange={setPayloadOverride} />
-      {payloadError && <div className="error">{payloadError}</div>}
-      {error && <div className="error">{error}</div>}
+      {payloadError && <div className={stylex(styles.error)}>{payloadError}</div>}
+      {error && <div className={stylex(styles.error)}>{error}</div>}
 
-      <div className="actions">
+      <div className={stylex(styles.actions)}>
         <button type="button" onClick={() => sendOnce(1)} disabled={sending}>
           Send Once
         </button>
         <button type="button" onClick={() => sendOnce(state.repeatCount)} disabled={sending}>
           Send {state.repeatCount}
         </button>
-        <button type="button" className="secondary" onClick={stopSending}>
+        <button type="button" className={stylex(styles.secondaryButton)} onClick={stopSending}>
           Stop
         </button>
       </div>
 
-      <section className="demo-log">
-        <div className="demo-log-header">
+      <section className={stylex(styles.demoLog)}>
+        <div className={stylex(styles.demoLogHeader)}>
           <h3>Results Log</h3>
           <span>Last 50</span>
         </div>
-        {logs.length === 0 && <div className="empty">No events sent yet.</div>}
+        {logs.length === 0 && <div className={stylex(styles.empty)}>No events sent yet.</div>}
         {logs.length > 0 && (
-          <div className="table-wrap">
+          <div className={stylex(styles.tableWrap)}>
             <table>
               <thead>
                 <tr>
@@ -393,7 +478,7 @@ export function DemoPanel(): JSX.Element {
                       ) : (
                         <button
                           type="button"
-                          className="link"
+                          className={stylex(styles.linkButton)}
                           onClick={() => openInPlanPreview(entry.externalId)}
                         >
                           Open

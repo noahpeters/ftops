@@ -1,4 +1,7 @@
+"use client";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
+import stylex from "~/lib/stylex";
 import { JsonView } from "../../components/JsonView";
 import {
   createRule,
@@ -18,6 +21,196 @@ const TEMPLATE_SEARCH_KEY = "ftops-ui:templates:search";
 const EMPTY_RULE_JSON = '{\n  "attach_to": "project"\n}';
 
 const TEMPLATE_KINDS = ["task", "checklist", "milestone"] as const;
+
+const styles = stylex.create({
+  panel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "16px",
+  },
+  toolbar: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    flexWrap: "wrap",
+  },
+  search: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+  actions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flexWrap: "wrap",
+  },
+  error: {
+    color: "#b91c1c",
+  },
+  empty: {
+    color: "#94a3b8",
+  },
+  layout: {
+    display: "grid",
+    gridTemplateColumns: "320px 1fr",
+    gap: "16px",
+  },
+  list: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "12px",
+    backgroundColor: "#ffffff",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  listHeader: {
+    fontWeight: 600,
+  },
+  listItem: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "10px",
+    padding: "10px",
+    backgroundColor: "#f8fafc",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  listItemActive: {
+    borderColor: "#6366f1",
+    backgroundColor: "#eef2ff",
+  },
+  templateKey: {
+    fontWeight: 600,
+  },
+  templateMeta: {
+    display: "flex",
+    gap: "6px",
+    flexWrap: "wrap",
+    fontSize: "12px",
+    color: "#475569",
+  },
+  statusOn: {
+    color: "#15803d",
+    fontWeight: 600,
+  },
+  statusOff: {
+    color: "#b91c1c",
+    fontWeight: 600,
+  },
+  detail: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "12px",
+    backgroundColor: "#ffffff",
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  detailHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "8px",
+    flexWrap: "wrap",
+  },
+  urlHint: {
+    fontSize: "12px",
+    color: "#64748b",
+  },
+  panelSub: {
+    marginTop: "8px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  formGrid: {
+    display: "grid",
+    gap: "12px",
+  },
+  checkbox: {
+    display: "inline-flex",
+    gap: "6px",
+    alignItems: "center",
+  },
+  advanced: {
+    border: "1px dashed #e2e8f0",
+    borderRadius: "10px",
+    padding: "10px",
+  },
+  dangerButton: {
+    border: "1px solid #fecaca",
+    backgroundColor: "#fee2e2",
+    color: "#991b1b",
+    padding: "6px 10px",
+    borderRadius: "8px",
+    cursor: "pointer",
+  },
+  secondaryButton: {
+    border: "1px solid #94a3b8",
+    backgroundColor: "#ffffff",
+    color: "#0f172a",
+    padding: "6px 10px",
+    borderRadius: "8px",
+    cursor: "pointer",
+  },
+  ruleCreate: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "10px",
+    padding: "10px",
+    backgroundColor: "#f8fafc",
+  },
+  full: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  rulesList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+  ruleCard: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "10px",
+    padding: "10px",
+    backgroundColor: "#ffffff",
+  },
+  ruleHeader: {
+    display: "flex",
+    gap: "8px",
+    alignItems: "center",
+    marginBottom: "8px",
+  },
+  badge: {
+    padding: "2px 6px",
+    borderRadius: "999px",
+    fontSize: "11px",
+    backgroundColor: "#e2e8f0",
+    color: "#1e293b",
+  },
+  jsonBlock: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "10px",
+    backgroundColor: "#f8fafc",
+  },
+  modalBackdrop: {
+    position: "fixed",
+    inset: 0,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "24px",
+  },
+  modal: {
+    backgroundColor: "#ffffff",
+    borderRadius: "12px",
+    padding: "20px",
+    border: "1px solid #e2e8f0",
+    width: "min(640px, 100%)",
+  },
+});
 
 type TemplatesState = {
   status?: number;
@@ -439,9 +632,9 @@ export function TemplatesPanel(): JSX.Element {
   }
 
   return (
-    <div className="templates-panel">
-      <div className="templates-toolbar">
-        <div className="template-search">
+    <div className={stylex(styles.panel)}>
+      <div className={stylex(styles.toolbar)}>
+        <div className={stylex(styles.search)}>
           <label htmlFor="template-search">Search templates</label>
           <input
             id="template-search"
@@ -451,7 +644,7 @@ export function TemplatesPanel(): JSX.Element {
             onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
-        <div className="templates-actions">
+        <div className={stylex(styles.actions)}>
           <button type="button" onClick={refreshTemplates} disabled={templatesLoading}>
             {templatesLoading ? "Refreshing..." : "Refresh"}
           </button>
@@ -461,35 +654,37 @@ export function TemplatesPanel(): JSX.Element {
         </div>
       </div>
 
-      {templatesState.error && <div className="error">{templatesState.error}</div>}
+      {templatesState.error && <div className={stylex(styles.error)}>{templatesState.error}</div>}
 
-      {actionError && <div className="error">{actionError}</div>}
+      {actionError && <div className={stylex(styles.error)}>{actionError}</div>}
 
-      <div className="templates-layout">
-        <div className="template-list">
-          <div className="template-list-header">
+      <div className={stylex(styles.layout)}>
+        <div className={stylex(styles.list)}>
+          <div className={stylex(styles.listHeader)}>
             <strong>Templates</strong>
             <span>{filteredTemplates.length} shown</span>
           </div>
-          {filteredTemplates.length === 0 && <div className="empty">No templates found.</div>}
+          {filteredTemplates.length === 0 && (
+            <div className={stylex(styles.empty)}>No templates found.</div>
+          )}
           {filteredTemplates.map((template) => {
             const isSelected = template.key === selectedTemplateKey;
             return (
               <button
                 key={template.key}
                 type="button"
-                className={isSelected ? "active" : ""}
+                className={stylex(styles.listItem, isSelected && styles.listItemActive)}
                 onClick={() => setSelectedTemplateKey(template.key)}
               >
-                <div className="template-key">{template.key}</div>
-                <div className="template-meta">
+                <div className={stylex(styles.templateKey)}>{template.key}</div>
+                <div className={stylex(styles.templateMeta)}>
                   <span>{template.title}</span>
                   <span>
                     {template.kind} · {template.scope}
                     {template.category_key ? ` · ${template.category_key}` : ""}
                     {template.deliverable_key ? `/${template.deliverable_key}` : ""}
                   </span>
-                  <span className={template.is_active ? "status-on" : "status-off"}>
+                  <span className={stylex(template.is_active ? styles.statusOn : styles.statusOff)}>
                     {template.is_active ? "active" : "inactive"}
                   </span>
                 </div>
@@ -498,29 +693,33 @@ export function TemplatesPanel(): JSX.Element {
           })}
         </div>
 
-        <div className="template-detail">
-          <div className="template-detail-header">
+        <div className={stylex(styles.detail)}>
+          <div className={stylex(styles.detailHeader)}>
             <strong>Template Editor</strong>
             {templateDetailState.status !== undefined && (
-              <span className="url-hint">
+              <span className={stylex(styles.urlHint)}>
                 Status {templateDetailState.status} · {templateDetailState.durationMs}ms
               </span>
             )}
           </div>
 
-          {templateDetailLoading && <div className="empty">Loading template details...</div>}
+          {templateDetailLoading && (
+            <div className={stylex(styles.empty)}>Loading template details...</div>
+          )}
 
-          {templateDetailState.error && <div className="error">{templateDetailState.error}</div>}
+          {templateDetailState.error && (
+            <div className={stylex(styles.error)}>{templateDetailState.error}</div>
+          )}
 
           {!templateDetail && !templateDetailLoading && (
-            <div className="empty">Select a template to edit.</div>
+            <div className={stylex(styles.empty)}>Select a template to edit.</div>
           )}
 
           {templateDetail && (
             <>
-              <section className="panel-sub">
+              <section className={stylex(styles.panelSub)}>
                 <h3>Template</h3>
-                <div className="form-grid">
+                <div className={stylex(styles.formGrid)}>
                   <label>
                     Key
                     <input type="text" value={templateDetail.template.key} disabled />
@@ -611,7 +810,7 @@ export function TemplatesPanel(): JSX.Element {
                       }
                     />
                   </label>
-                  <label className="checkbox">
+                  <label className={stylex(styles.checkbox)}>
                     <input
                       type="checkbox"
                       checked={templateForm.is_active}
@@ -626,7 +825,7 @@ export function TemplatesPanel(): JSX.Element {
                   </label>
                 </div>
 
-                <details className="panel-advanced">
+                <details className={stylex(styles.advanced)}>
                   <summary>Advanced: Default State JSON</summary>
                   <textarea
                     rows={6}
@@ -640,13 +839,13 @@ export function TemplatesPanel(): JSX.Element {
                   />
                 </details>
 
-                <div className="actions">
+                <div className={stylex(styles.actions)}>
                   <button type="button" onClick={handleUpdateTemplate} disabled={savingTemplate}>
                     {savingTemplate ? "Saving..." : "Save Template"}
                   </button>
                   <button
                     type="button"
-                    className="danger"
+                    className={stylex(styles.dangerButton)}
                     onClick={handleDeleteTemplate}
                     disabled={deletingTemplate}
                   >
@@ -655,9 +854,9 @@ export function TemplatesPanel(): JSX.Element {
                 </div>
               </section>
 
-              <section className="panel-sub">
+              <section className={stylex(styles.panelSub)}>
                 <h3>Rules</h3>
-                <div className="rule-create">
+                <div className={stylex(styles.ruleCreate)}>
                   <label>
                     Priority
                     <input
@@ -671,7 +870,7 @@ export function TemplatesPanel(): JSX.Element {
                       }
                     />
                   </label>
-                  <label className="checkbox">
+                  <label className={stylex(styles.checkbox)}>
                     <input
                       type="checkbox"
                       checked={ruleCreateForm.is_active}
@@ -684,7 +883,7 @@ export function TemplatesPanel(): JSX.Element {
                     />
                     Active
                   </label>
-                  <label className="full">
+                  <label className={stylex(styles.full)}>
                     Match JSON
                     <textarea
                       rows={4}
@@ -702,19 +901,19 @@ export function TemplatesPanel(): JSX.Element {
                   </button>
                 </div>
 
-                {rules.length === 0 && <div className="empty">No rules yet.</div>}
+                {rules.length === 0 && <div className={stylex(styles.empty)}>No rules yet.</div>}
 
-                <div className="rules-list">
+                <div className={stylex(styles.rulesList)}>
                   {rules.map((rule) => {
                     const edit = ruleEdits[rule.id];
                     const attachTo = getAttachTo(rule.match_json);
                     return (
-                      <div key={rule.id} className="rule-card">
-                        <div className="rule-header">
+                      <div key={rule.id} className={stylex(styles.ruleCard)}>
+                        <div className={stylex(styles.ruleHeader)}>
                           <strong>Rule {rule.id}</strong>
-                          {attachTo && <span className="badge">{attachTo}</span>}
+                          {attachTo && <span className={stylex(styles.badge)}>{attachTo}</span>}
                         </div>
-                        <div className="form-grid">
+                        <div className={stylex(styles.formGrid)}>
                           <label>
                             Priority
                             <input
@@ -727,7 +926,7 @@ export function TemplatesPanel(): JSX.Element {
                               }
                             />
                           </label>
-                          <label className="checkbox">
+                          <label className={stylex(styles.checkbox)}>
                             <input
                               type="checkbox"
                               checked={edit?.is_active ?? false}
@@ -739,7 +938,7 @@ export function TemplatesPanel(): JSX.Element {
                             />
                             Active
                           </label>
-                          <label className="full">
+                          <label className={stylex(styles.full)}>
                             Match JSON
                             <textarea
                               rows={4}
@@ -752,7 +951,7 @@ export function TemplatesPanel(): JSX.Element {
                             />
                           </label>
                         </div>
-                        <div className="actions">
+                        <div className={stylex(styles.actions)}>
                           <button
                             type="button"
                             onClick={() => handleSaveRule(rule)}
@@ -762,7 +961,7 @@ export function TemplatesPanel(): JSX.Element {
                           </button>
                           <button
                             type="button"
-                            className="danger"
+                            className={stylex(styles.dangerButton)}
                             onClick={() => handleDeleteRule(rule)}
                             disabled={deletingRuleId === rule.id}
                           >
@@ -775,9 +974,9 @@ export function TemplatesPanel(): JSX.Element {
                 </div>
               </section>
 
-              <section className="panel-sub">
+              <section className={stylex(styles.panelSub)}>
                 <h3>Raw JSON</h3>
-                <div className="json-block">
+                <div className={stylex(styles.jsonBlock)}>
                   <JsonView data={templateDetail} />
                 </div>
               </section>
@@ -787,10 +986,10 @@ export function TemplatesPanel(): JSX.Element {
       </div>
 
       {showNewTemplateModal && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal">
+        <div className={stylex(styles.modalBackdrop)} role="dialog" aria-modal="true">
+          <div className={stylex(styles.modal)}>
             <h3>New Template</h3>
-            <div className="form-grid">
+            <div className={stylex(styles.formGrid)}>
               <label>
                 Key
                 <input
@@ -894,7 +1093,7 @@ export function TemplatesPanel(): JSX.Element {
                   }
                 />
               </label>
-              <label className="checkbox">
+              <label className={stylex(styles.checkbox)}>
                 <input
                   type="checkbox"
                   checked={newTemplateForm.is_active}
@@ -908,7 +1107,7 @@ export function TemplatesPanel(): JSX.Element {
                 Active
               </label>
             </div>
-            <details className="panel-advanced">
+            <details className={stylex(styles.advanced)}>
               <summary>Advanced: Default State JSON</summary>
               <textarea
                 rows={6}
@@ -921,13 +1120,13 @@ export function TemplatesPanel(): JSX.Element {
                 }
               />
             </details>
-            <div className="actions">
+            <div className={stylex(styles.actions)}>
               <button type="button" onClick={handleCreateTemplate} disabled={creatingTemplate}>
                 {creatingTemplate ? "Creating..." : "Create"}
               </button>
               <button
                 type="button"
-                className="secondary"
+                className={stylex(styles.secondaryButton)}
                 onClick={() => setShowNewTemplateModal(false)}
               >
                 Cancel

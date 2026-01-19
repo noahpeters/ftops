@@ -1,4 +1,7 @@
+"use client";
+
 import { useEffect, useState } from "react";
+import stylex from "~/lib/stylex";
 import {
   createWorkspace,
   deleteWorkspace,
@@ -8,6 +11,77 @@ import {
 } from "./api";
 
 const SLUG_REGEX = /^[a-z0-9-]{3,40}$/;
+
+const styles = stylex.create({
+  panel: {
+    padding: "24px 32px",
+  },
+  error: {
+    color: "#b91c1c",
+  },
+  panelSub: {
+    marginTop: "16px",
+  },
+  formGrid: {
+    display: "grid",
+    gap: "12px",
+  },
+  formRow: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  actions: {
+    display: "flex",
+    gap: "8px",
+    marginTop: "10px",
+    flexWrap: "wrap",
+  },
+  muted: {
+    color: "#94a3b8",
+  },
+  tableWrap: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    overflowX: "auto",
+  },
+  dangerButton: {
+    border: "1px solid #fecaca",
+    backgroundColor: "#fee2e2",
+    color: "#991b1b",
+    padding: "6px 10px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    marginLeft: "6px",
+  },
+  secondaryButton: {
+    border: "1px solid #94a3b8",
+    backgroundColor: "#ffffff",
+    color: "#0f172a",
+    padding: "6px 10px",
+    borderRadius: "8px",
+    cursor: "pointer",
+  },
+  empty: {
+    color: "#94a3b8",
+  },
+  modal: {
+    position: "fixed",
+    inset: 0,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "24px",
+  },
+  modalContent: {
+    backgroundColor: "#ffffff",
+    borderRadius: "12px",
+    padding: "20px",
+    border: "1px solid #e2e8f0",
+    width: "min(520px, 100%)",
+  },
+});
 
 export function WorkspacesPanel({
   selectedWorkspaceId,
@@ -114,15 +188,15 @@ export function WorkspacesPanel({
   }
 
   return (
-    <section className="panel">
+    <section className={stylex(styles.panel)}>
       <h2>Workspaces</h2>
-      {error && <div className="error">{error}</div>}
-      {deleteError && <div className="error">{deleteError}</div>}
+      {error && <div className={stylex(styles.error)}>{error}</div>}
+      {deleteError && <div className={stylex(styles.error)}>{deleteError}</div>}
 
-      <div className="panel-sub">
+      <div className={stylex(styles.panelSub)}>
         <h3>Create Workspace</h3>
-        <div className="form-grid">
-          <div className="form-row">
+        <div className={stylex(styles.formGrid)}>
+          <div className={stylex(styles.formRow)}>
             <label>Slug</label>
             <input
               value={createSlug}
@@ -130,7 +204,7 @@ export function WorkspacesPanel({
               placeholder="acme-production"
             />
           </div>
-          <div className="form-row">
+          <div className={stylex(styles.formRow)}>
             <label>Name</label>
             <input
               value={createName}
@@ -139,17 +213,17 @@ export function WorkspacesPanel({
             />
           </div>
         </div>
-        <div className="actions">
+        <div className={stylex(styles.actions)}>
           <button type="button" onClick={handleCreate}>
             Create
           </button>
         </div>
       </div>
 
-      <div className="panel-sub">
+      <div className={stylex(styles.panelSub)}>
         <h3>Existing Workspaces</h3>
-        {loading && <p className="muted">Loading...</p>}
-        <div className="table-wrap">
+        {loading && <p className={stylex(styles.muted)}>Loading...</p>}
+        <div className={stylex(styles.tableWrap)}>
           <table>
             <thead>
               <tr>
@@ -180,7 +254,7 @@ export function WorkspacesPanel({
                     </button>
                     <button
                       type="button"
-                      className="danger"
+                      className={stylex(styles.dangerButton)}
                       onClick={() => handleDelete(workspace)}
                     >
                       Delete
@@ -190,7 +264,7 @@ export function WorkspacesPanel({
               ))}
               {workspaces.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={5} className="empty">
+                  <td colSpan={5} className={stylex(styles.empty)}>
                     No workspaces yet.
                   </td>
                 </tr>
@@ -201,24 +275,28 @@ export function WorkspacesPanel({
       </div>
 
       {editTarget && (
-        <div className="modal">
-          <div className="modal-content">
+        <div className={stylex(styles.modal)}>
+          <div className={stylex(styles.modalContent)}>
             <h3>Edit Workspace</h3>
-            <div className="form-grid">
-              <div className="form-row">
+            <div className={stylex(styles.formGrid)}>
+              <div className={stylex(styles.formRow)}>
                 <label>Slug</label>
                 <input value={editSlug} onChange={(event) => setEditSlug(event.target.value)} />
               </div>
-              <div className="form-row">
+              <div className={stylex(styles.formRow)}>
                 <label>Name</label>
                 <input value={editName} onChange={(event) => setEditName(event.target.value)} />
               </div>
             </div>
-            <div className="actions">
+            <div className={stylex(styles.actions)}>
               <button type="button" onClick={handleUpdate}>
                 Save
               </button>
-              <button type="button" className="secondary" onClick={() => setEditTarget(null)}>
+              <button
+                type="button"
+                className={stylex(styles.secondaryButton)}
+                onClick={() => setEditTarget(null)}
+              >
                 Cancel
               </button>
             </div>

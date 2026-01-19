@@ -1,4 +1,151 @@
+"use client";
+
 import { useMemo, useState } from "react";
+import stylex from "~/lib/stylex";
+
+const styles = stylex.create({
+  panel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "16px",
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "16px",
+    backgroundColor: "#ffffff",
+  },
+  panelHeader: {
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: "12px",
+  },
+  checkbox: {
+    display: "inline-flex",
+    gap: "6px",
+    alignItems: "center",
+  },
+  section: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  controls: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flexWrap: "wrap",
+  },
+  secondaryButton: {
+    border: "1px solid #94a3b8",
+    backgroundColor: "#ffffff",
+    color: "#0f172a",
+    padding: "6px 10px",
+    borderRadius: "8px",
+    cursor: "pointer",
+  },
+  muted: {
+    color: "#94a3b8",
+  },
+  card: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "12px",
+    backgroundColor: "#f8fafc",
+  },
+  cardSelected: {
+    borderColor: "#6366f1",
+    backgroundColor: "#eef2ff",
+  },
+  summary: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    alignItems: "center",
+    cursor: "pointer",
+  },
+  badge: {
+    padding: "2px 8px",
+    borderRadius: "999px",
+    fontSize: "11px",
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    backgroundColor: "#e2e8f0",
+    color: "#1e293b",
+  },
+  badgeProject: {
+    backgroundColor: "#e0f2fe",
+    color: "#075985",
+  },
+  badgeShared: {
+    backgroundColor: "#dcfce7",
+    color: "#166534",
+  },
+  badgeDeliverable: {
+    backgroundColor: "#fee2e2",
+    color: "#991b1b",
+  },
+  key: {
+    fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+    fontSize: "12px",
+  },
+  title: {
+    fontWeight: 600,
+  },
+  metaInline: {
+    fontSize: "12px",
+    color: "#64748b",
+  },
+  body: {
+    marginTop: "8px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+  meta: {
+    display: "grid",
+    gap: "6px",
+    fontSize: "12px",
+    color: "#475569",
+  },
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  },
+  error: {
+    color: "#b91c1c",
+  },
+  json: {
+    backgroundColor: "#0f172a",
+    color: "#e2e8f0",
+    padding: "10px",
+    borderRadius: "10px",
+    fontSize: "11px",
+    overflowX: "auto",
+  },
+  matches: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    fontSize: "12px",
+  },
+  matchTitle: {
+    fontWeight: 600,
+  },
+  matchKey: {
+    color: "#475569",
+    marginLeft: "6px",
+  },
+  matchMeta: {
+    color: "#94a3b8",
+    marginLeft: "6px",
+  },
+});
 
 type ProjectContext = {
   type: "project";
@@ -121,13 +268,13 @@ export function ContextViewer({ data }: ContextViewerProps): JSX.Element | null 
   }
 
   return (
-    <div className="context-panel">
-      <div className="context-panel-header">
+    <div className={stylex(styles.panel)}>
+      <div className={stylex(styles.panelHeader)}>
         <div>
           <h3>Contexts</h3>
           <p>Derived contexts and rule matches for this record.</p>
         </div>
-        <label className="checkbox">
+        <label className={stylex(styles.checkbox)}>
           <input
             type="checkbox"
             checked={showRuleIds}
@@ -137,18 +284,18 @@ export function ContextViewer({ data }: ContextViewerProps): JSX.Element | null 
         </label>
       </div>
 
-      <div className="context-section">
+      <div className={stylex(styles.section)}>
         <h4>Project</h4>
-        <details className="context-card" open>
-          <summary className="context-summary">
-            <span className="context-badge project">Project</span>
-            <span className="context-key">{shorten(contexts.project.key)}</span>
+        <details className={stylex(styles.card)} open>
+          <summary className={stylex(styles.summary)}>
+            <span className={stylex(styles.badge, styles.badgeProject)}>Project</span>
+            <span className={stylex(styles.key)}>{shorten(contexts.project.key)}</span>
             {contexts.project.customer_display && (
-              <span className="context-title">{contexts.project.customer_display}</span>
+              <span className={stylex(styles.title)}>{contexts.project.customer_display}</span>
             )}
           </summary>
-          <div className="context-body">
-            <div className="context-meta">
+          <div className={stylex(styles.body)}>
+            <div className={stylex(styles.meta)}>
               <div>
                 <strong>record_uri:</strong> {contexts.project.record_uri}
               </div>
@@ -172,18 +319,18 @@ export function ContextViewer({ data }: ContextViewerProps): JSX.Element | null 
         </details>
       </div>
 
-      <div className="context-section">
+      <div className={stylex(styles.section)}>
         <h4>Shared</h4>
-        {shared.length === 0 && <p className="muted">No shared contexts.</p>}
+        {shared.length === 0 && <p className={stylex(styles.muted)}>No shared contexts.</p>}
         {shared.map((context) => (
-          <details className="context-card" key={context.key}>
-            <summary className="context-summary">
-              <span className="context-badge shared">Shared</span>
-              <span className="context-key">{shorten(context.key)}</span>
-              <span className="context-title">{context.line_items.length} line items</span>
+          <details className={stylex(styles.card)} key={context.key}>
+            <summary className={stylex(styles.summary)}>
+              <span className={stylex(styles.badge, styles.badgeShared)}>Shared</span>
+              <span className={stylex(styles.key)}>{shorten(context.key)}</span>
+              <span className={stylex(styles.title)}>{context.line_items.length} line items</span>
             </summary>
-            <div className="context-body">
-              <div className="context-meta">
+            <div className={stylex(styles.body)}>
+              <div className={stylex(styles.meta)}>
                 <div>
                   <strong>group_key:</strong> {context.group_key}
                 </div>
@@ -200,7 +347,7 @@ export function ContextViewer({ data }: ContextViewerProps): JSX.Element | null 
                   {String(context.derived?.deliveryRequired ?? false)}
                 </div>
               </div>
-              <div className="context-list">
+              <div className={stylex(styles.list)}>
                 {context.line_items.map((item) => (
                   <div key={item.line_item_uri}>
                     {shorten(item.line_item_uri)} — {item.title ?? "Untitled"} ({item.category_key}/
@@ -214,10 +361,10 @@ export function ContextViewer({ data }: ContextViewerProps): JSX.Element | null 
         ))}
       </div>
 
-      <div className="context-section">
-        <div className="context-section-header">
+      <div className={stylex(styles.section)}>
+        <div className={stylex(styles.sectionHeader)}>
           <h4>Deliverables</h4>
-          <div className="context-controls">
+          <div className={stylex(styles.controls)}>
             <input
               type="text"
               placeholder="Search deliverables..."
@@ -227,7 +374,7 @@ export function ContextViewer({ data }: ContextViewerProps): JSX.Element | null 
             {selectedDeliverable && (
               <button
                 type="button"
-                className="secondary"
+                className={stylex(styles.secondaryButton)}
                 onClick={() => setSelectedDeliverable(null)}
               >
                 Clear selection
@@ -236,7 +383,7 @@ export function ContextViewer({ data }: ContextViewerProps): JSX.Element | null 
           </div>
         </div>
         {filteredDeliverables.length === 0 && (
-          <p className="muted">No deliverable contexts match.</p>
+          <p className={stylex(styles.muted)}>No deliverable contexts match.</p>
         )}
         {filteredDeliverables.map((context) => {
           const matches = getMatches("deliverable", context.key);
@@ -244,23 +391,23 @@ export function ContextViewer({ data }: ContextViewerProps): JSX.Element | null 
           const showMatches = !selectedDeliverable || selectedDeliverable === context.key;
           return (
             <details
-              className={`context-card ${isSelected ? "selected" : ""}`.trim()}
+              className={stylex(styles.card, isSelected && styles.cardSelected)}
               key={context.key}
               onClick={() => setSelectedDeliverable(isSelected ? null : context.key)}
             >
-              <summary className="context-summary">
-                <span className="context-badge deliverable">Deliverable</span>
-                <span className="context-key">{shorten(context.key)}</span>
-                <span className="context-title">{context.title ?? "Untitled"}</span>
-                <span className="context-meta-inline">
+              <summary className={stylex(styles.summary)}>
+                <span className={stylex(styles.badge, styles.badgeDeliverable)}>Deliverable</span>
+                <span className={stylex(styles.key)}>{shorten(context.key)}</span>
+                <span className={stylex(styles.title)}>{context.title ?? "Untitled"}</span>
+                <span className={stylex(styles.metaInline)}>
                   {context.category_key}/{context.deliverable_key}
                 </span>
                 {context.group_key && (
-                  <span className="context-meta-inline">group: {context.group_key}</span>
+                  <span className={stylex(styles.metaInline)}>group: {context.group_key}</span>
                 )}
               </summary>
-              <div className="context-body">
-                <div className="context-meta">
+              <div className={stylex(styles.body)}>
+                <div className={stylex(styles.meta)}>
                   <div>
                     <strong>quantity:</strong> {context.quantity ?? 0}
                   </div>
@@ -271,16 +418,18 @@ export function ContextViewer({ data }: ContextViewerProps): JSX.Element | null 
                     <strong>config_hash:</strong> {context.config_hash ?? "n/a"}
                   </div>
                   {context.configParseError && (
-                    <div className="error">
+                    <div className={stylex(styles.error)}>
                       <strong>config error:</strong> {context.configParseError}
                     </div>
                   )}
                 </div>
                 {context.config && (
-                  <pre className="context-json">{JSON.stringify(context.config, null, 2)}</pre>
+                  <pre className={stylex(styles.json)}>
+                    {JSON.stringify(context.config, null, 2)}
+                  </pre>
                 )}
                 {showMatches && <MatchesList matches={matches} showRuleIds={showRuleIds} />}
-                {!showMatches && <p className="muted">Select to view matches.</p>}
+                {!showMatches && <p className={stylex(styles.muted)}>Select to view matches.</p>}
               </div>
             </details>
           );
@@ -298,18 +447,18 @@ function MatchesList({
   showRuleIds: boolean;
 }) {
   if (!matches.length) {
-    return <p className="muted">No matching templates.</p>;
+    return <p className={stylex(styles.muted)}>No matching templates.</p>;
   }
   return (
-    <div className="context-matches">
+    <div className={stylex(styles.matches)}>
       <strong>Matched templates</strong>
       <ul>
         {matches.map((match, index) => (
           <li key={`${match.templateKey}-${match.ruleId}-${index}`}>
-            <span className="match-title">{match.title ?? match.templateKey}</span>
-            <span className="match-key">{match.templateKey}</span>
-            <span className="match-meta">priority {match.rulePriority}</span>
-            {showRuleIds && <span className="match-meta">rule {match.ruleId}</span>}
+            <span className={stylex(styles.matchTitle)}>{match.title ?? match.templateKey}</span>
+            <span className={stylex(styles.matchKey)}>{match.templateKey}</span>
+            <span className={stylex(styles.matchMeta)}>priority {match.rulePriority}</span>
+            {showRuleIds && <span className={stylex(styles.matchMeta)}>rule {match.ruleId}</span>}
           </li>
         ))}
       </ul>

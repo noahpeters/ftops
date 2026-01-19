@@ -1,4 +1,7 @@
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
+import stylex from "~/lib/stylex";
 import {
   addTaskNote,
   getProject,
@@ -14,6 +17,150 @@ import {
 const STATUS_OPTIONS = ["todo", "doing", "blocked", "done", "canceled"];
 
 type ContextLookup = Record<string, { title?: string | null }>;
+
+const styles = stylex.create({
+  panel: {
+    padding: "24px 32px",
+  },
+  layout: {
+    display: "grid",
+    gridTemplateColumns: "280px 1fr",
+    gap: "16px",
+  },
+  sidebar: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "12px",
+    backgroundColor: "#ffffff",
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  actions: {
+    display: "flex",
+    gap: "8px",
+  },
+  error: {
+    color: "#b91c1c",
+  },
+  list: {
+    listStyle: "none",
+    padding: 0,
+    margin: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  listButton: {
+    textAlign: "left",
+    width: "100%",
+    border: "1px solid #e2e8f0",
+    borderRadius: "10px",
+    padding: "10px",
+    backgroundColor: "#f8fafc",
+    cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  },
+  listButtonActive: {
+    borderColor: "#6366f1",
+    backgroundColor: "#eef2ff",
+  },
+  muted: {
+    color: "#94a3b8",
+  },
+  detail: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "16px",
+    backgroundColor: "#ffffff",
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  projectHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+  },
+  secondaryButton: {
+    border: "1px solid #94a3b8",
+    backgroundColor: "#ffffff",
+    color: "#0f172a",
+    padding: "6px 10px",
+    borderRadius: "8px",
+    cursor: "pointer",
+  },
+  tasksSection: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "16px",
+  },
+  taskGroup: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  taskSubgroup: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "10px",
+    backgroundColor: "#f8fafc",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  taskSubgroupTitle: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  },
+  taskRow: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "10px",
+    backgroundColor: "#ffffff",
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+  taskMain: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    flexWrap: "wrap",
+  },
+  taskMeta: {
+    fontSize: "12px",
+    color: "#475569",
+  },
+  taskActions: {
+    display: "flex",
+    gap: "8px",
+    alignItems: "center",
+  },
+  taskNotes: {
+    borderTop: "1px solid #e2e8f0",
+    paddingTop: "10px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  noteRow: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "10px",
+    padding: "8px",
+    backgroundColor: "#f8fafc",
+  },
+  noteMeta: {
+    display: "flex",
+    gap: "8px",
+    fontSize: "12px",
+    color: "#475569",
+  },
+});
 
 export function ProjectsPanel({
   selectedProjectId,
@@ -162,55 +309,64 @@ export function ProjectsPanel({
   }, [groupedTasks.shared]);
 
   return (
-    <section className="panel">
+    <section className={stylex(styles.panel)}>
       <h2>Projects</h2>
-      <div className="projects-layout">
-        <div className="projects-sidebar">
-          <div className="actions">
+      <div className={stylex(styles.layout)}>
+        <div className={stylex(styles.sidebar)}>
+          <div className={stylex(styles.actions)}>
             <button type="button" onClick={refreshProjects} disabled={projectsLoading}>
               {projectsLoading ? "Loading..." : "Refresh"}
             </button>
           </div>
-          {projectsError && <div className="error">{projectsError}</div>}
-          <ul className="projects-list">
+          {projectsError && <div className={stylex(styles.error)}>{projectsError}</div>}
+          <ul className={stylex(styles.list)}>
             {projects.map((item) => (
               <li key={item.id}>
                 <button
                   type="button"
-                  className={selectedProjectId === item.id ? "active" : ""}
+                  className={stylex(
+                    styles.listButton,
+                    selectedProjectId === item.id && styles.listButtonActive
+                  )}
                   onClick={() => onSelectProject(item.id)}
                 >
                   <strong>{item.title}</strong>
                   <span>{item.status}</span>
-                  <span className="muted">{item.updated_at ?? item.created_at}</span>
+                  <span className={stylex(styles.muted)}>{item.updated_at ?? item.created_at}</span>
                 </button>
               </li>
             ))}
             {projects.length === 0 && !projectsLoading && (
-              <li className="muted">No projects yet.</li>
+              <li className={stylex(styles.muted)}>No projects yet.</li>
             )}
           </ul>
         </div>
 
-        <div className="projects-detail">
-          {!selectedProjectId && <p className="muted">Select a project.</p>}
+        <div className={stylex(styles.detail)}>
+          {!selectedProjectId && <p className={stylex(styles.muted)}>Select a project.</p>}
           {selectedProjectId && (
             <>
-              <div className="project-header">
+              <div className={stylex(styles.projectHeader)}>
                 <div>
                   <h3>{project?.title ?? "Project"}</h3>
-                  <p className="muted">Record: {project?.commercial_record_uri ?? "n/a"}</p>
+                  <p className={stylex(styles.muted)}>
+                    Record: {project?.commercial_record_uri ?? "n/a"}
+                  </p>
                 </div>
-                <button type="button" className="secondary" onClick={() => onSelectProject(null)}>
+                <button
+                  type="button"
+                  className={stylex(styles.secondaryButton)}
+                  onClick={() => onSelectProject(null)}
+                >
                   Back to list
                 </button>
               </div>
 
-              {tasksError && <div className="error">{tasksError}</div>}
-              {tasksLoading && <p className="muted">Loading tasks...</p>}
+              {tasksError && <div className={stylex(styles.error)}>{tasksError}</div>}
+              {tasksLoading && <p className={stylex(styles.muted)}>Loading tasks...</p>}
 
               {!tasksLoading && (
-                <div className="tasks-section">
+                <div className={stylex(styles.tasksSection)}>
                   <TaskGroup
                     title="Project"
                     tasks={groupedTasks.project}
@@ -296,14 +452,14 @@ function TaskGroup({
 }) {
   if (!tasks.length) {
     return (
-      <div className="task-group">
+      <div className={stylex(styles.taskGroup)}>
         <h4>{title}</h4>
-        <p className="muted">No tasks.</p>
+        <p className={stylex(styles.muted)}>No tasks.</p>
       </div>
     );
   }
   return (
-    <div className="task-group">
+    <div className={stylex(styles.taskGroup)}>
       <h4>{title}</h4>
       {tasks.map((task) => (
         <TaskRowView
@@ -346,16 +502,16 @@ function TaskGroupCollection({
   noteError: string | null;
 }) {
   return (
-    <div className="task-group">
+    <div className={stylex(styles.taskGroup)}>
       <h4>{title}</h4>
-      {groups.size === 0 && <p className="muted">No tasks.</p>}
+      {groups.size === 0 && <p className={stylex(styles.muted)}>No tasks.</p>}
       {Array.from(groups.entries()).map(([key, tasks]) => {
         const contextTitle = contextLookup?.[key]?.title;
         return (
-          <div key={key} className="task-subgroup">
-            <div className="task-subgroup-title">
+          <div key={key} className={stylex(styles.taskSubgroup)}>
+            <div className={stylex(styles.taskSubgroupTitle)}>
               <strong>{contextTitle ?? shorten(key)}</strong>
-              {contextTitle && <span className="muted">{shorten(key)}</span>}
+              {contextTitle && <span className={stylex(styles.muted)}>{shorten(key)}</span>}
             </div>
             {tasks.map((task) => (
               <TaskRowView key={task.id} task={task} {...taskProps} />
@@ -397,15 +553,15 @@ function TaskRowView({
   const isSaving = statusSaving[task.id];
 
   return (
-    <div className="task-row">
-      <div className="task-main">
+    <div className={stylex(styles.taskRow)}>
+      <div className={stylex(styles.taskMain)}>
         <div>
           <strong>{task.title}</strong>
-          <div className="task-meta">
+          <div className={stylex(styles.taskMeta)}>
             <span>{task.template_key}</span>
           </div>
         </div>
-        <div className="task-actions">
+        <div className={stylex(styles.taskActions)}>
           <select
             value={task.status}
             onChange={(event) => onStatusChange(task.id, event.target.value)}
@@ -417,20 +573,26 @@ function TaskRowView({
               </option>
             ))}
           </select>
-          <button type="button" className="secondary" onClick={() => onToggleNotes(task.id)}>
+          <button
+            type="button"
+            className={stylex(styles.secondaryButton)}
+            onClick={() => onToggleNotes(task.id)}
+          >
             {isExpanded ? "Hide notes" : "Notes"}
           </button>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="task-notes">
-          {notesLoading[task.id] && <p className="muted">Loading notes...</p>}
-          {noteError && <div className="error">{noteError}</div>}
-          {notes.length === 0 && !notesLoading[task.id] && <p className="muted">No notes yet.</p>}
+        <div className={stylex(styles.taskNotes)}>
+          {notesLoading[task.id] && <p className={stylex(styles.muted)}>Loading notes...</p>}
+          {noteError && <div className={stylex(styles.error)}>{noteError}</div>}
+          {notes.length === 0 && !notesLoading[task.id] && (
+            <p className={stylex(styles.muted)}>No notes yet.</p>
+          )}
           {notes.map((note) => (
-            <div key={note.id} className="note-row">
-              <div className="note-meta">
+            <div key={note.id} className={stylex(styles.noteRow)}>
+              <div className={stylex(styles.noteMeta)}>
                 <strong>{note.author_email}</strong>
                 <span>{note.created_at}</span>
               </div>

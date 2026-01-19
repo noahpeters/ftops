@@ -7,6 +7,9 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      window.module = window.module || { exports: {} };
+    </script>
+    <script type="module" src="/src/entry.client.tsx"></script>
   </body>
 </html>

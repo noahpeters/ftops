@@ -1,4 +1,7 @@
+"use client";
+
 import { useCallback, useEffect, useState } from "react";
+import stylex from "~/lib/stylex";
 import {
   createIntegration,
   deleteIntegration,
@@ -18,6 +21,59 @@ const PROVIDERS = [
   { value: "qbo", label: "QuickBooks" },
 ];
 const ENVIRONMENTS = ["sandbox", "production"];
+
+const styles = stylex.create({
+  panel: {
+    padding: "24px 32px",
+  },
+  muted: {
+    color: "#94a3b8",
+  },
+  panelSub: {
+    marginTop: "16px",
+  },
+  formGrid: {
+    display: "grid",
+    gap: "12px",
+  },
+  formRow: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  actions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    marginTop: "10px",
+  },
+  error: {
+    color: "#b91c1c",
+  },
+  tableWrap: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    overflowX: "auto",
+  },
+  secondaryButton: {
+    border: "1px solid #94a3b8",
+    backgroundColor: "#ffffff",
+    color: "#0f172a",
+    padding: "6px 10px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    marginLeft: "6px",
+  },
+  dangerButton: {
+    border: "1px solid #fecaca",
+    backgroundColor: "#fee2e2",
+    color: "#991b1b",
+    padding: "6px 10px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    marginLeft: "6px",
+  },
+});
 
 export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanelProps) {
   const [integrations, setIntegrations] = useState<IntegrationRow[]>([]);
@@ -95,9 +151,9 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
   }
 
   return (
-    <section className="panel">
+    <section className={stylex(styles.panel)}>
       <h2>Integrations</h2>
-      <p className="muted">
+      <p className={stylex(styles.muted)}>
         Webhook endpoints:
         <br />
         Shopify: <code>https://api.from-trees.com/ingest/shopify/webhook?env=production</code>
@@ -105,10 +161,10 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
         QBO: <code>https://api.from-trees.com/ingest/qbo/webhook?env=production</code>
       </p>
 
-      <div className="panel-sub">
+      <div className={stylex(styles.panelSub)}>
         <h3>Create Integration</h3>
-        <div className="form-grid">
-          <div className="form-row">
+        <div className={stylex(styles.formGrid)}>
+          <div className={stylex(styles.formRow)}>
             <label>Workspace</label>
             <select value={workspaceId ?? ""} onChange={() => undefined} disabled>
               {workspaces.map((workspace) => (
@@ -118,7 +174,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
               ))}
             </select>
           </div>
-          <div className="form-row">
+          <div className={stylex(styles.formRow)}>
             <label>Provider</label>
             <select
               value={provider}
@@ -131,7 +187,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
               ))}
             </select>
           </div>
-          <div className="form-row">
+          <div className={stylex(styles.formRow)}>
             <label>Environment</label>
             <select
               value={environment}
@@ -144,7 +200,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
               ))}
             </select>
           </div>
-          <div className="form-row">
+          <div className={stylex(styles.formRow)}>
             <label>External account ID</label>
             <input
               value={externalAccountId}
@@ -152,7 +208,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
               placeholder={provider === "shopify" ? "shop.myshopify.com" : "realmId"}
             />
           </div>
-          <div className="form-row">
+          <div className={stylex(styles.formRow)}>
             <label>Display name</label>
             <input
               value={displayName}
@@ -160,7 +216,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
               placeholder="Optional label"
             />
           </div>
-          <div className="form-row">
+          <div className={stylex(styles.formRow)}>
             <label>{provider === "shopify" ? "Webhook secret" : "Webhook verifier token"}</label>
             <input
               value={secretValue}
@@ -169,19 +225,19 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
             />
           </div>
         </div>
-        <div className="actions">
+        <div className={stylex(styles.actions)}>
           <button type="button" onClick={submitIntegration}>
             Save integration
           </button>
         </div>
-        {error && <div className="error">{error}</div>}
+        {error && <div className={stylex(styles.error)}>{error}</div>}
       </div>
 
-      <div className="panel-sub">
+      <div className={stylex(styles.panelSub)}>
         <h3>Existing Integrations</h3>
-        {loading && <p className="muted">Loading...</p>}
-        {integrations.length === 0 && !loading && <p className="muted">None yet.</p>}
-        <div className="table-wrap">
+        {loading && <p className={stylex(styles.muted)}>Loading...</p>}
+        {integrations.length === 0 && !loading && <p className={stylex(styles.muted)}>None yet.</p>}
+        <div className={stylex(styles.tableWrap)}>
           <table>
             <thead>
               <tr>
@@ -220,14 +276,14 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                     </button>
                     <button
                       type="button"
-                      className="secondary"
+                      className={stylex(styles.secondaryButton)}
                       onClick={() => toggleActive(integration)}
                     >
                       {integration.is_active ? "Disable" : "Enable"}
                     </button>
                     <button
                       type="button"
-                      className="danger"
+                      className={stylex(styles.dangerButton)}
                       onClick={() => removeIntegration(integration.id)}
                     >
                       Delete

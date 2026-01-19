@@ -1,4 +1,7 @@
+"use client";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
+import stylex from "~/lib/stylex";
 import { buildUrl, fetchJson } from "./lib/api";
 import { DevMigrationBanner } from "./components/DevMigrationBanner";
 import { JsonView } from "./components/JsonView";
@@ -12,7 +15,6 @@ import { IntegrationsPanel } from "./features/integrations/IntegrationsPanel";
 import { IngestPanel } from "./features/ingest/IngestPanel";
 import { listWorkspaces, type WorkspaceRow } from "./features/workspaces/api";
 import { WorkspacesPanel } from "./features/workspaces/WorkspacesPanel";
-import "./index.css";
 
 const EXAMPLE_URIS = ["manual://proposal/demo", "shopify://order/example", "qbo://invoice/example"];
 
@@ -22,6 +24,169 @@ const AUTO_RUN_STORAGE_KEY = "ftops-ui:auto-run-preview";
 const DEBUG_EMAIL_STORAGE_KEY = "ftops-ui:debug-email";
 const PROJECT_STORAGE_KEY = "ftops-ui:project-id";
 const WORKSPACE_STORAGE_KEY = "ftops-ui:workspace-id";
+
+const styles = stylex.create({
+  app: {
+    minHeight: "100vh",
+    backgroundColor: "#f8fafc",
+    color: "#0f172a",
+    fontFamily: '"IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif',
+  },
+  appHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "24px",
+    padding: "24px 32px 16px",
+    borderBottom: "1px solid #e2e8f0",
+    backgroundColor: "#ffffff",
+  },
+  headerControls: {
+    display: "flex",
+    gap: "16px",
+    alignItems: "flex-end",
+    flexWrap: "wrap",
+  },
+  workspaceSelect: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  devIdentity: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  tabs: {
+    display: "flex",
+    gap: "8px",
+    padding: "16px 32px 0",
+    flexWrap: "wrap",
+  },
+  tabButton: {
+    border: "1px solid #cbd5f5",
+    backgroundColor: "#eef2ff",
+    color: "#1e1b4b",
+    padding: "8px 14px",
+    borderRadius: "999px",
+    cursor: "pointer",
+    fontSize: "13px",
+  },
+  tabButtonActive: {
+    backgroundColor: "#0f172a",
+    color: "#ffffff",
+    borderColor: "#0f172a",
+  },
+  panel: {
+    padding: "24px 32px",
+  },
+  previewLayout: {
+    display: "grid",
+    gridTemplateColumns: "280px 1fr",
+    gap: "24px",
+    alignItems: "flex-start",
+  },
+  previewMain: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "16px",
+  },
+  formRow: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  exampleRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+  },
+  actions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    alignItems: "center",
+  },
+  secondaryButton: {
+    border: "1px solid #94a3b8",
+    backgroundColor: "#ffffff",
+    color: "#0f172a",
+    padding: "8px 12px",
+    borderRadius: "8px",
+    cursor: "pointer",
+  },
+  checkbox: {
+    display: "inline-flex",
+    gap: "6px",
+    alignItems: "center",
+  },
+  urlHint: {
+    fontSize: "12px",
+    color: "#475569",
+  },
+  highlight: {
+    padding: "12px 14px",
+    borderRadius: "12px",
+    backgroundColor: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+  },
+  highlightWarning: {
+    backgroundColor: "#fef3c7",
+    borderColor: "#fcd34d",
+  },
+  results: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  error: {
+    color: "#b91c1c",
+  },
+  meta: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "12px",
+    fontSize: "12px",
+    color: "#64748b",
+  },
+  jsonBlock: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    backgroundColor: "#ffffff",
+    overflow: "hidden",
+  },
+  jsonHeader: {
+    padding: "10px 14px",
+    borderBottom: "1px solid #e2e8f0",
+    backgroundColor: "#f8fafc",
+    fontSize: "12px",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  tableWrap: {
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    overflowX: "auto",
+  },
+  empty: {
+    color: "#94a3b8",
+  },
+  divider: {
+    height: "1px",
+    backgroundColor: "#e2e8f0",
+    margin: "12px 0",
+  },
+  panelSub: {
+    marginTop: "16px",
+  },
+  formGrid: {
+    display: "grid",
+    gap: "12px",
+  },
+  fullWidth: {
+    gridColumn: "1 / -1",
+  },
+});
 
 type PlanPreviewState = {
   status?: number;
@@ -50,18 +215,14 @@ type EventsTestState = {
   error?: string;
 };
 
-export default function App(): JSX.Element {
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    return localStorage.getItem(TAB_STORAGE_KEY) || "preview";
-  });
+const canUseStorage = () =>
+  typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 
-  const [recordUri, setRecordUri] = useState<string>(() => {
-    return localStorage.getItem(RECORD_URI_STORAGE_KEY) || "";
-  });
-  const [autoRunOnSelect, setAutoRunOnSelect] = useState<boolean>(() => {
-    const stored = localStorage.getItem(AUTO_RUN_STORAGE_KEY);
-    return stored ? stored === "true" : true;
-  });
+export default function App(): JSX.Element {
+  const [activeTab, setActiveTab] = useState<string>("preview");
+
+  const [recordUri, setRecordUri] = useState<string>("");
+  const [autoRunOnSelect, setAutoRunOnSelect] = useState<boolean>(true);
 
   const [previewState, setPreviewState] = useState<PlanPreviewState>({});
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -79,17 +240,22 @@ export default function App(): JSX.Element {
   const [testState, setTestState] = useState<EventsTestState>({});
   const [testLoading, setTestLoading] = useState(false);
 
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
-    return localStorage.getItem(PROJECT_STORAGE_KEY);
-  });
-  const [debugEmail, setDebugEmail] = useState<string>(() => {
-    return localStorage.getItem(DEBUG_EMAIL_STORAGE_KEY) || "";
-  });
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [debugEmail, setDebugEmail] = useState<string>("");
   const [workspaces, setWorkspaces] = useState<WorkspaceRow[]>([]);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(() =>
-    localStorage.getItem(WORKSPACE_STORAGE_KEY)
-  );
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!canUseStorage()) return;
+    setActiveTab(localStorage.getItem(TAB_STORAGE_KEY) || "preview");
+    setRecordUri(localStorage.getItem(RECORD_URI_STORAGE_KEY) || "");
+    const storedAutoRun = localStorage.getItem(AUTO_RUN_STORAGE_KEY);
+    setAutoRunOnSelect(storedAutoRun ? storedAutoRun === "true" : true);
+    setSelectedProjectId(localStorage.getItem(PROJECT_STORAGE_KEY));
+    setDebugEmail(localStorage.getItem(DEBUG_EMAIL_STORAGE_KEY) || "");
+    setSelectedWorkspaceId(localStorage.getItem(WORKSPACE_STORAGE_KEY));
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(TAB_STORAGE_KEY, activeTab);
@@ -358,14 +524,14 @@ export default function App(): JSX.Element {
   }
 
   return (
-    <div className="app">
-      <header className="app-header">
+    <div className={stylex(styles.app)}>
+      <header className={stylex(styles.appHeader)}>
         <div>
           <h1>ftops internal UI</h1>
           <p>Plan preview + events viewer for ftops endpoints.</p>
         </div>
-        <div className="header-controls">
-          <div className="workspace-select">
+        <div className={stylex(styles.headerControls)}>
+          <div className={stylex(styles.workspaceSelect)}>
             <label htmlFor="workspace-select">Workspace</label>
             <select
               id="workspace-select"
@@ -381,7 +547,7 @@ export default function App(): JSX.Element {
             </select>
           </div>
           {import.meta.env.DEV && (
-            <div className="dev-identity">
+            <div className={stylex(styles.devIdentity)}>
               <label htmlFor="debug-email">Dev identity</label>
               <input
                 id="debug-email"
@@ -396,58 +562,61 @@ export default function App(): JSX.Element {
       </header>
       <DevMigrationBanner />
 
-      <nav className="tabs">
+      <nav className={stylex(styles.tabs)}>
         <button
-          className={activeTab === "preview" ? "active" : ""}
+          className={stylex(styles.tabButton, activeTab === "preview" && styles.tabButtonActive)}
           onClick={() => setActiveTab("preview")}
           type="button"
         >
           Plan Preview
         </button>
         <button
-          className={activeTab === "events" ? "active" : ""}
+          className={stylex(styles.tabButton, activeTab === "events" && styles.tabButtonActive)}
           onClick={() => setActiveTab("events")}
           type="button"
         >
           Events Viewer
         </button>
         <button
-          className={activeTab === "demo" ? "active" : ""}
+          className={stylex(styles.tabButton, activeTab === "demo" && styles.tabButtonActive)}
           onClick={() => setActiveTab("demo")}
           type="button"
         >
           Demo
         </button>
         <button
-          className={activeTab === "templates" ? "active" : ""}
+          className={stylex(styles.tabButton, activeTab === "templates" && styles.tabButtonActive)}
           onClick={() => setActiveTab("templates")}
           type="button"
         >
           Templates
         </button>
         <button
-          className={activeTab === "projects" ? "active" : ""}
+          className={stylex(styles.tabButton, activeTab === "projects" && styles.tabButtonActive)}
           onClick={() => setActiveTab("projects")}
           type="button"
         >
           Projects
         </button>
         <button
-          className={activeTab === "integrations" ? "active" : ""}
+          className={stylex(
+            styles.tabButton,
+            activeTab === "integrations" && styles.tabButtonActive
+          )}
           onClick={() => setActiveTab("integrations")}
           type="button"
         >
           Integrations
         </button>
         <button
-          className={activeTab === "ingest" ? "active" : ""}
+          className={stylex(styles.tabButton, activeTab === "ingest" && styles.tabButtonActive)}
           onClick={() => setActiveTab("ingest")}
           type="button"
         >
           Ingest
         </button>
         <button
-          className={activeTab === "workspaces" ? "active" : ""}
+          className={stylex(styles.tabButton, activeTab === "workspaces" && styles.tabButtonActive)}
           onClick={() => setActiveTab("workspaces")}
           type="button"
         >
@@ -456,9 +625,9 @@ export default function App(): JSX.Element {
       </nav>
 
       {activeTab === "preview" && (
-        <section className="panel">
+        <section className={stylex(styles.panel)}>
           <h2>Plan Preview</h2>
-          <div className="preview-layout">
+          <div className={stylex(styles.previewLayout)}>
             <RecordSidebar
               selectedUri={recordUri}
               onSelect={(uri) => {
@@ -468,8 +637,8 @@ export default function App(): JSX.Element {
                 }
               }}
             />
-            <div className="preview-main">
-              <div className="form-row">
+            <div className={stylex(styles.previewMain)}>
+              <div className={stylex(styles.formRow)}>
                 <label htmlFor="record-uri">Record URI</label>
                 <input
                   id="record-uri"
@@ -480,7 +649,7 @@ export default function App(): JSX.Element {
                 />
               </div>
 
-              <div className="example-row">
+              <div className={stylex(styles.exampleRow)}>
                 <span>Example URIs:</span>
                 {EXAMPLE_URIS.map((uri) => (
                   <button key={uri} type="button" onClick={() => setRecordUri(uri)}>
@@ -489,19 +658,19 @@ export default function App(): JSX.Element {
                 ))}
               </div>
 
-              <div className="actions">
+              <div className={stylex(styles.actions)}>
                 <button type="button" onClick={() => runPreview()} disabled={previewLoading}>
                   {previewLoading ? "Running..." : "Run Preview"}
                 </button>
                 <button
                   type="button"
-                  className="secondary"
+                  className={stylex(styles.secondaryButton)}
                   onClick={materializeTasks}
                   disabled={materializeLoading || !recordUri.trim()}
                 >
                   {materializeLoading ? "Materializing..." : "Create Project + Materialize Tasks"}
                 </button>
-                <label className="checkbox">
+                <label className={stylex(styles.checkbox)}>
                   <input
                     type="checkbox"
                     checked={autoRunOnSelect}
@@ -509,20 +678,22 @@ export default function App(): JSX.Element {
                   />
                   Auto-run on select
                 </label>
-                {previewUrl && <span className="url-hint">{previewUrl}</span>}
+                {previewUrl && <span className={stylex(styles.urlHint)}>{previewUrl}</span>}
               </div>
 
               {materializeMessage && (
-                <div className="highlight">
+                <div className={stylex(styles.highlight)}>
                   <strong>Materialize:</strong> {materializeMessage}
                 </div>
               )}
 
-              <div className="results">
-                {previewState.error && <div className="error">{previewState.error}</div>}
+              <div className={stylex(styles.results)}>
+                {previewState.error && (
+                  <div className={stylex(styles.error)}>{previewState.error}</div>
+                )}
 
                 {previewState.status !== undefined && (
-                  <div className="meta">
+                  <div className={stylex(styles.meta)}>
                     <div>
                       <strong>Status:</strong> {previewState.status}
                     </div>
@@ -536,7 +707,7 @@ export default function App(): JSX.Element {
                 )}
 
                 {planId && (
-                  <div className="highlight">
+                  <div className={stylex(styles.highlight)}>
                     <div>
                       <strong>plan_id:</strong> {planId}
                     </div>
@@ -547,7 +718,7 @@ export default function App(): JSX.Element {
                 )}
 
                 {warnings && warnings.length > 0 && (
-                  <div className="highlight warning">
+                  <div className={stylex(styles.highlight, styles.highlightWarning)}>
                     <strong>Warnings:</strong>
                     <ul>
                       {warnings.map((warning) => (
@@ -560,8 +731,8 @@ export default function App(): JSX.Element {
                 <ContextViewer data={previewState.data} />
 
                 {previewState.data !== undefined && (
-                  <div className="json-block">
-                    <div className="json-header">
+                  <div className={stylex(styles.jsonBlock)}>
+                    <div className={stylex(styles.jsonHeader)}>
                       <strong>Response JSON</strong>
                       <button
                         type="button"
@@ -580,8 +751,8 @@ export default function App(): JSX.Element {
                 )}
 
                 {previewState.data === undefined && previewState.text && (
-                  <div className="json-block">
-                    <div className="json-header">
+                  <div className={stylex(styles.jsonBlock)}>
+                    <div className={stylex(styles.jsonHeader)}>
                       <strong>Response Text</strong>
                       <button
                         type="button"
@@ -600,20 +771,20 @@ export default function App(): JSX.Element {
       )}
 
       {activeTab === "events" && (
-        <section className="panel">
+        <section className={stylex(styles.panel)}>
           <h2>Events Viewer</h2>
-          <div className="actions">
+          <div className={stylex(styles.actions)}>
             <button type="button" onClick={refreshEvents} disabled={eventsLoading}>
               {eventsLoading ? "Refreshing..." : "Refresh"}
             </button>
-            {eventsState.url && <span className="url-hint">{eventsState.url}</span>}
+            {eventsState.url && <span className={stylex(styles.urlHint)}>{eventsState.url}</span>}
           </div>
 
-          <div className="results">
-            {eventsState.error && <div className="error">{eventsState.error}</div>}
+          <div className={stylex(styles.results)}>
+            {eventsState.error && <div className={stylex(styles.error)}>{eventsState.error}</div>}
 
             {eventsState.status !== undefined && (
-              <div className="meta">
+              <div className={stylex(styles.meta)}>
                 <div>
                   <strong>Status:</strong> {eventsState.status}
                 </div>
@@ -623,7 +794,7 @@ export default function App(): JSX.Element {
               </div>
             )}
 
-            <div className="table-wrap">
+            <div className={stylex(styles.tableWrap)}>
               <table>
                 <thead>
                   <tr>
@@ -638,7 +809,7 @@ export default function App(): JSX.Element {
                 <tbody>
                   {events.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="empty">
+                      <td colSpan={6} className={stylex(styles.empty)}>
                         No events loaded yet.
                       </td>
                     </tr>
@@ -649,7 +820,7 @@ export default function App(): JSX.Element {
                     return (
                       <tr
                         key={index}
-                        className={isExpanded ? "expanded" : ""}
+                        className={stylex(isExpanded && styles.highlight)}
                         onClick={() => setExpandedRowIndex(isExpanded ? null : index)}
                       >
                         <td>{String(row.source ?? "")}</td>
@@ -666,8 +837,8 @@ export default function App(): JSX.Element {
             </div>
 
             {expandedRowIndex !== null && events[expandedRowIndex] !== undefined && (
-              <div className="json-block">
-                <div className="json-header">
+              <div className={stylex(styles.jsonBlock)}>
+                <div className={stylex(styles.jsonHeader)}>
                   <strong>Event Details</strong>
                 </div>
                 <JsonView data={events[expandedRowIndex]} />
@@ -675,11 +846,11 @@ export default function App(): JSX.Element {
             )}
           </div>
 
-          <div className="divider" />
+          <div className={stylex(styles.divider)} />
 
-          <div className="panel-sub">
+          <div className={stylex(styles.panelSub)}>
             <h3>POST /events/test</h3>
-            <div className="form-grid">
+            <div className={stylex(styles.formGrid)}>
               <label>
                 Source
                 <input
@@ -706,7 +877,7 @@ export default function App(): JSX.Element {
               </label>
             </div>
 
-            <label className="full">
+            <label className={stylex(styles.fullWidth)}>
               Payload JSON
               <textarea
                 rows={6}
@@ -715,17 +886,17 @@ export default function App(): JSX.Element {
               />
             </label>
 
-            <div className="actions">
+            <div className={stylex(styles.actions)}>
               <button type="button" onClick={runEventsTest} disabled={testLoading}>
                 {testLoading ? "Sending..." : "Send Test Event"}
               </button>
-              {testState.url && <span className="url-hint">{testState.url}</span>}
+              {testState.url && <span className={stylex(styles.urlHint)}>{testState.url}</span>}
             </div>
 
-            {testState.error && <div className="error">{testState.error}</div>}
+            {testState.error && <div className={stylex(styles.error)}>{testState.error}</div>}
 
             {testState.status !== undefined && (
-              <div className="meta">
+              <div className={stylex(styles.meta)}>
                 <div>
                   <strong>Status:</strong> {testState.status}
                 </div>
@@ -736,7 +907,7 @@ export default function App(): JSX.Element {
             )}
 
             {idempotencyKey && (
-              <div className="highlight">
+              <div className={stylex(styles.highlight)}>
                 <div>
                   <strong>idempotencyKey:</strong> {idempotencyKey}
                 </div>
@@ -750,8 +921,8 @@ export default function App(): JSX.Element {
             )}
 
             {testState.data !== undefined && (
-              <div className="json-block">
-                <div className="json-header">
+              <div className={stylex(styles.jsonBlock)}>
+                <div className={stylex(styles.jsonHeader)}>
                   <strong>Response</strong>
                 </div>
                 <JsonView data={testState.data} />
@@ -759,8 +930,8 @@ export default function App(): JSX.Element {
             )}
 
             {testState.data === undefined && testState.text && (
-              <div className="json-block">
-                <div className="json-header">
+              <div className={stylex(styles.jsonBlock)}>
+                <div className={stylex(styles.jsonHeader)}>
                   <strong>Response Text</strong>
                 </div>
                 <pre>{testState.text}</pre>
@@ -771,13 +942,13 @@ export default function App(): JSX.Element {
       )}
 
       {activeTab === "demo" && (
-        <section className="panel">
+        <section className={stylex(styles.panel)}>
           <DemoPanel />
         </section>
       )}
 
       {activeTab === "templates" && (
-        <section className="panel">
+        <section className={stylex(styles.panel)}>
           <h2>Templates</h2>
           <TemplatesPanel />
         </section>
