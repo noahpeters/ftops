@@ -1,1 +1,0 @@
-import{w as t}from"./chunk-EPOLDU6W-DaRFMLBV.js";import{j as o}from"./jsx-runtime-BTp501oS.js";const r=t(function(){return o.jsxs("section",{className:"xm2aqkj x1e3jit",children:[o.jsx("h2",{children:"Not Found"}),o.jsx("p",{children:"That page does not exist."})]})});export{r as default};
