@@ -12,6 +12,7 @@
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "fmt:check": "npm run format:check",
     "tidy": "npm run format:check && npm run lint && npm run typecheck",
     "verify": "npm run tidy",
     "deploy": "npm run verify && react-router build && wrangler deploy",

@@ -19,7 +19,7 @@
     "deploy:webhooks": "npm --workspace apps/webhooks run deploy",
     "deploy:ui": "npm --workspace apps/ui run deploy",
     "check:remote-migrations": "node scripts/check-remote-migrations.cjs",
-    "prepare": "simple-git-hooks"
+    "prepare": "node -e \"const fs=require('fs');const path=require('path');if(process.env.SKIP_SIMPLE_GIT_HOOKS){process.exit(0);}const bin=path.join(process.cwd(),'node_modules','.bin','simple-git-hooks');if(!fs.existsSync(bin)){console.log('simple-git-hooks not installed; skipping');process.exit(0);}require('child_process').execSync('simple-git-hooks',{stdio:'inherit'});\""
   },
   "simple-git-hooks": {
     "pre-commit": "npm run fmt:check",

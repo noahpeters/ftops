@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ROLLUP_DISABLE_NATIVE: "1"
+      SKIP_SIMPLE_GIT_HOOKS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,9 +19,9 @@ jobs:
           node-version: 20
           cache: npm
       - name: Install
-        run: npx -y npm@10.5.0 ci
+        run: npm ci --workspaces
       - name: Verify
-        run: npx -y npm@10.5.0 run verify
+        run: npm run verify
 
   terraform-plan:
     runs-on: ubuntu-latest

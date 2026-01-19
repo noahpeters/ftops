@@ -20,6 +20,7 @@
     "lint:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier \"**/*.{ts,js,json,md}\" --write",
     "format:check": "prettier \"**/*.{ts,js,json,md}\" --check",
+    "fmt:check": "npm run format:check",
     "typecheck": "tsc --noEmit",
     "tidy": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit",
     "verify": "npm run tidy && npm run test:int",
@@ -45,7 +46,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@ftops/webhooks": "workspace:*"
+    "@ftops/webhooks": "file:../../packages/webhooks"
   },
   "bugs": {
     "url": "https://github.com/noahpeters/ftops/issues"

@@ -12,6 +12,7 @@
     "lint:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier \"**/*.{ts,js,json,md}\" --write",
     "format:check": "prettier \"**/*.{ts,js,json,md}\" --check",
+    "fmt:check": "npm run format:check",
     "typecheck": "tsc --noEmit",
     "tidy": "npm run format:check && npm run lint && npm run typecheck && npm run test",
     "verify": "npm run tidy",
@@ -41,6 +42,6 @@
     "wrangler": "^4.59.2"
   },
   "dependencies": {
-    "@ftops/webhooks": "workspace:*"
+    "@ftops/webhooks": "file:../../packages/webhooks"
   }
 }
