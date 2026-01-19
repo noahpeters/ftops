@@ -1,4 +1,4 @@
-import { corsPreflight, withCors } from "./lib/cors";
+import { applyCorsHeaders, corsPreflight, getCorsContext } from "./lib/cors";
 import { route } from "./lib/router";
 import type { Env, EventQueuePayload } from "./lib/types";
 import { processEventMessage } from "./processors/eventProcessor";
@@ -11,8 +11,30 @@ export default {
       return corsPreflight(request);
     }
 
-    const response = await route(request, env, ctx);
-    return withCors(request, response);
+    const cors = getCorsContext(request);
+    if (!cors.allowed) {
+      return applyCorsHeaders(
+        new Response(JSON.stringify({ error: "origin_not_allowed" }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        }),
+        cors.headers
+      );
+    }
+
+    try {
+      const response = await route(request, env, ctx);
+      return applyCorsHeaders(response, cors.headers);
+    } catch (error) {
+      console.error(error);
+      return applyCorsHeaders(
+        new Response(JSON.stringify({ error: "internal_error" }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        }),
+        cors.headers
+      );
+    }
   },
 
   async queue(

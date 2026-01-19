@@ -1,4 +1,4 @@
-import { badRequest, json, methodNotAllowed, notFound } from "../lib/http";
+import { badRequest, json, methodNotAllowed, notFound, serverError } from "../lib/http";
 import type { Env } from "../lib/types";
 import { encryptSecrets } from "../lib/crypto/secrets";
 import { nowISO } from "../lib/utils";
@@ -70,7 +70,13 @@ export async function handleIntegrations(
         return badRequest(secretsValid.error);
       }
 
-      const encrypted = await encryptSecrets(env, JSON.stringify(secrets));
+      let encrypted;
+      try {
+        encrypted = await encryptSecrets(env, JSON.stringify(secrets));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "secrets_encrypt_failed";
+        return serverError(message);
+      }
       const now = nowISO();
       const id = crypto.randomUUID();
       await env.DB.prepare(
@@ -147,7 +153,13 @@ export async function handleIntegrations(
         if (!secretsValid.ok) {
           return badRequest(secretsValid.error);
         }
-        const encrypted = await encryptSecrets(env, JSON.stringify(body.secrets));
+        let encrypted;
+        try {
+          encrypted = await encryptSecrets(env, JSON.stringify(body.secrets));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "secrets_encrypt_failed";
+          return serverError(message);
+        }
         updates.push("secrets_key_id = ?", "secrets_ciphertext = ?");
         bindings.push(encrypted.keyId, encrypted.ciphertext);
       }
