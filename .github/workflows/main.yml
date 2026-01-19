@@ -20,12 +20,10 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Use npm 10
-        run: npm install -g npm@10.5.0
       - name: Install
-        run: npm ci
+        run: npx -y npm@10.5.0 ci
       - name: Verify
-        run: npm run verify
+        run: npx -y npm@10.5.0 run verify
 
   deploy-api:
     runs-on: ubuntu-latest
@@ -39,14 +37,12 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Use npm 10
-        run: npm install -g npm@10.5.0
       - name: Install
-        run: npm ci
+        run: npx -y npm@10.5.0 ci
       - name: Check remote migrations
-        run: npm run check:remote-migrations
+        run: npx -y npm@10.5.0 run check:remote-migrations
       - name: Deploy API
-        run: npm run deploy:api
+        run: npx -y npm@10.5.0 run deploy:api
 
   deploy-webhooks:
     runs-on: ubuntu-latest
@@ -60,12 +56,10 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Use npm 10
-        run: npm install -g npm@10.5.0
       - name: Install
-        run: npm ci
+        run: npx -y npm@10.5.0 ci
       - name: Deploy Webhooks
-        run: npm run deploy:webhooks
+        run: npx -y npm@10.5.0 run deploy:webhooks
 
   deploy-ui:
     runs-on: ubuntu-latest
@@ -79,12 +73,10 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Use npm 10
-        run: npm install -g npm@10.5.0
       - name: Install
-        run: npm ci
+        run: npx -y npm@10.5.0 ci
       - name: Deploy UI
-        run: npm run deploy:ui
+        run: npx -y npm@10.5.0 run deploy:ui
 
   terraform-apply:
     runs-on: ubuntu-latest

@@ -17,12 +17,10 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Use npm 10
-        run: npm install -g npm@10.5.0
       - name: Install
-        run: npm ci
+        run: npx -y npm@10.5.0 ci
       - name: Verify
-        run: npm run verify
+        run: npx -y npm@10.5.0 run verify
 
   terraform-plan:
     runs-on: ubuntu-latest
