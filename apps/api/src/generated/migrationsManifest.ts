@@ -15,7 +15,8 @@ export const MIGRATIONS = [
   "0012_create_task_notes.sql",
   "0013_create_ingest_requests.sql",
   "0014_workspaces_integrations.sql",
+  "0015_add_ingest_emitted_fields.sql",
   "0015_create_raw_events.sql"
 ] as const;
 export const LATEST_MIGRATION = "0015_create_raw_events.sql";
-export const MIGRATIONS_COUNT = 16;
+export const MIGRATIONS_COUNT = 17;

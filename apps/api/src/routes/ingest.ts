@@ -26,9 +26,9 @@ export async function handleIngest(
   }
 
   if (tail) {
-    return getIngestRequestById(env, tail);
+    return await getIngestRequestById(env, tail);
   }
-  return listIngestRequests(env, url);
+  return await listIngestRequests(env, url);
 }
 
 async function listIngestRequests(env: Env, url: URL) {

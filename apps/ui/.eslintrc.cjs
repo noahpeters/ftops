@@ -1,5 +1,6 @@
 module.exports = {
   root: true,
+  ignorePatterns: ["vite.config.d.ts"],
   parser: "@typescript-eslint/parser",
   parserOptions: {
     ecmaVersion: 2020,
@@ -7,6 +8,8 @@ module.exports = {
     ecmaFeatures: {
       jsx: true,
     },
+    project: ["./tsconfig.eslint.json"],
+    tsconfigRootDir: __dirname,
   },
   plugins: ["@typescript-eslint", "react", "react-hooks"],
   extends: ["plugin:react/recommended", "plugin:react-hooks/recommended", "prettier"],
@@ -17,6 +20,7 @@ module.exports = {
   },
   rules: {
     "react/react-in-jsx-scope": "off",
+    "@typescript-eslint/return-await": ["error", "always"],
   },
   overrides: [
     {

@@ -28,6 +28,9 @@ queue = "ftops-events"
 [[queues.consumers]]
 queue = "events-qb-ingest"
 
+[[queues.consumers]]
+queue = "events-shopify-ingest"
+
 [observability]
 [observability.logs]
 enabled = true

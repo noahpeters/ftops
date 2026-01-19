@@ -9,11 +9,11 @@ export type WorkspaceRow = {
 };
 
 export async function listWorkspaces() {
-  return fetchJson<WorkspaceRow[]>(buildUrl("/workspaces"));
+  return await fetchJson<WorkspaceRow[]>(buildUrl("/workspaces"));
 }
 
 export async function createWorkspace(body: { slug: string; name: string }) {
-  return fetchJson<WorkspaceRow>(buildUrl("/workspaces"), {
+  return await fetchJson<WorkspaceRow>(buildUrl("/workspaces"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -21,7 +21,7 @@ export async function createWorkspace(body: { slug: string; name: string }) {
 }
 
 export async function updateWorkspace(id: string, body: { slug?: string; name?: string }) {
-  return fetchJson<WorkspaceRow>(buildUrl(`/workspaces/${id}`), {
+  return await fetchJson<WorkspaceRow>(buildUrl(`/workspaces/${id}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -29,5 +29,5 @@ export async function updateWorkspace(id: string, body: { slug?: string; name?: 
 }
 
 export async function deleteWorkspace(id: string) {
-  return fetchJson(buildUrl(`/workspaces/${id}`), { method: "DELETE" });
+  return await fetchJson(buildUrl(`/workspaces/${id}`), { method: "DELETE" });
 }

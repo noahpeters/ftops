@@ -29,9 +29,9 @@ export async function listIngestRequests(params: {
   environment?: string;
   limit?: number;
 }) {
-  return fetchJson<IngestListResponse>(buildUrl("/ingest/requests", params));
+  return await fetchJson<IngestListResponse>(buildUrl("/ingest/requests", params));
 }
 
 export async function getIngestRequest(id: string) {
-  return fetchJson<IngestRequestDetail>(buildUrl(`/ingest/requests/${id}`));
+  return await fetchJson<IngestRequestDetail>(buildUrl(`/ingest/requests/${id}`));
 }

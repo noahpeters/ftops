@@ -12,7 +12,7 @@ export async function findIntegration(
   if (!externalAccountId) {
     return null;
   }
-  return env.DB.prepare(
+  return await env.DB.prepare(
     `SELECT id, workspace_id, provider, environment, external_account_id,
             secrets_key_id, secrets_ciphertext, is_active
      FROM integrations

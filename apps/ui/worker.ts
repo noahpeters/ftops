@@ -33,7 +33,7 @@ async function getHandler() {
       })
     );
   }
-  return handlerPromise;
+  return await handlerPromise;
 }
 
 export default {
@@ -43,7 +43,7 @@ export default {
         return await handleApiProxyRequest(request, env);
       }
       const handler = await getHandler();
-      return await handler({
+      return handler({
         request,
         env,
         params: {},

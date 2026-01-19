@@ -1,4 +1,4 @@
-import { badRequest, json, methodNotAllowed, notFound } from "../lib/http";
+import { json, methodNotAllowed, notFound } from "../lib/http";
 import type { Env } from "../lib/types";
 import { verifyShopifyHmac } from "../ingest/verifyShopify";
 import { verifyQboSignature } from "../ingest/verifyQbo";
@@ -8,7 +8,10 @@ import {
   getShopifyWebhookSecret,
 } from "../ingest/getIntegrationSecret";
 import { nowISO } from "../lib/utils";
-import { buildWebhookEnvelopeId, type WebhookEnvelope } from "@ftops/webhooks";
+import {
+  buildWebhookEnvelopeId,
+  type IngestQueueMessage,
+} from "@ftops/webhooks";
 
 const PROVIDERS = ["shopify", "qbo"] as const;
 const UNKNOWN_WORKSPACE_ID = "ws_unknown";
@@ -36,10 +39,10 @@ export async function handleIngest(
   }
 
   if (head === "shopify") {
-    return handleShopifyWebhook(env, request, url);
+    return await handleShopifyWebhook(env, request, url);
   }
   if (head === "qbo") {
-    return handleQboWebhook(env, request, url);
+    return await handleQboWebhook(env, request, url);
   }
 
   return notFound("Route not found");
@@ -76,7 +79,6 @@ async function handleShopifyWebhook(env: Env, request: Request, url: URL) {
     ? "invalid_env_param"
     : null;
   let workspaceId = UNKNOWN_WORKSPACE_ID;
-  let integrationId: string | null = null;
   let routed = false;
 
   if (!integration) {
@@ -84,7 +86,6 @@ async function handleShopifyWebhook(env: Env, request: Request, url: URL) {
   } else {
     routed = true;
     workspaceId = integration.workspace_id;
-    integrationId = integration.id;
     try {
       const webhookSecret = await getShopifyWebhookSecret(env, integration);
       const result = await verifyShopifyHmac(
@@ -100,12 +101,17 @@ async function handleShopifyWebhook(env: Env, request: Request, url: URL) {
     }
   }
 
-  const envelope = await buildEnvelope({
+  if (!parsed.ok) {
+    verifyError = verifyError ?? "invalid_json_body";
+  }
+
+  const message = await buildIngestMessage({
     source: "shopify",
     workspaceId,
-    externalAccountId: shopDomain || null,
-    integrationId,
     environment: envParam.value,
+    externalAccountId: shopDomain || null,
+    integrationId: integration?.id ?? null,
+    realmId: null,
     request,
     url,
     headers,
@@ -114,26 +120,23 @@ async function handleShopifyWebhook(env: Env, request: Request, url: URL) {
     signatureHeader,
     signatureVerified: verified,
     verifyError,
+    notes: null,
   });
 
-  await env.QB_INGEST_QUEUE.send(envelope);
+  await env.SHOPIFY_INGEST_QUEUE.send(message);
 
   console.log(
     JSON.stringify({
       source: "shopify",
-      received_at: envelope.receivedAt,
+      received_at: message.received_at,
       verified,
       topic: request.headers.get("X-Shopify-Topic") ?? undefined,
       shopDomain,
       webhookId: request.headers.get("X-Shopify-Webhook-Id") ?? undefined,
       error: verifyError ?? undefined,
-      id: envelope.id,
+      id: message.id,
     }),
   );
-
-  if (!parsed.ok) {
-    return badRequest("invalid_json_body");
-  }
 
   return json({ ok: true, verified, routed, workspaceId });
 }
@@ -169,7 +172,6 @@ async function handleQboWebhook(env: Env, request: Request, url: URL) {
     ? "invalid_env_param"
     : null;
   let workspaceId = UNKNOWN_WORKSPACE_ID;
-  let integrationId: string | null = null;
   let routed = false;
 
   if (!parsed.ok) {
@@ -181,7 +183,6 @@ async function handleQboWebhook(env: Env, request: Request, url: URL) {
   } else {
     routed = true;
     workspaceId = integration.workspace_id;
-    integrationId = integration.id;
     try {
       const verifierToken = await getQboVerifierToken(env, integration);
       const result = await verifyQboSignature(
@@ -197,13 +198,13 @@ async function handleQboWebhook(env: Env, request: Request, url: URL) {
     }
   }
 
-  const envelope = await buildEnvelope({
+  const message = await buildIngestMessage({
     source: "quickbooks",
     workspaceId,
-    realmId,
-    externalAccountId: realmId,
-    integrationId,
     environment: envParam.value,
+    externalAccountId: realmId,
+    integrationId: integration?.id ?? null,
+    realmId,
     request,
     url,
     headers,
@@ -212,35 +213,32 @@ async function handleQboWebhook(env: Env, request: Request, url: URL) {
     signatureHeader,
     signatureVerified: verified,
     verifyError,
+    notes: null,
   });
 
-  await env.QB_INGEST_QUEUE.send(envelope);
+  await env.QB_INGEST_QUEUE.send(message);
 
   console.log(
     JSON.stringify({
       source: "quickbooks",
-      received_at: envelope.receivedAt,
+      received_at: message.received_at,
       verified,
       realmId: realmId ?? undefined,
       error: verifyError ?? undefined,
-      id: envelope.id,
+      id: message.id,
     }),
   );
-
-  if (!parsed.ok) {
-    return badRequest("invalid_json_body");
-  }
 
   return json({ ok: true, verified, routed, workspaceId });
 }
 
-async function buildEnvelope(args: {
-  source: WebhookEnvelope["source"];
+async function buildIngestMessage(args: {
+  source: "quickbooks" | "shopify";
   workspaceId: string;
-  realmId?: string | null;
-  externalAccountId?: string | null;
+  environment: string | null;
+  externalAccountId: string | null;
   integrationId: string | null;
-  environment: string;
+  realmId: string | null;
   request: Request;
   url: URL;
   headers: Record<string, string>;
@@ -249,12 +247,13 @@ async function buildEnvelope(args: {
   signatureHeader: string | null;
   signatureVerified: boolean;
   verifyError: string | null;
+  notes: string | null;
 }) {
   const id = await buildWebhookEnvelopeId({
     source: args.source,
     parsedBody: args.parsedBody,
     body: args.bodyText,
-    realmId: args.realmId ?? null,
+    realmId: args.realmId,
     path: args.url.pathname,
     method: args.request.method,
   });
@@ -262,21 +261,23 @@ async function buildEnvelope(args: {
   return {
     id,
     source: args.source,
-    workspaceId: args.workspaceId,
-    realmId: args.realmId ?? null,
-    externalAccountId: args.externalAccountId ?? null,
-    integrationId: args.integrationId,
+    workspace_id: args.workspaceId,
     environment: args.environment,
-    receivedAt: nowISO(),
-    path: args.url.pathname,
+    external_account_id: args.externalAccountId,
+    integration_id: args.integrationId,
+    received_at: nowISO(),
     method: args.request.method,
-    headers: args.headers,
-    body: args.bodyText,
-    contentType: args.request.headers.get("content-type"),
+    path: args.url.pathname,
+    headers_json: JSON.stringify(args.headers),
+    body_text: args.bodyText,
+    body_json: args.parsedBody ? JSON.stringify(args.parsedBody) : null,
+    content_type: args.request.headers.get("content-type"),
     signature: args.signatureHeader,
-    signatureVerified: args.signatureVerified,
-    verifyError: args.verifyError,
-  } satisfies WebhookEnvelope;
+    signature_header: args.signatureHeader,
+    signature_verified: args.signatureVerified,
+    verify_error: args.verifyError,
+    notes: args.notes,
+  } satisfies IngestQueueMessage;
 }
 
 function parseEnvironment(url: URL): {

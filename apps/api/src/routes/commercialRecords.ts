@@ -16,12 +16,12 @@ export async function handleCommercialRecords(
   }
 
   if (segments.length === 0) {
-    return listCommercialRecords(env, url);
+    return await listCommercialRecords(env, url);
   }
 
   if (segments.length === 1) {
     const encodedUri = segments[0];
-    return getCommercialRecord(env, encodedUri);
+    return await getCommercialRecord(env, encodedUri);
   }
 
   return notFound("Route not found");

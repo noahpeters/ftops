@@ -31,19 +31,19 @@ export type TaskNote = {
 };
 
 export async function listProjects() {
-  return fetchJson<ProjectRow[]>(buildUrl("/projects"));
+  return await fetchJson<ProjectRow[]>(buildUrl("/projects"));
 }
 
 export async function getProject(id: string) {
-  return fetchJson<ProjectRow>(buildUrl(`/projects/${id}`));
+  return await fetchJson<ProjectRow>(buildUrl(`/projects/${id}`));
 }
 
 export async function getProjectTasks(projectId: string) {
-  return fetchJson<TaskRow[]>(buildUrl(`/projects/${projectId}/tasks`));
+  return await fetchJson<TaskRow[]>(buildUrl(`/projects/${projectId}/tasks`));
 }
 
 export async function patchTaskStatus(taskId: string, status: string) {
-  return fetchJson(buildUrl(`/tasks/${taskId}`), {
+  return await fetchJson(buildUrl(`/tasks/${taskId}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
@@ -51,11 +51,11 @@ export async function patchTaskStatus(taskId: string, status: string) {
 }
 
 export async function listTaskNotes(taskId: string) {
-  return fetchJson<TaskNote[]>(buildUrl(`/tasks/${taskId}/notes`));
+  return await fetchJson<TaskNote[]>(buildUrl(`/tasks/${taskId}/notes`));
 }
 
 export async function addTaskNote(taskId: string, body: string) {
-  return fetchJson<TaskNote>(buildUrl(`/tasks/${taskId}/notes`), {
+  return await fetchJson<TaskNote>(buildUrl(`/tasks/${taskId}/notes`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ body }),
@@ -63,15 +63,18 @@ export async function addTaskNote(taskId: string, body: string) {
 }
 
 export async function createProjectFromRecord(recordUri: string) {
-  return fetchJson<{ project: ProjectRow; created: boolean }>(buildUrl("/projects/from-record"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recordUri }),
-  });
+  return await fetchJson<{ project: ProjectRow; created: boolean }>(
+    buildUrl("/projects/from-record"),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recordUri }),
+    }
+  );
 }
 
 export async function materializeProject(projectId: string) {
-  return fetchJson<{
+  return await fetchJson<{
     alreadyMaterialized: boolean;
     tasksCreated: number;
   }>(buildUrl(`/projects/${projectId}/materialize`), {

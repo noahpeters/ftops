@@ -20,6 +20,29 @@ export type WebhookEnvelope = {
   verifyError?: string | null;
 };
 
+export type IngestQueueMessage = {
+  id: string;
+  source: WebhookSource;
+  workspace_id: string;
+  environment: string | null;
+  external_account_id: string | null;
+  integration_id: string | null;
+  received_at: string;
+  method: string;
+  path: string;
+  headers_json: string;
+  body_text: string;
+  body_json: string | null;
+  content_type: string | null;
+  signature: string | null;
+  signature_header?: string | null;
+  signature_verified: boolean;
+  verify_error: string | null;
+  notes: string | null;
+  processed_at?: string | null;
+  process_error?: string | null;
+};
+
 export async function buildWebhookEnvelopeId(args: {
   source: WebhookSource;
   parsedBody?: unknown;
@@ -42,7 +65,7 @@ export async function buildWebhookEnvelopeId(args: {
     args.path,
     args.body,
   ].join("|");
-  return sha256Hex(stable);
+  return await sha256Hex(stable);
 }
 
 export function extractQuickBooksEventId(payload: unknown): string | null {

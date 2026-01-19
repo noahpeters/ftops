@@ -17,7 +17,7 @@ export async function handleEvents(
   _ctx: ExecutionContext,
   url: URL
 ) {
-  return handleSegment(
+  return await handleSegment(
     segments,
     request,
     env,

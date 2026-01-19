@@ -14,7 +14,7 @@ export type IntegrationRow = {
 };
 
 export async function listIntegrations(workspaceId?: string | null) {
-  return fetchJson<IntegrationRow[]>(
+  return await fetchJson<IntegrationRow[]>(
     buildUrl("/integrations", workspaceId ? { workspaceId } : undefined)
   );
 }
@@ -27,7 +27,7 @@ export async function createIntegration(body: {
   displayName?: string;
   secrets: Record<string, unknown>;
 }) {
-  return fetchJson<IntegrationRow>(buildUrl("/integrations"), {
+  return await fetchJson<IntegrationRow>(buildUrl("/integrations"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -42,7 +42,7 @@ export async function updateIntegration(
     secrets?: Record<string, unknown>;
   }
 ) {
-  return fetchJson<IntegrationRow>(buildUrl(`/integrations/${id}`), {
+  return await fetchJson<IntegrationRow>(buildUrl(`/integrations/${id}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -50,5 +50,5 @@ export async function updateIntegration(
 }
 
 export async function deleteIntegration(id: string) {
-  return fetchJson(buildUrl(`/integrations/${id}`), { method: "DELETE" });
+  return await fetchJson(buildUrl(`/integrations/${id}`), { method: "DELETE" });
 }

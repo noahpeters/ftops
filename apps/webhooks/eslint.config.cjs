@@ -13,6 +13,8 @@ module.exports = [
       parserOptions: {
         ecmaVersion: "latest",
         sourceType: "module",
+        project: ["./tsconfig.json"],
+        tsconfigRootDir: __dirname,
       },
     },
     plugins: {
@@ -23,6 +25,7 @@ module.exports = [
       ...tsPlugin.configs.recommended.rules,
       "no-undef": "off",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/return-await": ["error", "always"],
     },
   },
 ];

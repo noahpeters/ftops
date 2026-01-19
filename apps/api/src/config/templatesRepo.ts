@@ -183,7 +183,7 @@ export async function createTemplate(
     })
   );
 
-  return getTemplateDetailByKey(env, input.key, workspaceId);
+  return await getTemplateDetailByKey(env, input.key, workspaceId);
 }
 
 export async function updateTemplate(
@@ -252,7 +252,7 @@ export async function updateTemplate(
     })
   );
 
-  return getTemplateDetailByKey(env, templateKey, workspaceId);
+  return await getTemplateDetailByKey(env, templateKey, workspaceId);
 }
 
 export async function deleteTemplate(
@@ -315,7 +315,7 @@ export async function createRule(
     })
   );
 
-  return getRuleById(env, templateKey, id, workspaceId);
+  return await getRuleById(env, templateKey, id, workspaceId);
 }
 
 export async function updateRule(
@@ -355,7 +355,7 @@ export async function updateRule(
     })
   );
 
-  return getRuleById(env, templateKey, ruleId, workspaceId);
+  return await getRuleById(env, templateKey, ruleId, workspaceId);
 }
 
 export async function deleteRule(
@@ -464,7 +464,7 @@ async function getRuleById(
   ruleId: string,
   workspaceId = DEFAULT_WORKSPACE_ID
 ) {
-  return env.DB.prepare(
+  return await env.DB.prepare(
     `SELECT id, workspace_id, template_key, priority, match_json, is_active, created_at, updated_at
      FROM template_rules
      WHERE workspace_id = ? AND template_key = ? AND id = ?`

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "worker.ts",
+    "vite.config.ts",
+    "react-router.config.ts",
+    "vite.config.d.ts"
+  ]
+}

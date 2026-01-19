@@ -79,7 +79,7 @@ export async function handleApiProxyRequest(request: Request, env: ApiProxyEnv):
     body,
   });
 
-  return env.API.fetch(upstreamRequest);
+  return await env.API.fetch(upstreamRequest);
 }
 
 function stripApiPrefix(pathname: string) {

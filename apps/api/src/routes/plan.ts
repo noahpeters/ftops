@@ -10,7 +10,7 @@ export async function handlePlan(
   ctx: ExecutionContext,
   url: URL
 ) {
-  return handleSegment(
+  return await handleSegment(
     segments,
     request,
     env,

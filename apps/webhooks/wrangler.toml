@@ -16,6 +16,10 @@ database_id = "0df8f7bd-69a2-460d-809f-f92a3c634ea6"
 binding = "QB_INGEST_QUEUE"
 queue = "events-qb-ingest"
 
+[[queues.producers]]
+binding = "SHOPIFY_INGEST_QUEUE"
+queue = "events-shopify-ingest"
+
 [observability]
 [observability.logs]
 enabled = true

@@ -10,6 +10,7 @@ import { handleTasks } from "../routes/tasks";
 import { handleIngest } from "../routes/ingest";
 import { handleWorkspaces } from "../routes/workspaces";
 import { handleIntegrations } from "../routes/integrations";
+import { handleAdmin } from "../routes/admin";
 
 export type SegmentHandler = (
   segments: string[],
@@ -27,7 +28,7 @@ export async function route(request: Request, env: Env, ctx: ExecutionContext) {
     return notFound("Route not found");
   }
 
-  return routesRoot(segments, request, env, ctx, url);
+  return await routesRoot(segments, request, env, ctx, url);
 }
 
 export async function handleSegment(
@@ -60,7 +61,7 @@ async function routesRoot(
   ctx: ExecutionContext,
   url: URL
 ) {
-  return handleSegment(
+  return await handleSegment(
     segments,
     request,
     env,
@@ -77,6 +78,7 @@ async function routesRoot(
       ingest: handleIngest,
       workspaces: handleWorkspaces,
       integrations: handleIntegrations,
+      admin: handleAdmin,
     },
     () => notFound("Route not found")
   );

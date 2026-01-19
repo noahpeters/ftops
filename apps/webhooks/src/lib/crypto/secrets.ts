@@ -14,7 +14,7 @@ export async function importMasterKey(env: Env): Promise<CryptoKey> {
   if (keyBytes.length !== 32) {
     throw new Error("invalid_master_key_length");
   }
-  return globalThis.crypto.subtle.importKey(
+  return await globalThis.crypto.subtle.importKey(
     "raw",
     keyBytes,
     { name: "AES-GCM" },

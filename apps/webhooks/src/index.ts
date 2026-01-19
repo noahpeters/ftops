@@ -16,7 +16,7 @@ export default {
     }
 
     if (segments[0] === "ingest") {
-      return handleIngest(segments.slice(1), request, env, ctx, url);
+      return await handleIngest(segments.slice(1), request, env, ctx, url);
     }
 
     return notFound("Route not found");

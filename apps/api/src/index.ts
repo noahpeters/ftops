@@ -3,7 +3,8 @@ import { route } from "./lib/router";
 import type { Env, EventQueuePayload } from "./lib/types";
 import { processEventMessage } from "./processors/eventProcessor";
 import { processWebhookEnvelope } from "./processors/webhookProcessor";
-import type { WebhookEnvelope } from "@ftops/webhooks";
+import type { IngestQueueMessage, WebhookEnvelope } from "@ftops/webhooks";
+import { processIngestQueueMessage } from "./processors/ingestQueue";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -38,11 +39,17 @@ export default {
   },
 
   async queue(
-    batch: MessageBatch<EventQueuePayload | WebhookEnvelope>,
+    batch: MessageBatch<EventQueuePayload | WebhookEnvelope | IngestQueueMessage>,
     env: Env,
     _ctx: ExecutionContext
   ) {
     for (const msg of batch.messages) {
+      if (isIngestQueueMessage(msg.body)) {
+        await processIngestQueueMessage(msg.body, env);
+        msg.ack();
+        continue;
+      }
+
       if (isWebhookEnvelope(msg.body)) {
         await processWebhookEnvelope(msg.body, env);
         msg.ack();
@@ -55,9 +62,21 @@ export default {
   },
 };
 
-function isWebhookEnvelope(body: EventQueuePayload | WebhookEnvelope): body is WebhookEnvelope {
+function isWebhookEnvelope(
+  body: EventQueuePayload | WebhookEnvelope | IngestQueueMessage
+): body is WebhookEnvelope {
   return (
     typeof (body as WebhookEnvelope).id === "string" &&
     typeof (body as WebhookEnvelope).path === "string"
+  );
+}
+
+function isIngestQueueMessage(
+  body: EventQueuePayload | WebhookEnvelope | IngestQueueMessage
+): body is IngestQueueMessage {
+  return (
+    typeof (body as IngestQueueMessage).id === "string" &&
+    typeof (body as IngestQueueMessage).headers_json === "string" &&
+    typeof (body as IngestQueueMessage).body_text === "string"
   );
 }

@@ -196,7 +196,7 @@ async function computeTemplateConfigHash(env: Env, workspaceId: string) {
     })),
   };
 
-  return sha256Hex(stableStringify(payload));
+  return await sha256Hex(stableStringify(payload));
 }
 
 async function loadRegistries(env: Env): Promise<Registries> {
@@ -233,7 +233,7 @@ async function loadRegistries(env: Env): Promise<Registries> {
 }
 
 async function loadRecord(env: Env, recordUri: string) {
-  return env.DB.prepare(
+  return await env.DB.prepare(
     `SELECT uri, source, kind, external_id, customer_uri, customer_display,
             quoted_delivery_date, quoted_install_date, currency, total_amount_cents,
             snapshot_json, snapshot_hash, first_seen_at, last_seen_at, last_event_id,
