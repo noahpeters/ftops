@@ -12,7 +12,7 @@ import {
 import { NavLink, Outlet, useNavigate, useParams } from "react-router";
 import stylex from "~/lib/stylex";
 import { colors, spacing, radius } from "./theme/tokens.stylex";
-import { buildUrl, fetchJson } from "./lib/api";
+import { buildUrl, fetchJson, setDebugEmailHeader } from "./lib/api";
 import { DevMigrationBanner } from "./components/DevMigrationBanner";
 import { JsonView } from "./components/JsonView";
 import { DemoPanel } from "./features/demo/DemoPanel";
@@ -27,12 +27,6 @@ import { listWorkspaces, type WorkspaceRow } from "./features/workspaces/api";
 import { WorkspacesPanel } from "./features/workspaces/WorkspacesPanel";
 
 const EXAMPLE_URIS = ["manual://proposal/demo", "shopify://order/example", "qbo://invoice/example"];
-
-const RECORD_URI_STORAGE_KEY = "ftops-ui:record-uri";
-const AUTO_RUN_STORAGE_KEY = "ftops-ui:auto-run-preview";
-const DEBUG_EMAIL_STORAGE_KEY = "ftops-ui:debug-email";
-const PROJECT_STORAGE_KEY = "ftops-ui:project-id";
-const WORKSPACE_STORAGE_KEY = "ftops-ui:workspace-id";
 
 const styles = stylex.create({
   app: {
@@ -278,9 +272,6 @@ export function useAppState(): AppContextValue {
   return context;
 }
 
-const canUseStorage = () =>
-  typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-
 export default function App(): JSX.Element {
   const navigate = useNavigate();
 
@@ -310,41 +301,9 @@ export default function App(): JSX.Element {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!canUseStorage()) return;
-    setRecordUri(localStorage.getItem(RECORD_URI_STORAGE_KEY) || "");
-    const storedAutoRun = localStorage.getItem(AUTO_RUN_STORAGE_KEY);
-    setAutoRunOnSelect(storedAutoRun ? storedAutoRun === "true" : true);
-    setSelectedProjectId(localStorage.getItem(PROJECT_STORAGE_KEY));
-    setDebugEmail(localStorage.getItem(DEBUG_EMAIL_STORAGE_KEY) || "");
-    setSelectedWorkspaceId(localStorage.getItem(WORKSPACE_STORAGE_KEY));
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(RECORD_URI_STORAGE_KEY, recordUri);
-  }, [recordUri]);
-
-  useEffect(() => {
-    localStorage.setItem(AUTO_RUN_STORAGE_KEY, String(autoRunOnSelect));
-  }, [autoRunOnSelect]);
-
-  useEffect(() => {
-    if (selectedProjectId) {
-      localStorage.setItem(PROJECT_STORAGE_KEY, selectedProjectId);
-    } else {
-      localStorage.removeItem(PROJECT_STORAGE_KEY);
-    }
-  }, [selectedProjectId]);
-
-  useEffect(() => {
     if (!import.meta.env.DEV) return;
-    localStorage.setItem(DEBUG_EMAIL_STORAGE_KEY, debugEmail);
+    setDebugEmailHeader(debugEmail);
   }, [debugEmail]);
-
-  useEffect(() => {
-    if (selectedWorkspaceId) {
-      localStorage.setItem(WORKSPACE_STORAGE_KEY, selectedWorkspaceId);
-    }
-  }, [selectedWorkspaceId]);
 
   const refreshWorkspaces = useCallback(async () => {
     setWorkspaceLoading(true);

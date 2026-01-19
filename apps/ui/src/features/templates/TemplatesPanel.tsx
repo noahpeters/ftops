@@ -16,9 +16,6 @@ import {
 } from "./api";
 import type { TemplateDetail, TemplateListItem, TemplateRule } from "./api";
 
-const TEMPLATE_SELECTED_KEY = "ftops-ui:templates:selected";
-const TEMPLATE_SEARCH_KEY = "ftops-ui:templates:search";
-
 const EMPTY_RULE_JSON = '{\n  "attach_to": "project"\n}';
 
 const TEMPLATE_KINDS = ["task", "checklist", "milestone"] as const;
@@ -267,12 +264,8 @@ export function TemplatesPanel({
   const [templateDetailLoading, setTemplateDetailLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>(() => {
-    return localStorage.getItem(TEMPLATE_SELECTED_KEY) || "";
-  });
-  const [searchTerm, setSearchTerm] = useState<string>(() => {
-    return localStorage.getItem(TEMPLATE_SEARCH_KEY) || "";
-  });
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
   const [templateForm, setTemplateForm] = useState<TemplateFormState>({
     title: "",
@@ -321,14 +314,6 @@ export function TemplatesPanel({
     },
     [onSelectedTemplateKeyChange]
   );
-
-  useEffect(() => {
-    localStorage.setItem(TEMPLATE_SELECTED_KEY, selectedTemplateKey);
-  }, [selectedTemplateKey]);
-
-  useEffect(() => {
-    localStorage.setItem(TEMPLATE_SEARCH_KEY, searchTerm);
-  }, [searchTerm]);
 
   useEffect(() => {
     if (selectedTemplateKeyOverride === undefined) return;

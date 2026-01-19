@@ -14,10 +14,11 @@
     "format:check": "prettier --check .",
     "tidy": "npm run format:check && npm run lint && npm run typecheck",
     "verify": "npm run tidy",
-    "deploy": "npm run verify && react-router build",
+    "deploy": "npm run verify && react-router build && wrangler deploy",
     "ci": "npm run verify"
   },
   "dependencies": {
+    "@react-router/cloudflare": "^7.0.0",
     "@stylexjs/stylex": "^0.7.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

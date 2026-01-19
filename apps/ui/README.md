@@ -43,3 +43,11 @@ npm run build
 ```
 
 The build output includes both client and server bundles for Cloudflare SSR.
+
+## Deploy
+
+```bash
+npm run deploy
+```
+
+Requires a Cloudflare API token in the environment for Wrangler (`CLOUDFLARE_API_TOKEN`).

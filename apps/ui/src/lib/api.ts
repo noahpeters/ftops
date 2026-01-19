@@ -7,8 +7,17 @@ export type FetchJsonResult<T = unknown> = {
   durationMs: number;
 };
 
+let debugEmailHeader = "";
+
+export function setDebugEmailHeader(value: string): void {
+  debugEmailHeader = value;
+}
+
 export function getApiBase(): string {
-  return import.meta.env.VITE_FTOPS_API_BASE_URL || "http://localhost:8787";
+  if (import.meta.env.DEV) {
+    return import.meta.env.VITE_FTOPS_API_BASE_URL || "http://localhost:8787";
+  }
+  return import.meta.env.VITE_FTOPS_API_BASE_URL || "https://api.from-trees.com";
 }
 
 export function buildUrl(
@@ -39,15 +48,8 @@ export async function fetchJson<T>(
   let data: T | null = null;
   const headers = new Headers(init.headers || {});
 
-  if (import.meta.env.DEV) {
-    try {
-      const debugEmail = localStorage.getItem("ftops-ui:debug-email");
-      if (debugEmail) {
-        headers.set("X-Debug-User-Email", debugEmail);
-      }
-    } catch {
-      // ignore localStorage access errors
-    }
+  if (import.meta.env.DEV && debugEmailHeader) {
+    headers.set("X-Debug-User-Email", debugEmailHeader);
   }
 
   try {

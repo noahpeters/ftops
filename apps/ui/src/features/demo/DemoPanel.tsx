@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import stylex from "~/lib/stylex";
 import { colors } from "../../theme/tokens.stylex";
 import { buildUrl, fetchJson } from "../../lib/api";
@@ -8,10 +9,6 @@ import { PayloadEditor } from "./PayloadEditor";
 import { ScenarioDetails } from "./ScenarioDetails";
 import { ScenarioPicker } from "./ScenarioPicker";
 import { DEFAULT_SCENARIOS, buildIdempotencyVariant } from "./scenarios";
-
-const STORAGE_KEY = "ftops-ui:demo:state";
-const RECORD_URI_STORAGE_KEY = "ftops-ui:record-uri";
-const TAB_STORAGE_KEY = "ftops-ui:tab";
 
 type IdStrategy = "increment" | "random" | "fixed" | "timestamped";
 
@@ -127,29 +124,18 @@ const styles = stylex.create({
 });
 
 export function DemoPanel(): JSX.Element {
-  const [state, setState] = useState<DemoState>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return DEFAULT_STATE;
-    try {
-      return { ...DEFAULT_STATE, ...(JSON.parse(saved) as DemoState) };
-    } catch {
-      return DEFAULT_STATE;
-    }
-  });
+  const [state, setState] = useState<DemoState>(DEFAULT_STATE);
   const [logs, setLogs] = useState<DemoLogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const stopRef = useRef(false);
+  const navigate = useNavigate();
 
   const scenario = useMemo(() => {
     return (
       DEFAULT_SCENARIOS.find((item) => item.id === state.selectedScenarioId) ?? DEFAULT_SCENARIOS[0]
     );
   }, [state.selectedScenarioId]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
 
   const payloadText = useMemo(() => {
     const override = state.payloadOverrides[scenario.id];
@@ -320,8 +306,7 @@ export function DemoPanel(): JSX.Element {
 
   function openInPlanPreview(externalId: string) {
     const uri = `manual://proposal/${externalId}`;
-    localStorage.setItem(RECORD_URI_STORAGE_KEY, uri);
-    localStorage.setItem(TAB_STORAGE_KEY, "preview");
+    navigate(`/plan-preview/${encodeURIComponent(uri)}`);
   }
 
   return (

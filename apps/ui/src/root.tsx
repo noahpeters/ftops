@@ -17,13 +17,15 @@ export default function Root(): JSX.Element {
       <head suppressHydrationWarning>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="stylesheet" href="/virtual:stylex.css" suppressHydrationWarning />
+        {import.meta.env.DEV && (
+          <link rel="stylesheet" href="/virtual:stylex.css" suppressHydrationWarning />
+        )}
         <Meta />
         <Links />
       </head>
       <body className={stylex(styles.body)}>
         <Outlet />
-        <ScrollRestoration />
+        <ScrollRestoration getKey={(_location, matches) => matches[matches.length - 1]?.id ?? ""} />
         <Scripts />
       </body>
     </html>

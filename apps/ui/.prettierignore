@@ -1,4 +1,6 @@
 node_modules
 /dist
+/build
+wrangler.toml
 infra/cloudflare/zero-trust/.terraform/
 .react-router
