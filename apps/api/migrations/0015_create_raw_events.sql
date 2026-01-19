@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS raw_events (
+  id TEXT PRIMARY KEY,
+  source TEXT NOT NULL,
+  workspace_id TEXT,
+  environment TEXT,
+  external_account_id TEXT,
+  integration_id TEXT,
+  received_at TEXT NOT NULL,
+  method TEXT NOT NULL,
+  path TEXT NOT NULL,
+  headers_json TEXT NOT NULL,
+  body_text TEXT NOT NULL,
+  body_json TEXT,
+  content_type TEXT,
+  signature TEXT,
+  signature_verified INTEGER NOT NULL DEFAULT 0,
+  verify_error TEXT,
+  processed_at TEXT,
+  process_error TEXT
+);

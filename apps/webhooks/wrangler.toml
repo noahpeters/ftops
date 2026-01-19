@@ -1,0 +1,20 @@
+name = "ftops-webhooks"
+compatibility_date = "2026-01-01"
+main = "src/index.ts"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ftops-db"
+database_id = "0df8f7bd-69a2-460d-809f-f92a3c634ea6"
+
+[[queues.producers]]
+binding = "QB_INGEST_QUEUE"
+queue = "events-qb-ingest"
+
+[observability]
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[vars]
+INTEGRATIONS_KEY_ID = "v1"

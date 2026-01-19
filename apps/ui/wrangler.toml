@@ -5,3 +5,8 @@ main = "worker.ts"
 
 [assets]
 directory = "./build/client"
+
+[observability]
+[observability.logs]
+enabled = true
+invocation_logs = true

@@ -44,6 +44,9 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "dependencies": {
+    "@ftops/webhooks": "workspace:*"
+  },
   "bugs": {
     "url": "https://github.com/noahpeters/ftops/issues"
   },

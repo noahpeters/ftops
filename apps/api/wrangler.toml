@@ -20,6 +20,9 @@ queue = "ftops-events"
 [[queues.consumers]]
 queue = "ftops-events"
 
+[[queues.consumers]]
+queue = "events-qb-ingest"
+
 [observability]
 [observability.logs]
 enabled = true

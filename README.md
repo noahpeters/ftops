@@ -5,6 +5,7 @@ This repo contains the ftops API (Cloudflare Worker + D1) and UI (React Router S
 ## Repo layout
 
 - `apps/api` - Cloudflare Worker API, D1 migrations, queues
+- `apps/webhooks` - Cloudflare Worker for webhook ingress (QuickBooks/Shopify)
 - `apps/ui` - React Router SSR UI deployed as a Cloudflare Worker
 - `infra/cloudflare/zero-trust` - Terraform for Cloudflare Zero Trust Access
 
@@ -24,6 +25,7 @@ Or individually:
 
 ```sh
 npm run dev:api
+npm run dev:webhooks
 npm run dev:ui
 ```
 
@@ -37,7 +39,10 @@ npm run verify
 
 ```sh
 npm run deploy:api
+npm run deploy:webhooks
 npm run deploy:ui
+
+Webhook ingress details are in `docs/webhooks.md`.
 ```
 
 ## Infrastructure

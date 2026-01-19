@@ -1,0 +1,46 @@
+{
+  "name": "@ftops/webhooks-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler build",
+    "test": "vitest run",
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier \"**/*.{ts,js,json,md}\" --write",
+    "format:check": "prettier \"**/*.{ts,js,json,md}\" --check",
+    "typecheck": "tsc --noEmit",
+    "tidy": "npm run format:check && npm run lint && npm run typecheck && npm run test",
+    "verify": "npm run tidy",
+    "deploy": "npm run verify && wrangler deploy",
+    "deploy:prod": "npm run verify && wrangler deploy --env production",
+    "deploy:dev": "npm run verify && wrangler deploy --env dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/noahpeters/ftops.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260116.0",
+    "@types/node": "^20.17.23",
+    "@typescript-eslint/eslint-plugin": "^8.53.0",
+    "@typescript-eslint/parser": "^8.53.0",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "miniflare": "^4.0.0",
+    "prettier": "^3.8.0",
+    "typescript": "^5.6.3",
+    "vitest": "^4.0.17",
+    "wrangler": "^4.59.2"
+  },
+  "dependencies": {
+    "@ftops/webhooks": "workspace:*"
+  }
+}

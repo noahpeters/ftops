@@ -171,7 +171,7 @@ async function getWorkspaceDependencyCounts(env: Env, workspaceId: string) {
     { table: "projects", key: "projects" },
     { table: "tasks", key: "tasks" },
     { table: "commercial_records", key: "commercial_records" },
-    { table: "ingest_requests", key: "ingest_requests" },
+    { table: "raw_events", key: "raw_events" },
   ] as const;
 
   const counts: Record<string, number> = {};
