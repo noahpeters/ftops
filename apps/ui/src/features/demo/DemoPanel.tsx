@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import stylex from "~/lib/stylex";
+import { colors } from "../../theme/tokens.stylex";
 import { buildUrl, fetchJson } from "../../lib/api";
 import { PayloadEditor } from "./PayloadEditor";
 import { ScenarioDetails } from "./ScenarioDetails";
@@ -70,9 +71,9 @@ const styles = stylex.create({
     alignItems: "center",
   },
   secondaryButton: {
-    border: "1px solid #94a3b8",
-    backgroundColor: "#ffffff",
-    color: "#0f172a",
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surface,
+    color: colors.text,
     padding: "6px 12px",
     borderRadius: "8px",
     cursor: "pointer",
@@ -93,13 +94,13 @@ const styles = stylex.create({
     gap: "6px",
   },
   error: {
-    color: "#b91c1c",
+    color: colors.errorText,
   },
   demoLog: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "8px",
     padding: "12px",
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surface,
   },
   demoLogHeader: {
     display: "flex",
@@ -108,15 +109,15 @@ const styles = stylex.create({
     marginBottom: "8px",
   },
   empty: {
-    color: "#94a3b8",
+    color: colors.textSubtle,
   },
   tableWrap: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "8px",
     overflowX: "auto",
   },
   linkButton: {
-    color: "#2563eb",
+    color: colors.accent,
     textDecoration: "underline",
     background: "none",
     border: "none",

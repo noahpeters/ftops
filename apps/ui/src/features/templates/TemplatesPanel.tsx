@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import stylex from "~/lib/stylex";
+import { colors } from "../../theme/tokens.stylex";
 import { JsonView } from "../../components/JsonView";
 import {
   createRule,
@@ -46,10 +47,10 @@ const styles = stylex.create({
     flexWrap: "wrap",
   },
   error: {
-    color: "#b91c1c",
+    color: colors.errorText,
   },
   empty: {
-    color: "#94a3b8",
+    color: colors.textSubtle,
   },
   layout: {
     display: "grid",
@@ -57,10 +58,10 @@ const styles = stylex.create({
     gap: "16px",
   },
   list: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "8px",
     padding: "12px",
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surface,
     display: "flex",
     flexDirection: "column",
     gap: "8px",
@@ -69,16 +70,16 @@ const styles = stylex.create({
     fontWeight: 600,
   },
   listItem: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "10px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "8px",
     padding: "10px",
-    backgroundColor: "#f8fafc",
+    backgroundColor: colors.surfaceAlt,
     textAlign: "left",
     cursor: "pointer",
   },
   listItemActive: {
-    borderColor: "#6366f1",
-    backgroundColor: "#eef2ff",
+    borderColor: colors.accent,
+    backgroundColor: colors.surfaceStrong,
   },
   templateKey: {
     fontWeight: 600,
@@ -88,21 +89,21 @@ const styles = stylex.create({
     gap: "6px",
     flexWrap: "wrap",
     fontSize: "12px",
-    color: "#475569",
+    color: colors.textMuted,
   },
   statusOn: {
-    color: "#15803d",
+    color: colors.successText,
     fontWeight: 600,
   },
   statusOff: {
-    color: "#b91c1c",
+    color: colors.errorText,
     fontWeight: 600,
   },
   detail: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "8px",
     padding: "12px",
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surface,
     display: "flex",
     flexDirection: "column",
     gap: "12px",
@@ -115,7 +116,7 @@ const styles = stylex.create({
   },
   urlHint: {
     fontSize: "12px",
-    color: "#64748b",
+    color: colors.textSubtle,
   },
   panelSub: {
     marginTop: "8px",
@@ -133,31 +134,31 @@ const styles = stylex.create({
     alignItems: "center",
   },
   advanced: {
-    border: "1px dashed #e2e8f0",
-    borderRadius: "10px",
+    border: `1px dashed ${colors.border}`,
+    borderRadius: "8px",
     padding: "10px",
   },
   dangerButton: {
-    border: "1px solid #fecaca",
-    backgroundColor: "#fee2e2",
-    color: "#991b1b",
+    border: `1px solid ${colors.errorText}`,
+    backgroundColor: colors.errorBg,
+    color: colors.errorText,
     padding: "6px 10px",
     borderRadius: "8px",
     cursor: "pointer",
   },
   secondaryButton: {
-    border: "1px solid #94a3b8",
-    backgroundColor: "#ffffff",
-    color: "#0f172a",
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surface,
+    color: colors.text,
     padding: "6px 10px",
     borderRadius: "8px",
     cursor: "pointer",
   },
   ruleCreate: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "10px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "8px",
     padding: "10px",
-    backgroundColor: "#f8fafc",
+    backgroundColor: colors.surfaceAlt,
   },
   full: {
     display: "flex",
@@ -170,10 +171,10 @@ const styles = stylex.create({
     gap: "10px",
   },
   ruleCard: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "10px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "8px",
     padding: "10px",
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surface,
   },
   ruleHeader: {
     display: "flex",
@@ -183,31 +184,31 @@ const styles = stylex.create({
   },
   badge: {
     padding: "2px 6px",
-    borderRadius: "999px",
+    borderRadius: "8px",
     fontSize: "11px",
-    backgroundColor: "#e2e8f0",
-    color: "#1e293b",
+    backgroundColor: colors.neutralBg,
+    color: colors.neutralText,
   },
   jsonBlock: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "8px",
     padding: "10px",
-    backgroundColor: "#f8fafc",
+    backgroundColor: colors.surfaceAlt,
   },
   modalBackdrop: {
     position: "fixed",
     inset: 0,
-    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    backgroundColor: "rgba(43, 33, 24, 0.45)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     padding: "24px",
   },
   modal: {
-    backgroundColor: "#ffffff",
-    borderRadius: "12px",
+    backgroundColor: colors.surface,
+    borderRadius: "8px",
     padding: "20px",
-    border: "1px solid #e2e8f0",
+    border: `1px solid ${colors.border}`,
     width: "min(640px, 100%)",
   },
 });

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import stylex from "~/lib/stylex";
+import { colors, radius } from "../../theme/tokens.stylex";
 import {
   addTaskNote,
   getProject,
@@ -28,10 +29,10 @@ const styles = stylex.create({
     gap: "16px",
   },
   sidebar: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.md,
     padding: "12px",
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surface,
     display: "flex",
     flexDirection: "column",
     gap: "12px",
@@ -41,7 +42,7 @@ const styles = stylex.create({
     gap: "8px",
   },
   error: {
-    color: "#b91c1c",
+    color: colors.errorText,
   },
   list: {
     listStyle: "none",
@@ -54,27 +55,27 @@ const styles = stylex.create({
   listButton: {
     textAlign: "left",
     width: "100%",
-    border: "1px solid #e2e8f0",
-    borderRadius: "10px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.sm,
     padding: "10px",
-    backgroundColor: "#f8fafc",
+    backgroundColor: colors.surfaceAlt,
     cursor: "pointer",
     display: "flex",
     flexDirection: "column",
     gap: "4px",
   },
   listButtonActive: {
-    borderColor: "#6366f1",
-    backgroundColor: "#eef2ff",
+    borderColor: colors.accent,
+    backgroundColor: colors.neutralBg,
   },
   muted: {
-    color: "#94a3b8",
+    color: colors.textSubtle,
   },
   detail: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.md,
     padding: "16px",
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surface,
     display: "flex",
     flexDirection: "column",
     gap: "12px",
@@ -86,11 +87,11 @@ const styles = stylex.create({
     gap: "12px",
   },
   secondaryButton: {
-    border: "1px solid #94a3b8",
-    backgroundColor: "#ffffff",
-    color: "#0f172a",
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surface,
+    color: colors.text,
     padding: "6px 10px",
-    borderRadius: "8px",
+    borderRadius: radius.sm,
     cursor: "pointer",
   },
   tasksSection: {
@@ -104,10 +105,10 @@ const styles = stylex.create({
     gap: "8px",
   },
   taskSubgroup: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.md,
     padding: "10px",
-    backgroundColor: "#f8fafc",
+    backgroundColor: colors.surfaceAlt,
     display: "flex",
     flexDirection: "column",
     gap: "8px",
@@ -118,10 +119,10 @@ const styles = stylex.create({
     gap: "4px",
   },
   taskRow: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.md,
     padding: "10px",
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surface,
     display: "flex",
     flexDirection: "column",
     gap: "10px",
@@ -134,7 +135,7 @@ const styles = stylex.create({
   },
   taskMeta: {
     fontSize: "12px",
-    color: "#475569",
+    color: colors.textMuted,
   },
   taskActions: {
     display: "flex",
@@ -142,23 +143,23 @@ const styles = stylex.create({
     alignItems: "center",
   },
   taskNotes: {
-    borderTop: "1px solid #e2e8f0",
+    borderTop: `1px solid ${colors.border}`,
     paddingTop: "10px",
     display: "flex",
     flexDirection: "column",
     gap: "8px",
   },
   noteRow: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "10px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "8px",
     padding: "8px",
-    backgroundColor: "#f8fafc",
+    backgroundColor: colors.surfaceAlt,
   },
   noteMeta: {
     display: "flex",
     gap: "8px",
     fontSize: "12px",
-    color: "#475569",
+    color: colors.textMuted,
   },
 });
 

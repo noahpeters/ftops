@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import stylex from "~/lib/stylex";
+import { colors, radius } from "../../theme/tokens.stylex";
 import {
   getIngestRequest,
   listIngestRequests,
@@ -24,7 +25,7 @@ const styles = stylex.create({
     alignItems: "center",
   },
   error: {
-    color: "#b91c1c",
+    color: colors.errorText,
   },
   layout: {
     display: "grid",
@@ -33,22 +34,22 @@ const styles = stylex.create({
     marginTop: "16px",
   },
   list: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.md,
     overflowX: "auto",
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surface,
   },
   detail: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.md,
     padding: "12px",
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surface,
   },
   empty: {
-    color: "#94a3b8",
+    color: colors.textSubtle,
   },
   muted: {
-    color: "#94a3b8",
+    color: colors.textSubtle,
   },
 });
 

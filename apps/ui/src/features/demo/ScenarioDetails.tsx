@@ -1,12 +1,13 @@
 import type { DemoScenario } from "./scenarios";
 import stylex from "~/lib/stylex";
+import { colors } from "../../theme/tokens.stylex";
 
 const styles = stylex.create({
   details: {
     padding: "12px",
-    borderRadius: "12px",
-    border: "1px solid #e2e8f0",
-    backgroundColor: "#ffffff",
+    borderRadius: "8px",
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surface,
   },
 });
 

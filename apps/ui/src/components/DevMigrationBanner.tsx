@@ -3,15 +3,16 @@
 import { useEffect, useState } from "react";
 import stylex from "~/lib/stylex";
 import { buildUrl, fetchJson } from "../lib/api";
+import { colors, radius } from "../theme/tokens.stylex";
 
 const styles = stylex.create({
   banner: {
     margin: "16px 32px",
     padding: "12px 16px",
-    borderRadius: "12px",
-    backgroundColor: "#fee2e2",
-    color: "#7f1d1d",
-    border: "1px solid #fecaca",
+    borderRadius: radius.md,
+    backgroundColor: colors.errorBg,
+    color: colors.errorText,
+    border: `1px solid ${colors.errorText}`,
     display: "flex",
     flexDirection: "column",
     gap: "6px",

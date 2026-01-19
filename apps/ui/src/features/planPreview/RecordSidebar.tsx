@@ -2,15 +2,16 @@
 
 import { useEffect, useState } from "react";
 import stylex from "~/lib/stylex";
+import { colors, radius } from "../../theme/tokens.stylex";
 import { listCommercialRecords } from "../api/commercialRecords";
 import type { CommercialRecordListItem } from "../api/commercialRecords";
 
 const styles = stylex.create({
   sidebar: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.md,
     padding: "12px",
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surface,
     display: "flex",
     flexDirection: "column",
     gap: "12px",
@@ -27,10 +28,10 @@ const styles = stylex.create({
     fontSize: "12px",
   },
   empty: {
-    color: "#94a3b8",
+    color: colors.textSubtle,
   },
   error: {
-    color: "#b91c1c",
+    color: colors.errorText,
   },
   list: {
     display: "flex",
@@ -39,15 +40,15 @@ const styles = stylex.create({
   },
   listItem: {
     textAlign: "left",
-    border: "1px solid #e2e8f0",
-    borderRadius: "10px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.sm,
     padding: "10px",
-    backgroundColor: "#f8fafc",
+    backgroundColor: colors.surfaceAlt,
     cursor: "pointer",
   },
   listItemActive: {
-    borderColor: "#6366f1",
-    backgroundColor: "#eef2ff",
+    borderColor: colors.accent,
+    backgroundColor: colors.neutralBg,
   },
   recordUri: {
     fontWeight: 600,
@@ -58,7 +59,7 @@ const styles = stylex.create({
     flexDirection: "column",
     gap: "4px",
     fontSize: "11px",
-    color: "#475569",
+    color: colors.textMuted,
   },
 });
 

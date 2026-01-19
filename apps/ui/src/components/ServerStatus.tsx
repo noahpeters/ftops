@@ -1,10 +1,11 @@
 import stylex from "~/lib/stylex";
+import { colors } from "../theme/tokens.stylex";
 import { useEffect, useState } from "react";
 
 const styles = stylex.create({
   banner: {
-    backgroundColor: "#0f172a",
-    color: "#e2e8f0",
+    backgroundColor: colors.accent,
+    color: colors.surface,
     padding: "12px 16px",
     fontSize: "12px",
     letterSpacing: "0.08em",

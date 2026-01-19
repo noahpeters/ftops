@@ -1,1 +1,11 @@
 /* StyleX entrypoint */
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}

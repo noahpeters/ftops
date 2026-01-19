@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import stylex from "~/lib/stylex";
+import { colors } from "../../theme/tokens.stylex";
 import {
   createWorkspace,
   deleteWorkspace,
@@ -17,7 +18,7 @@ const styles = stylex.create({
     padding: "24px 32px",
   },
   error: {
-    color: "#b91c1c",
+    color: colors.errorText,
   },
   panelSub: {
     marginTop: "16px",
@@ -38,47 +39,47 @@ const styles = stylex.create({
     flexWrap: "wrap",
   },
   muted: {
-    color: "#94a3b8",
+    color: colors.textSubtle,
   },
   tableWrap: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "8px",
     overflowX: "auto",
   },
   dangerButton: {
-    border: "1px solid #fecaca",
-    backgroundColor: "#fee2e2",
-    color: "#991b1b",
+    border: `1px solid ${colors.errorText}`,
+    backgroundColor: colors.errorBg,
+    color: colors.errorText,
     padding: "6px 10px",
     borderRadius: "8px",
     cursor: "pointer",
     marginLeft: "6px",
   },
   secondaryButton: {
-    border: "1px solid #94a3b8",
-    backgroundColor: "#ffffff",
-    color: "#0f172a",
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surface,
+    color: colors.text,
     padding: "6px 10px",
     borderRadius: "8px",
     cursor: "pointer",
   },
   empty: {
-    color: "#94a3b8",
+    color: colors.textSubtle,
   },
   modal: {
     position: "fixed",
     inset: 0,
-    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    backgroundColor: "rgba(43, 33, 24, 0.45)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     padding: "24px",
   },
   modalContent: {
-    backgroundColor: "#ffffff",
-    borderRadius: "12px",
+    backgroundColor: colors.surface,
+    borderRadius: "8px",
     padding: "20px",
-    border: "1px solid #e2e8f0",
+    border: `1px solid ${colors.border}`,
     width: "min(520px, 100%)",
   },
 });

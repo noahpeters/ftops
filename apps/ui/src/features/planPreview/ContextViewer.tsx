@@ -2,16 +2,17 @@
 
 import { useMemo, useState } from "react";
 import stylex from "~/lib/stylex";
+import { colors, radius } from "../../theme/tokens.stylex";
 
 const styles = stylex.create({
   panel: {
     display: "flex",
     flexDirection: "column",
     gap: "16px",
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.md,
     padding: "16px",
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.surface,
   },
   panelHeader: {
     display: "flex",
@@ -41,25 +42,25 @@ const styles = stylex.create({
     flexWrap: "wrap",
   },
   secondaryButton: {
-    border: "1px solid #94a3b8",
-    backgroundColor: "#ffffff",
-    color: "#0f172a",
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surface,
+    color: colors.text,
     padding: "6px 10px",
-    borderRadius: "8px",
+    borderRadius: radius.sm,
     cursor: "pointer",
   },
   muted: {
-    color: "#94a3b8",
+    color: colors.textSubtle,
   },
   card: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.md,
     padding: "12px",
-    backgroundColor: "#f8fafc",
+    backgroundColor: colors.surfaceAlt,
   },
   cardSelected: {
-    borderColor: "#6366f1",
-    backgroundColor: "#eef2ff",
+    borderColor: colors.accent,
+    backgroundColor: colors.neutralBg,
   },
   summary: {
     display: "flex",
@@ -70,24 +71,24 @@ const styles = stylex.create({
   },
   badge: {
     padding: "2px 8px",
-    borderRadius: "999px",
+    borderRadius: "8px",
     fontSize: "11px",
     textTransform: "uppercase",
     letterSpacing: "0.06em",
-    backgroundColor: "#e2e8f0",
-    color: "#1e293b",
+    backgroundColor: colors.neutralBg,
+    color: colors.neutralText,
   },
   badgeProject: {
-    backgroundColor: "#e0f2fe",
-    color: "#075985",
+    backgroundColor: colors.infoBg,
+    color: colors.infoText,
   },
   badgeShared: {
-    backgroundColor: "#dcfce7",
-    color: "#166534",
+    backgroundColor: colors.successBg,
+    color: colors.successText,
   },
   badgeDeliverable: {
-    backgroundColor: "#fee2e2",
-    color: "#991b1b",
+    backgroundColor: colors.errorBg,
+    color: colors.errorText,
   },
   key: {
     fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
@@ -98,7 +99,7 @@ const styles = stylex.create({
   },
   metaInline: {
     fontSize: "12px",
-    color: "#64748b",
+    color: colors.textSubtle,
   },
   body: {
     marginTop: "8px",
@@ -110,7 +111,7 @@ const styles = stylex.create({
     display: "grid",
     gap: "6px",
     fontSize: "12px",
-    color: "#475569",
+    color: colors.textMuted,
   },
   list: {
     display: "flex",
@@ -118,13 +119,13 @@ const styles = stylex.create({
     gap: "4px",
   },
   error: {
-    color: "#b91c1c",
+    color: colors.errorText,
   },
   json: {
-    backgroundColor: "#0f172a",
-    color: "#e2e8f0",
+    backgroundColor: colors.surfaceStrong,
+    color: colors.text,
     padding: "10px",
-    borderRadius: "10px",
+    borderRadius: radius.sm,
     fontSize: "11px",
     overflowX: "auto",
   },
@@ -138,11 +139,11 @@ const styles = stylex.create({
     fontWeight: 600,
   },
   matchKey: {
-    color: "#475569",
+    color: colors.textMuted,
     marginLeft: "6px",
   },
   matchMeta: {
-    color: "#94a3b8",
+    color: colors.textSubtle,
     marginLeft: "6px",
   },
 });

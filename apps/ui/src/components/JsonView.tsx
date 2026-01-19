@@ -1,11 +1,11 @@
-import React from "react";
 import stylex from "~/lib/stylex";
+import { colors } from "../theme/tokens.stylex";
 
 const styles = stylex.create({
   jsonView: {
     fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
     fontSize: "12px",
-    color: "#0f172a",
+    color: colors.text,
   },
   jsonChildren: {
     paddingLeft: "12px",
@@ -19,14 +19,14 @@ const styles = stylex.create({
     alignItems: "baseline",
   },
   jsonKey: {
-    color: "#334155",
+    color: colors.textMuted,
     fontWeight: 600,
   },
   jsonSep: {
-    color: "#94a3b8",
+    color: colors.textSubtle,
   },
   jsonValue: {
-    color: "#0f172a",
+    color: colors.text,
   },
 });
 

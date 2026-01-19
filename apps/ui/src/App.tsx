@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import stylex from "~/lib/stylex";
+import { colors, spacing, radius } from "./theme/tokens.stylex";
 import { buildUrl, fetchJson } from "./lib/api";
 import { DevMigrationBanner } from "./components/DevMigrationBanner";
 import { JsonView } from "./components/JsonView";
@@ -28,18 +29,18 @@ const WORKSPACE_STORAGE_KEY = "ftops-ui:workspace-id";
 const styles = stylex.create({
   app: {
     minHeight: "100vh",
-    backgroundColor: "#f8fafc",
-    color: "#0f172a",
+    backgroundColor: colors.background,
+    color: colors.text,
     fontFamily: '"IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif',
   },
   appHeader: {
     display: "flex",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: "24px",
+    gap: spacing.xl,
     padding: "24px 32px 16px",
-    borderBottom: "1px solid #e2e8f0",
-    backgroundColor: "#ffffff",
+    borderBottom: `1px solid ${colors.border}`,
+    backgroundColor: colors.surface,
   },
   headerControls: {
     display: "flex",
@@ -59,23 +60,23 @@ const styles = stylex.create({
   },
   tabs: {
     display: "flex",
-    gap: "8px",
+    gap: spacing.sm,
     padding: "16px 32px 0",
     flexWrap: "wrap",
   },
   tabButton: {
-    border: "1px solid #cbd5f5",
-    backgroundColor: "#eef2ff",
-    color: "#1e1b4b",
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surfaceAlt,
+    color: colors.textMuted,
     padding: "8px 14px",
-    borderRadius: "999px",
+    borderRadius: "8px",
     cursor: "pointer",
     fontSize: "13px",
   },
   tabButtonActive: {
-    backgroundColor: "#0f172a",
-    color: "#ffffff",
-    borderColor: "#0f172a",
+    backgroundColor: colors.accent,
+    color: colors.surface,
+    borderColor: colors.accent,
   },
   panel: {
     padding: "24px 32px",
@@ -108,11 +109,11 @@ const styles = stylex.create({
     alignItems: "center",
   },
   secondaryButton: {
-    border: "1px solid #94a3b8",
-    backgroundColor: "#ffffff",
-    color: "#0f172a",
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surface,
+    color: colors.text,
     padding: "8px 12px",
-    borderRadius: "8px",
+    borderRadius: radius.sm,
     cursor: "pointer",
   },
   checkbox: {
@@ -122,17 +123,17 @@ const styles = stylex.create({
   },
   urlHint: {
     fontSize: "12px",
-    color: "#475569",
+    color: colors.textMuted,
   },
   highlight: {
     padding: "12px 14px",
-    borderRadius: "12px",
-    backgroundColor: "#f1f5f9",
-    border: "1px solid #e2e8f0",
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    border: `1px solid ${colors.border}`,
   },
   highlightWarning: {
-    backgroundColor: "#fef3c7",
-    borderColor: "#fcd34d",
+    backgroundColor: colors.warnBg,
+    borderColor: colors.warnText,
   },
   results: {
     display: "flex",
@@ -140,40 +141,40 @@ const styles = stylex.create({
     gap: "12px",
   },
   error: {
-    color: "#b91c1c",
+    color: colors.errorText,
   },
   meta: {
     display: "flex",
     flexWrap: "wrap",
     gap: "12px",
     fontSize: "12px",
-    color: "#64748b",
+    color: colors.textSubtle,
   },
   jsonBlock: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
-    backgroundColor: "#ffffff",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
     overflow: "hidden",
   },
   jsonHeader: {
     padding: "10px 14px",
-    borderBottom: "1px solid #e2e8f0",
-    backgroundColor: "#f8fafc",
+    borderBottom: `1px solid ${colors.border}`,
+    backgroundColor: colors.surfaceAlt,
     fontSize: "12px",
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
   tableWrap: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.md,
     overflowX: "auto",
   },
   empty: {
-    color: "#94a3b8",
+    color: colors.textSubtle,
   },
   divider: {
     height: "1px",
-    backgroundColor: "#e2e8f0",
+    backgroundColor: colors.border,
     margin: "12px 0",
   },
   panelSub: {
