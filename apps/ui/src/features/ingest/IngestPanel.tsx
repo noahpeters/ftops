@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import stylex from "~/lib/stylex";
 import { colors, radius } from "../../theme/tokens.stylex";
 import {
   getIngestRequest,
   listIngestRequests,
+  replayIngestRequest,
   type IngestRequestDetail,
   type IngestRequestSummary,
 } from "./api";
@@ -39,6 +40,22 @@ const styles = stylex.create({
     overflowX: "auto",
     backgroundColor: colors.surface,
   },
+  toast: {
+    marginTop: "12px",
+    padding: "10px 12px",
+    borderRadius: radius.md,
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surface,
+    color: colors.text,
+  },
+  toastSuccess: {
+    borderColor: colors.successText,
+    color: colors.successText,
+  },
+  toastError: {
+    borderColor: colors.errorText,
+    color: colors.errorText,
+  },
   detail: {
     border: `1px solid ${colors.border}`,
     borderRadius: radius.md,
@@ -50,6 +67,20 @@ const styles = stylex.create({
   },
   muted: {
     color: colors.textSubtle,
+  },
+  replayButton: {
+    padding: "4px 8px",
+    borderRadius: radius.sm,
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surface,
+    cursor: "pointer",
+  },
+  replayButtonDisabled: {
+    cursor: "not-allowed",
+    opacity: 0.6,
+  },
+  actionsCell: {
+    whiteSpace: "nowrap",
   },
 });
 
@@ -65,12 +96,18 @@ export function IngestPanel({
   const [requests, setRequests] = useState<IngestRequestSummary[]>([]);
   const [selected, setSelected] = useState<IngestRequestDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
+  const [replayingIds, setReplayingIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const workspaceMap = new Map(workspaces.map((ws) => [ws.id, ws.name]));
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setToast(null);
     const result = await listIngestRequests({
       provider,
       environment,
@@ -97,6 +134,42 @@ export function IngestPanel({
     } else {
       setError(result.text || "Failed to load detail.");
     }
+  }
+
+  async function handleReplay(event: MouseEvent<HTMLButtonElement>, id: string) {
+    event.stopPropagation();
+    const confirmed = window.confirm(
+      "Replay this ingest request? This will re-enqueue the same event."
+    );
+    if (!confirmed) return;
+
+    setReplayingIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    setToast(null);
+
+    const result = await replayIngestRequest(id);
+
+    setReplayingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+
+    if (result.ok) {
+      setToast({ type: "success", message: `Replayed ${id}` });
+      await refresh();
+      return;
+    }
+
+    if (result.status === 409 && result.data?.error === "already_emitted") {
+      setToast({ type: "info", message: `Already emitted (skipped): ${id}` });
+      return;
+    }
+
+    setToast({ type: "error", message: result.text || "Replay failed." });
   }
 
   return (
@@ -130,6 +203,17 @@ export function IngestPanel({
       </div>
 
       {error && <div className={stylex(styles.error)}>{error}</div>}
+      {toast && (
+        <div
+          className={stylex(
+            styles.toast,
+            toast.type === "success" && styles.toastSuccess,
+            toast.type === "error" && styles.toastError
+          )}
+        >
+          {toast.message}
+        </div>
+      )}
 
       <div className={stylex(styles.layout)}>
         <div className={stylex(styles.list)}>
@@ -145,6 +229,7 @@ export function IngestPanel({
                 <th>shop</th>
                 <th>webhook_id</th>
                 <th>error</th>
+                <th>actions</th>
               </tr>
             </thead>
             <tbody>
@@ -159,11 +244,24 @@ export function IngestPanel({
                   <td>{request.shop_domain ?? "-"}</td>
                   <td>{request.webhook_id ?? "-"}</td>
                   <td>{request.verify_error ?? "-"}</td>
+                  <td className={stylex(styles.actionsCell)}>
+                    <button
+                      type="button"
+                      className={stylex(
+                        styles.replayButton,
+                        replayingIds.has(request.id) && styles.replayButtonDisabled
+                      )}
+                      onClick={(event) => handleReplay(event, request.id)}
+                      disabled={replayingIds.has(request.id)}
+                    >
+                      {replayingIds.has(request.id) ? "Replaying..." : "Replay"}
+                    </button>
+                  </td>
                 </tr>
               ))}
               {requests.length === 0 && (
                 <tr>
-                  <td colSpan={10} className={stylex(styles.empty)}>
+                  <td colSpan={11} className={stylex(styles.empty)}>
                     No requests.
                   </td>
                 </tr>

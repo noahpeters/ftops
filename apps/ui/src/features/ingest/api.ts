@@ -35,3 +35,12 @@ export async function listIngestRequests(params: {
 export async function getIngestRequest(id: string) {
   return await fetchJson<IngestRequestDetail>(buildUrl(`/ingest/requests/${id}`));
 }
+
+export async function replayIngestRequest(id: string) {
+  return await fetchJson<{ ok: boolean; error?: string }>(
+    buildUrl(`/admin/ingest-requests/${id}/replay`),
+    {
+      method: "POST",
+    }
+  );
+}
