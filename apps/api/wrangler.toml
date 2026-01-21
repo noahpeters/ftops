@@ -42,4 +42,6 @@ invocation_logs = true
 
 [vars]
 INTEGRATIONS_KEY_ID = "v1"
+# Set true for dev-only direct upload fallback (no presigned URLs).
+ALLOW_R2_FALLBACK_UPLOADS = "false"
 # INTEGRATIONS_MASTER_KEY should be set via `wrangler secret` or .dev.vars

@@ -194,9 +194,15 @@ export async function handleTasks(
         return json({ uploadUrl: presigned, storageKey });
       }
 
-      const uploadUrl = new URL(`/tasks/${taskId}/files/upload`, "http://local");
-      uploadUrl.searchParams.set("storageKey", storageKey);
-      return json({ uploadUrl: `${uploadUrl.pathname}${uploadUrl.search}`, storageKey });
+      if (env.ALLOW_R2_FALLBACK_UPLOADS === "true") {
+        const uploadUrl = new URL(`/tasks/${taskId}/files/upload`, "http://local");
+        uploadUrl.searchParams.set("storageKey", storageKey);
+        return json({ uploadUrl: `${uploadUrl.pathname}${uploadUrl.search}`, storageKey });
+      }
+
+      return serverError("Failed to sign upload URL", {
+        detail: "presigned_url_unsupported",
+      });
     }
 
     if (action === "upload" && request.method === "PUT") {

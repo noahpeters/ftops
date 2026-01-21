@@ -16,6 +16,7 @@ import {
   type TaskFile,
 } from "./api";
 import { addTaskNote, listTaskNotes, type TaskNote } from "@/features/projects/api";
+import { buildUrl } from "@/lib/api";
 
 type LaneKey = "overdue" | "due_this_week" | "doing" | "blocked" | "canceled";
 
@@ -454,7 +455,8 @@ export function TasksKanbanPanel(): JSX.Element {
       return;
     }
     const { uploadUrl, storageKey } = init.data;
-    const uploadResponse = await fetch(uploadUrl, {
+    const resolvedUploadUrl = uploadUrl.startsWith("/") ? buildUrl(uploadUrl) : uploadUrl;
+    const uploadResponse = await fetch(resolvedUploadUrl, {
       method: "PUT",
       headers: { "Content-Type": file.type || "application/octet-stream" },
       body: file,
@@ -491,7 +493,10 @@ export function TasksKanbanPanel(): JSX.Element {
       return;
     }
     try {
-      const response = await fetch(result.data.downloadUrl);
+      const resolvedDownloadUrl = result.data.downloadUrl.startsWith("/")
+        ? buildUrl(result.data.downloadUrl)
+        : result.data.downloadUrl;
+      const response = await fetch(resolvedDownloadUrl);
       if (!response.ok) {
         setFileError("Failed to download file.");
         return;

@@ -47,8 +47,13 @@ export async function handleTaskFiles(
       return json({ downloadUrl: presigned });
     }
 
-    const downloadUrl = new URL(`/task-files/${fileId}/blob`, request.url);
-    return json({ downloadUrl: downloadUrl.toString() });
+    if (env.ALLOW_R2_FALLBACK_UPLOADS === "true") {
+      return json({ downloadUrl: `/task-files/${fileId}/blob` });
+    }
+
+    return serverError("Failed to sign download URL", {
+      detail: "presigned_url_unsupported",
+    });
   }
 
   if (sub === "blob" && request.method === "GET") {
