@@ -57,10 +57,10 @@ export async function handleTaskFiles(
       const s3Url = await presignR2S3Url({
         method: "GET",
         key: file.storage_key,
-        bucketName,
-        accountId,
-        accessKeyId,
-        secretAccessKey,
+        bucketName: bucketName as string,
+        accountId: accountId as string,
+        accessKeyId: accessKeyId as string,
+        secretAccessKey: secretAccessKey as string,
         hostOverride,
         expiresIn: 900,
       });

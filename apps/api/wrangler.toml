@@ -46,6 +46,7 @@ INTEGRATIONS_KEY_ID = "v1"
 ALLOW_R2_FALLBACK_UPLOADS = "false"
 R2_TASK_FILES_BUCKET_NAME = "ftops-task-files"
 # Optional public host for R2 (e.g. opsfiles.from-trees.com)
-# R2_TASK_FILES_PUBLIC_HOST = "opsfiles.from-trees.com"
+R2_TASK_FILES_PUBLIC_HOST = "opsfiles.from-trees.com"
 # R2_ACCOUNT_ID should be set per environment (see Cloudflare dashboard)
+R2_ACCOUNT_ID = "125d8016e23830dcaf86de127ce90576"
 # INTEGRATIONS_MASTER_KEY should be set via `wrangler secret` or .dev.vars

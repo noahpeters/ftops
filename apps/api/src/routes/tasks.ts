@@ -199,14 +199,21 @@ export async function handleTasks(
         return json({ uploadUrl: presigned, storageKey });
       }
 
-      if (bucketName && accountId && accessKeyId && secretAccessKey) {
+      const missing = [
+        !bucketName ? "R2_TASK_FILES_BUCKET_NAME" : null,
+        !accountId ? "R2_ACCOUNT_ID" : null,
+        !accessKeyId ? "R2_ACCESS_KEY_ID" : null,
+        !secretAccessKey ? "R2_SECRET_ACCESS_KEY" : null,
+      ].filter(Boolean);
+
+      if (missing.length === 0) {
         const s3Url = await presignR2S3Url({
           method: "PUT",
           key: storageKey,
-          bucketName,
-          accountId,
-          accessKeyId,
-          secretAccessKey,
+          bucketName: bucketName as string,
+          accountId: accountId as string,
+          accessKeyId: accessKeyId as string,
+          secretAccessKey: secretAccessKey as string,
           expiresIn: 900,
         });
         return json({ uploadUrl: s3Url, storageKey });
@@ -220,6 +227,7 @@ export async function handleTasks(
 
       return serverError("Failed to sign upload URL", {
         detail: "presigned_url_unsupported",
+        missing,
       });
     }
 
