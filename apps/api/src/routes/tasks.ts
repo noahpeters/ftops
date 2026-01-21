@@ -190,6 +190,7 @@ export async function handleTasks(
       const accountId = env.R2_ACCOUNT_ID;
       const accessKeyId = env.R2_ACCESS_KEY_ID;
       const secretAccessKey = env.R2_SECRET_ACCESS_KEY;
+      const hostOverride = env.R2_TASK_FILES_PUBLIC_HOST;
 
       const presigned = await tryCreatePresignedUrl(env.R2_TASK_FILES_BUCKET, storageKey, {
         method: "PUT",
@@ -207,6 +208,7 @@ export async function handleTasks(
           accountId,
           accessKeyId,
           secretAccessKey,
+          hostOverride,
           expiresIn: 900,
         });
         return json({ uploadUrl: s3Url, storageKey });

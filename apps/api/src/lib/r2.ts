@@ -26,6 +26,7 @@ type R2S3PresignArgs = {
   accountId: string;
   accessKeyId: string;
   secretAccessKey: string;
+  hostOverride?: string;
   expiresIn?: number;
 };
 
@@ -34,7 +35,7 @@ export async function presignR2S3Url(args: R2S3PresignArgs): Promise<string> {
   const service = "s3";
   const method = args.method;
   const expiresIn = Math.min(Math.max(args.expiresIn ?? 900, 1), 604800);
-  const host = `${args.accountId}.r2.cloudflarestorage.com`;
+  const host = args.hostOverride ?? `${args.accountId}.r2.cloudflarestorage.com`;
   const now = new Date();
   const amzDate = toAmzDate(now);
   const dateStamp = amzDate.slice(0, 8);
