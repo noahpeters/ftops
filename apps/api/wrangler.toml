@@ -44,4 +44,6 @@ invocation_logs = true
 INTEGRATIONS_KEY_ID = "v1"
 # Set true for dev-only direct upload fallback (no presigned URLs).
 ALLOW_R2_FALLBACK_UPLOADS = "false"
+R2_TASK_FILES_BUCKET_NAME = "ftops-task-files"
+# R2_ACCOUNT_ID should be set per environment (see Cloudflare dashboard)
 # INTEGRATIONS_MASTER_KEY should be set via `wrangler secret` or .dev.vars

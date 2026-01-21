@@ -1,5 +1,5 @@
 import { badRequest, json, methodNotAllowed, notFound, serverError } from "../lib/http";
-import { tryCreatePresignedUrl } from "../lib/r2";
+import { presignR2S3Url, tryCreatePresignedUrl } from "../lib/r2";
 import type { Env } from "../lib/types";
 
 type TaskFileRow = {
@@ -39,12 +39,30 @@ export async function handleTaskFiles(
       return notFound("File not found");
     }
 
+    const bucketName = env.R2_TASK_FILES_BUCKET_NAME;
+    const accountId = env.R2_ACCOUNT_ID;
+    const accessKeyId = env.R2_ACCESS_KEY_ID;
+    const secretAccessKey = env.R2_SECRET_ACCESS_KEY;
+
     const presigned = await tryCreatePresignedUrl(env.R2_TASK_FILES_BUCKET, file.storage_key, {
       method: "GET",
       expiresIn: 900,
     });
     if (presigned) {
       return json({ downloadUrl: presigned });
+    }
+
+    if (bucketName && accountId && accessKeyId && secretAccessKey) {
+      const s3Url = await presignR2S3Url({
+        method: "GET",
+        key: file.storage_key,
+        bucketName,
+        accountId,
+        accessKeyId,
+        secretAccessKey,
+        expiresIn: 900,
+      });
+      return json({ downloadUrl: s3Url });
     }
 
     if (env.ALLOW_R2_FALLBACK_UPLOADS === "true") {

@@ -2,7 +2,7 @@ import { badRequest, json, methodNotAllowed, notFound, serverError } from "../li
 import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { getActorEmail } from "../lib/identity";
-import { tryCreatePresignedUrl } from "../lib/r2";
+import { presignR2S3Url, tryCreatePresignedUrl } from "../lib/r2";
 import { handleTasksKanban } from "./tasksKanban";
 
 const ALLOWED_STATUSES = new Set([
@@ -186,12 +186,30 @@ export async function handleTasks(
 
       const storageKey = `tasks/${taskRow.workspace_id}/${taskId}/${crypto.randomUUID()}-${filename}`;
 
+      const bucketName = env.R2_TASK_FILES_BUCKET_NAME;
+      const accountId = env.R2_ACCOUNT_ID;
+      const accessKeyId = env.R2_ACCESS_KEY_ID;
+      const secretAccessKey = env.R2_SECRET_ACCESS_KEY;
+
       const presigned = await tryCreatePresignedUrl(env.R2_TASK_FILES_BUCKET, storageKey, {
         method: "PUT",
         expiresIn: 900,
       });
       if (presigned) {
         return json({ uploadUrl: presigned, storageKey });
+      }
+
+      if (bucketName && accountId && accessKeyId && secretAccessKey) {
+        const s3Url = await presignR2S3Url({
+          method: "PUT",
+          key: storageKey,
+          bucketName,
+          accountId,
+          accessKeyId,
+          secretAccessKey,
+          expiresIn: 900,
+        });
+        return json({ uploadUrl: s3Url, storageKey });
       }
 
       if (env.ALLOW_R2_FALLBACK_UPLOADS === "true") {
