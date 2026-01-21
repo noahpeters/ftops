@@ -194,9 +194,9 @@ export async function handleTasks(
         return json({ uploadUrl: presigned, storageKey });
       }
 
-      const uploadUrl = new URL(`/tasks/${taskId}/files/upload`, url.origin);
+      const uploadUrl = new URL(`/tasks/${taskId}/files/upload`, "http://local");
       uploadUrl.searchParams.set("storageKey", storageKey);
-      return json({ uploadUrl: uploadUrl.toString(), storageKey });
+      return json({ uploadUrl: `${uploadUrl.pathname}${uploadUrl.search}`, storageKey });
     }
 
     if (action === "upload" && request.method === "PUT") {
