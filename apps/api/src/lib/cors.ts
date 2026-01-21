@@ -23,7 +23,7 @@ export function getCorsContext(request: Request) {
     headers: {
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Credentials": "true",
-      "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
+      "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS",
       "Access-Control-Allow-Headers": ALLOWED_HEADERS,
       Vary: "Origin",
     },

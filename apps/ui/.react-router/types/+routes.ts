@@ -44,6 +44,9 @@ type Pages = {
       "projectId": string;
     };
   };
+  "/tasks/kanban": {
+    params: {};
+  };
   "/integrations": {
     params: {};
   };
@@ -63,11 +66,11 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/integrations" | "/ingest" | "/workspaces" | "/*";
+    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/tasks/kanban" | "/integrations" | "/ingest" | "/workspaces" | "/*";
   };
   "routes/root.tsx": {
     id: "routes/root";
-    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/integrations" | "/ingest" | "/workspaces" | "/*";
+    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/tasks/kanban" | "/integrations" | "/ingest" | "/workspaces" | "/*";
   };
   "routes/index.tsx": {
     id: "routes/index";
@@ -105,6 +108,10 @@ type RouteFiles = {
     id: "routes/projects-project";
     page: "/projects/:projectId";
   };
+  "routes/tasks-kanban.tsx": {
+    id: "routes/tasks-kanban";
+    page: "/tasks/kanban";
+  };
   "routes/integrations.tsx": {
     id: "routes/integrations";
     page: "/integrations";
@@ -135,6 +142,7 @@ type RouteModules = {
   "routes/templates-template": typeof import("./src/routes/templates-template.tsx");
   "routes/projects": typeof import("./src/routes/projects.tsx");
   "routes/projects-project": typeof import("./src/routes/projects-project.tsx");
+  "routes/tasks-kanban": typeof import("./src/routes/tasks-kanban.tsx");
   "routes/integrations": typeof import("./src/routes/integrations.tsx");
   "routes/ingest": typeof import("./src/routes/ingest.tsx");
   "routes/workspaces": typeof import("./src/routes/workspaces.tsx");

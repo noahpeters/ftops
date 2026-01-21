@@ -1,27 +1,41 @@
-import { badRequest, json, methodNotAllowed, notFound } from "../lib/http";
+import { badRequest, json, methodNotAllowed, notFound, serverError } from "../lib/http";
 import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { getActorEmail } from "../lib/identity";
+import { tryCreatePresignedUrl } from "../lib/r2";
+import { handleTasksKanban } from "./tasksKanban";
 
-const ALLOWED_STATUSES = new Set(["todo", "doing", "blocked", "done", "canceled"]);
+const ALLOWED_STATUSES = new Set([
+  "todo",
+  "doing",
+  "blocked",
+  "done",
+  "canceled",
+  "overdue",
+  "due_this_week",
+]);
 
 export async function handleTasks(
   segments: string[],
   request: Request,
   env: Env,
   _ctx: ExecutionContext,
-  _url: URL
+  url: URL
 ) {
   if (segments.length === 0) {
     return notFound("Route not found");
   }
 
-  const [taskId, sub] = segments;
+  const [taskId, sub, action] = segments;
+
+  if (taskId === "kanban") {
+    return await handleTasksKanban(request, env, url);
+  }
 
   if (!sub && request.method === "PATCH") {
-    let body: { status?: string } = {};
+    let body: { status?: string; priority?: number } = {};
     try {
-      body = (await request.json()) as { status?: string };
+      body = (await request.json()) as { status?: string; priority?: number };
     } catch {
       body = {};
     }
@@ -30,8 +44,11 @@ export async function handleTasks(
       return badRequest("invalid_status");
     }
 
-    if (!body.status) {
-      return badRequest("missing_status");
+    const hasPriority = typeof body.priority === "number" && Number.isFinite(body.priority);
+    const hasStatus = Boolean(body.status);
+
+    if (!hasPriority && !hasStatus) {
+      return badRequest("missing_fields");
     }
 
     const existing = await env.DB.prepare("SELECT id FROM tasks WHERE id = ?").bind(taskId).first();
@@ -39,12 +56,17 @@ export async function handleTasks(
       return notFound("Task not found");
     }
 
+    const nextStatus = body.status ?? null;
+    const nextPriority = hasPriority ? body.priority : null;
+
     const result = await env.DB.prepare(
       `UPDATE tasks
-       SET status = ?, updated_at = ?
+       SET status = COALESCE(?, status),
+           priority = COALESCE(?, priority),
+           updated_at = ?
        WHERE id = ?`
     )
-      .bind(body.status, nowISO(), taskId)
+      .bind(nextStatus, nextPriority, nowISO(), taskId)
       .run();
 
     if (!result.success) {
@@ -115,6 +137,160 @@ export async function handleTasks(
         .run();
 
       return json(note, 201);
+    }
+
+    return methodNotAllowed(["GET", "POST"]);
+  }
+
+  if (sub === "files") {
+    if (!action && request.method === "GET") {
+      const files = await env.DB.prepare(
+        `SELECT id, workspace_id, task_id, uploaded_by_email, original_filename, content_type,
+                size_bytes, storage_key, sha256, created_at
+         FROM task_files
+         WHERE task_id = ?
+         ORDER BY created_at DESC`
+      )
+        .bind(taskId)
+        .all();
+      return json(files.results ?? []);
+    }
+
+    if (action === "init" && request.method === "POST") {
+      let body: { filename?: string; contentType?: string; sizeBytes?: number } = {};
+      try {
+        body = (await request.json()) as {
+          filename?: string;
+          contentType?: string;
+          sizeBytes?: number;
+        };
+      } catch {
+        body = {};
+      }
+
+      const filename = body.filename?.trim();
+      const contentType = body.contentType?.trim();
+      const sizeBytes = body.sizeBytes;
+
+      if (!filename || !contentType || typeof sizeBytes !== "number") {
+        return badRequest("missing_fields");
+      }
+
+      const taskRow = await env.DB.prepare("SELECT id, workspace_id FROM tasks WHERE id = ?")
+        .bind(taskId)
+        .first<{ id: string; workspace_id: string }>();
+
+      if (!taskRow) {
+        return notFound("Task not found");
+      }
+
+      const storageKey = `tasks/${taskRow.workspace_id}/${taskId}/${crypto.randomUUID()}-${filename}`;
+
+      const presigned = await tryCreatePresignedUrl(env.R2_TASK_FILES_BUCKET, storageKey, {
+        method: "PUT",
+        expiresIn: 900,
+      });
+      if (presigned) {
+        return json({ uploadUrl: presigned, storageKey });
+      }
+
+      const uploadUrl = new URL(`/tasks/${taskId}/files/upload`, url.origin);
+      uploadUrl.searchParams.set("storageKey", storageKey);
+      return json({ uploadUrl: uploadUrl.toString(), storageKey });
+    }
+
+    if (action === "upload" && request.method === "PUT") {
+      const storageKey = url.searchParams.get("storageKey");
+      if (!storageKey) {
+        return badRequest("missing_storage_key");
+      }
+
+      const contentType = request.headers.get("content-type") || "application/octet-stream";
+      const payload = await request.arrayBuffer();
+
+      try {
+        await env.R2_TASK_FILES_BUCKET.put(storageKey, payload, {
+          httpMetadata: { contentType },
+        });
+      } catch (error) {
+        return serverError("Failed to upload file", { detail: String(error) });
+      }
+
+      return json({ ok: true });
+    }
+
+    if (action === "complete" && request.method === "POST") {
+      let body: {
+        storageKey?: string;
+        filename?: string;
+        contentType?: string;
+        sizeBytes?: number;
+        sha256?: string;
+      } = {};
+      try {
+        body = (await request.json()) as {
+          storageKey?: string;
+          filename?: string;
+          contentType?: string;
+          sizeBytes?: number;
+          sha256?: string;
+        };
+      } catch {
+        body = {};
+      }
+
+      const storageKey = body.storageKey?.trim();
+      const filename = body.filename?.trim();
+      const contentType = body.contentType?.trim();
+      const sizeBytes = body.sizeBytes;
+      const sha256 = body.sha256?.trim() ?? null;
+
+      if (!storageKey || !filename || !contentType || typeof sizeBytes !== "number") {
+        return badRequest("missing_fields");
+      }
+
+      const taskRow = await env.DB.prepare("SELECT id, workspace_id FROM tasks WHERE id = ?")
+        .bind(taskId)
+        .first<{ id: string; workspace_id: string }>();
+
+      if (!taskRow) {
+        return notFound("Task not found");
+      }
+
+      const fileRow = {
+        id: crypto.randomUUID(),
+        workspace_id: taskRow.workspace_id,
+        task_id: taskId,
+        uploaded_by_email: getActorEmail(request),
+        original_filename: filename,
+        content_type: contentType,
+        size_bytes: sizeBytes,
+        storage_key: storageKey,
+        sha256,
+        created_at: nowISO(),
+      };
+
+      await env.DB.prepare(
+        `INSERT INTO task_files
+          (id, workspace_id, task_id, uploaded_by_email, original_filename,
+           content_type, size_bytes, storage_key, sha256, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+        .bind(
+          fileRow.id,
+          fileRow.workspace_id,
+          fileRow.task_id,
+          fileRow.uploaded_by_email,
+          fileRow.original_filename,
+          fileRow.content_type,
+          fileRow.size_bytes,
+          fileRow.storage_key,
+          fileRow.sha256,
+          fileRow.created_at
+        )
+        .run();
+
+      return json(fileRow, 201);
     }
 
     return methodNotAllowed(["GET", "POST"]);

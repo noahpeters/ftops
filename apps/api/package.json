@@ -46,7 +46,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@ftops/webhooks": "file:../../packages/webhooks"
+    "@ftops/webhooks": "file:../../packages/webhooks",
+    "luxon": "^3.7.2"
   },
   "bugs": {
     "url": "https://github.com/noahpeters/ftops/issues"
@@ -54,6 +55,7 @@
   "homepage": "https://github.com/noahpeters/ftops#readme",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260116.0",
+    "@types/luxon": "^3.7.1",
     "@typescript-eslint/eslint-plugin": "^8.53.0",
     "@typescript-eslint/parser": "^8.53.0",
     "eslint": "^9.39.2",

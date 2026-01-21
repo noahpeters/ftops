@@ -25,6 +25,7 @@ import { IntegrationsPanel } from "./features/integrations/IntegrationsPanel";
 import { IngestPanel } from "./features/ingest/IngestPanel";
 import { listWorkspaces, type WorkspaceRow } from "./features/workspaces/api";
 import { WorkspacesPanel } from "./features/workspaces/WorkspacesPanel";
+import { TasksKanbanPanel } from "./features/kanban/TasksKanbanPanel";
 
 const EXAMPLE_URIS = ["manual://proposal/demo", "shopify://order/example", "qbo://invoice/example"];
 
@@ -669,6 +670,14 @@ export default function App(): JSX.Element {
             className={({ isActive }) =>
               stylex(styles.tabButton, isActive && styles.tabButtonActive)
             }
+            to="/tasks/kanban"
+          >
+            Kanban
+          </NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              stylex(styles.tabButton, isActive && styles.tabButtonActive)
+            }
             to="/integrations"
           >
             Integrations
@@ -1160,6 +1169,10 @@ export function ProjectsRoute(): JSX.Element {
       contextLookup={contextLookup}
     />
   );
+}
+
+export function TasksKanbanRoute(): JSX.Element {
+  return <TasksKanbanPanel />;
 }
 
 export function IntegrationsRoute(): JSX.Element {

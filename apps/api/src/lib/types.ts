@@ -1,6 +1,7 @@
 export type Env = {
   DB: D1Database;
   EVENT_QUEUE: Queue;
+  R2_TASK_FILES_BUCKET: R2Bucket;
   INTEGRATIONS_MASTER_KEY?: string;
   INTEGRATIONS_KEY_ID?: string;
 };

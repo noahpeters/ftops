@@ -50,6 +50,7 @@ function makeEnv(data: {
   return {
     DB: db as D1Database,
     EVENT_QUEUE: {} as Queue,
+    R2_TASK_FILES_BUCKET: {} as R2Bucket,
   };
 }
 

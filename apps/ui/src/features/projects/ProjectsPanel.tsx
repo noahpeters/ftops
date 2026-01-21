@@ -15,7 +15,7 @@ import {
   type TaskRow,
 } from "./api";
 
-const STATUS_OPTIONS = ["todo", "doing", "blocked", "done", "canceled"];
+const STATUS_OPTIONS = ["todo", "doing", "blocked", "done", "canceled", "overdue", "due_this_week"];
 
 type ContextLookup = Record<string, { title?: string | null }>;
 

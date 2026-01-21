@@ -31,6 +31,10 @@ queue = "events-qb-ingest"
 [[queues.consumers]]
 queue = "events-shopify-ingest"
 
+[[r2_buckets]]
+binding = "R2_TASK_FILES_BUCKET"
+bucket_name = "ftops-task-files"
+
 [observability]
 [observability.logs]
 enabled = true
