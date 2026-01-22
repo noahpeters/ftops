@@ -1,6 +1,6 @@
 import { buildUrl, fetchJson } from "@/lib/api";
 
-export type KanbanTask = {
+export type TaskRow = {
   id: string;
   workspace_id: string;
   project_id: string;
@@ -23,16 +23,27 @@ export type KanbanTask = {
   updated_at: string;
   priority: number;
   attachments_count?: number;
+  notes_count?: number;
 };
 
 export type KanbanResponse = {
   weekStart: string;
   weekEnd: string;
-  overdue: KanbanTask[];
-  due_this_week: KanbanTask[];
-  in_progress: KanbanTask[];
-  blocked: KanbanTask[];
-  canceled: KanbanTask[];
+  scheduled: TaskRow[];
+  overdue: TaskRow[];
+  due_this_week: TaskRow[];
+  in_progress: TaskRow[];
+  blocked: TaskRow[];
+  done: TaskRow[];
+  canceled: TaskRow[];
+};
+
+export type TaskNote = {
+  id: string;
+  task_id: string;
+  author_email: string;
+  created_at: string;
+  body: string;
 };
 
 export type TaskFile = {
@@ -48,19 +59,56 @@ export type TaskFile = {
   created_at: string;
 };
 
-export async function getKanban(scope: "this_week" = "this_week") {
+export type WorkspaceUser = {
+  workspace_id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  workspace_admin?: number | boolean;
+  system_admin?: number | boolean;
+};
+
+export async function fetchKanban(scope: "this_week" = "this_week") {
   return await fetchJson<KanbanResponse>(buildUrl("/tasks/kanban", { scope }));
 }
 
-export async function patchTask(taskId: string, payload: { status?: string; priority?: number }) {
-  return await fetchJson(buildUrl(`/tasks/${taskId}`), {
+export async function getTask(id: string) {
+  return await fetchJson<TaskRow>(buildUrl(`/tasks/${id}`));
+}
+
+export async function updateTask(
+  id: string,
+  updates: {
+    status?: string;
+    priority?: number;
+    due_at?: string | null;
+    assigned_to?: string | null;
+    description?: string | null;
+    template_id?: string | null;
+    customer_id?: string | null;
+    title?: string | null;
+  }
+) {
+  return await fetchJson<TaskRow>(buildUrl(`/tasks/${id}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(updates),
   });
 }
 
-export async function initTaskFile(
+export async function fetchNotes(taskId: string) {
+  return await fetchJson<TaskNote[]>(buildUrl(`/tasks/${taskId}/notes`));
+}
+
+export async function createNote(taskId: string, body: string) {
+  return await fetchJson<TaskNote>(buildUrl(`/tasks/${taskId}/notes`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+  });
+}
+
+export async function initFileUpload(
   taskId: string,
   payload: {
     filename: string;
@@ -78,7 +126,7 @@ export async function initTaskFile(
   );
 }
 
-export async function completeTaskFile(
+export async function completeFileUpload(
   taskId: string,
   payload: {
     storageKey: string;
@@ -95,16 +143,20 @@ export async function completeTaskFile(
   });
 }
 
-export async function listTaskFiles(taskId: string) {
+export async function listFiles(taskId: string) {
   return await fetchJson<TaskFile[]>(buildUrl(`/tasks/${taskId}/files`));
 }
 
-export async function downloadTaskFile(fileId: string) {
+export async function downloadFile(fileId: string) {
   return await fetchJson<{ downloadUrl: string }>(buildUrl(`/task-files/${fileId}/download`));
 }
 
-export async function deleteTaskFile(fileId: string) {
+export async function deleteFile(fileId: string) {
   return await fetchJson<{ ok: boolean }>(buildUrl(`/task-files/${fileId}`), {
     method: "DELETE",
   });
+}
+
+export async function listWorkspaceUsers(workspaceId: string) {
+  return await fetchJson<WorkspaceUser[]>(buildUrl(`/workspaces/${workspaceId}/users`));
 }

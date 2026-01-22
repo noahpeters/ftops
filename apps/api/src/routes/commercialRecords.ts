@@ -47,7 +47,7 @@ async function listCommercialRecords(env: Env, url: URL) {
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
 
-  const sql = `SELECT uri, source, kind, external_id, customer_display,
+  const sql = `SELECT uri, source, kind, external_id, customer_uri, customer_display,
                      quoted_delivery_date, quoted_install_date,
                      last_seen_at, snapshot_hash
               FROM commercial_records

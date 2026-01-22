@@ -5,6 +5,7 @@ export type CommercialRecordListItem = {
   source: string;
   kind: string;
   external_id: string | null;
+  customer_uri: string | null;
   customer_display: string | null;
   quoted_delivery_date: string | null;
   quoted_install_date: string | null;

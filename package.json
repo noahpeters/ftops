@@ -13,16 +13,17 @@
     "typecheck": "npm --workspace apps/api run typecheck && npm --workspace apps/webhooks run typecheck && npm --workspace apps/ui run typecheck",
     "fmt": "npm --workspace apps/api run format && npm --workspace apps/webhooks run format && npm --workspace apps/ui run format",
     "fmt:check": "npm --workspace apps/api run format:check && npm --workspace apps/webhooks run format:check && npm --workspace apps/ui run format:check",
-    "verify": "npm --workspace apps/api run verify && npm --workspace apps/webhooks run verify && npm --workspace apps/ui run verify",
+    "verify": "npm --workspace apps/api run verify && npm --workspace apps/webhooks run verify && npm --workspace apps/ui run verify && npm run check:migration-edits",
     "deploy": "npm run deploy:api && npm run deploy:webhooks && npm run deploy:ui",
     "deploy:api": "npm --workspace apps/api run deploy",
     "deploy:webhooks": "npm --workspace apps/webhooks run deploy",
     "deploy:ui": "npm --workspace apps/ui run deploy",
     "check:remote-migrations": "node scripts/check-remote-migrations.cjs",
+    "check:migration-edits": "node scripts/check-migration-edits.cjs",
     "prepare": "node -e \"const fs=require('fs');const path=require('path');if(process.env.SKIP_SIMPLE_GIT_HOOKS){process.exit(0);}const bin=path.join(process.cwd(),'node_modules','.bin','simple-git-hooks');if(!fs.existsSync(bin)){console.log('simple-git-hooks not installed; skipping');process.exit(0);}require('child_process').execSync('simple-git-hooks',{stdio:'inherit'});\""
   },
   "simple-git-hooks": {
-    "pre-commit": "npm run fmt:check",
+    "pre-commit": "npm run fmt:check && npm run check:migration-edits",
     "pre-push": "npm run verify && npm run check:remote-migrations"
   },
   "optionalDependencies": {

@@ -223,13 +223,17 @@ export async function handleProjects(
         group_key: task.groupKey ?? null,
         line_item_uri: task.lineItemUri ?? null,
         template_key: task.templateKey,
+        template_id: task.templateKey,
         title: task.title,
         kind: task.kind,
+        description: null,
         position: task.position,
-        status: "todo",
+        status: "scheduled",
         state_json: task.state_json ?? null,
         due_at: null,
+        completed_at: null,
         assigned_to: null,
+        customer_id: null,
       }));
 
       try {
@@ -237,9 +241,10 @@ export async function handleProjects(
           const statements = taskRows.map((task) =>
             env.DB.prepare(
               `INSERT INTO tasks
-                (id, workspace_id, project_id, scope, group_key, line_item_uri, template_key,
-                 title, kind, position, status, state_json, due_at, assigned_to, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                (id, workspace_id, project_id, scope, group_key, line_item_uri, template_key, template_id,
+                 title, kind, description, position, status, state_json, due_at, completed_at, assigned_to,
+                 customer_id, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
             ).bind(
               task.id,
               task.workspace_id,
@@ -248,13 +253,17 @@ export async function handleProjects(
               task.group_key,
               task.line_item_uri,
               task.template_key,
+              task.template_id,
               task.title,
               task.kind,
+              task.description,
               task.position,
               task.status,
               task.state_json,
               task.due_at,
+              task.completed_at,
               task.assigned_to,
+              task.customer_id,
               new Date().toISOString(),
               new Date().toISOString()
             )

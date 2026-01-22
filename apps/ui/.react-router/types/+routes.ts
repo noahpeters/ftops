@@ -44,6 +44,9 @@ type Pages = {
       "projectId": string;
     };
   };
+  "/tasks": {
+    params: {};
+  };
   "/tasks/kanban": {
     params: {};
   };
@@ -56,6 +59,9 @@ type Pages = {
   "/workspaces": {
     params: {};
   };
+  "/users": {
+    params: {};
+  };
   "/*": {
     params: {
       "*": string;
@@ -66,11 +72,11 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/tasks/kanban" | "/integrations" | "/ingest" | "/workspaces" | "/*";
+    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/tasks" | "/tasks/kanban" | "/integrations" | "/ingest" | "/workspaces" | "/users" | "/*";
   };
   "routes/root.tsx": {
     id: "routes/root";
-    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/tasks/kanban" | "/integrations" | "/ingest" | "/workspaces" | "/*";
+    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/tasks" | "/tasks/kanban" | "/integrations" | "/ingest" | "/workspaces" | "/users" | "/*";
   };
   "routes/index.tsx": {
     id: "routes/index";
@@ -108,6 +114,10 @@ type RouteFiles = {
     id: "routes/projects-project";
     page: "/projects/:projectId";
   };
+  "routes/tasks.tsx": {
+    id: "routes/tasks";
+    page: "/tasks";
+  };
   "routes/tasks-kanban.tsx": {
     id: "routes/tasks-kanban";
     page: "/tasks/kanban";
@@ -123,6 +133,10 @@ type RouteFiles = {
   "routes/workspaces.tsx": {
     id: "routes/workspaces";
     page: "/workspaces";
+  };
+  "routes/users.tsx": {
+    id: "routes/users";
+    page: "/users";
   };
   "routes/not-found.tsx": {
     id: "routes/not-found";
@@ -142,9 +156,11 @@ type RouteModules = {
   "routes/templates-template": typeof import("./src/routes/templates-template.tsx");
   "routes/projects": typeof import("./src/routes/projects.tsx");
   "routes/projects-project": typeof import("./src/routes/projects-project.tsx");
+  "routes/tasks": typeof import("./src/routes/tasks.tsx");
   "routes/tasks-kanban": typeof import("./src/routes/tasks-kanban.tsx");
   "routes/integrations": typeof import("./src/routes/integrations.tsx");
   "routes/ingest": typeof import("./src/routes/ingest.tsx");
   "routes/workspaces": typeof import("./src/routes/workspaces.tsx");
+  "routes/users": typeof import("./src/routes/users.tsx");
   "routes/not-found": typeof import("./src/routes/not-found.tsx");
 };

@@ -75,6 +75,183 @@ export async function handleWorkspaces(
     return json(workspace);
   }
 
+  if (segments.length === 2 && segments[1] === "users") {
+    const workspaceId = segments[0];
+    const workspace = await env.DB.prepare("SELECT id FROM workspaces WHERE id = ?")
+      .bind(workspaceId)
+      .first();
+    if (!workspace) {
+      return notFound("Workspace not found");
+    }
+
+    if (request.method === "GET") {
+      const result = await env.DB.prepare(
+        `SELECT workspace_id, user_id, name, email, workspace_admin, system_admin
+         FROM users
+         WHERE workspace_id = ?
+         ORDER BY name ASC, email ASC`
+      )
+        .bind(workspaceId)
+        .all();
+
+      return json(result.results ?? []);
+    }
+
+    if (request.method === "POST") {
+      let body: {
+        name?: string;
+        email?: string;
+        workspace_admin?: boolean;
+        system_admin?: boolean;
+      } = {};
+      try {
+        body = (await request.json()) as {
+          name?: string;
+          email?: string;
+          workspace_admin?: boolean;
+          system_admin?: boolean;
+        };
+      } catch {
+        body = {};
+      }
+
+      const name = body.name?.trim();
+      const email = body.email?.trim();
+      if (!name || !email) {
+        return badRequest("missing_name_or_email");
+      }
+
+      const userId = crypto.randomUUID();
+      const workspaceAdmin = body.workspace_admin ? 1 : 0;
+      const systemAdmin = body.system_admin ? 1 : 0;
+
+      await env.DB.prepare(
+        `INSERT INTO users
+          (workspace_id, user_id, name, email, workspace_admin, system_admin)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+        .bind(workspaceId, userId, name, email, workspaceAdmin, systemAdmin)
+        .run();
+
+      const user = await env.DB.prepare(
+        `SELECT workspace_id, user_id, name, email, workspace_admin, system_admin
+         FROM users
+         WHERE workspace_id = ? AND user_id = ?`
+      )
+        .bind(workspaceId, userId)
+        .first();
+
+      return json(user, 201);
+    }
+
+    return methodNotAllowed(["GET", "POST"]);
+  }
+
+  if (segments.length === 3 && segments[1] === "users") {
+    const workspaceId = segments[0];
+    const userId = segments[2];
+    const workspace = await env.DB.prepare("SELECT id FROM workspaces WHERE id = ?")
+      .bind(workspaceId)
+      .first();
+    if (!workspace) {
+      return notFound("Workspace not found");
+    }
+
+    if (request.method === "PATCH") {
+      let body: {
+        name?: string;
+        email?: string;
+        workspace_admin?: boolean;
+        system_admin?: boolean;
+      } = {};
+      try {
+        body = (await request.json()) as {
+          name?: string;
+          email?: string;
+          workspace_admin?: boolean;
+          system_admin?: boolean;
+        };
+      } catch {
+        body = {};
+      }
+
+      const updates: string[] = [];
+      const bindings: unknown[] = [];
+
+      if (body.name !== undefined) {
+        const name = body.name.trim();
+        if (!name) {
+          return badRequest("missing_name");
+        }
+        updates.push("name = ?");
+        bindings.push(name);
+      }
+
+      if (body.email !== undefined) {
+        const email = body.email.trim();
+        if (!email) {
+          return badRequest("missing_email");
+        }
+        updates.push("email = ?");
+        bindings.push(email);
+      }
+
+      if (body.workspace_admin !== undefined) {
+        updates.push("workspace_admin = ?");
+        bindings.push(body.workspace_admin ? 1 : 0);
+      }
+
+      if (body.system_admin !== undefined) {
+        updates.push("system_admin = ?");
+        bindings.push(body.system_admin ? 1 : 0);
+      }
+
+      if (updates.length === 0) {
+        return badRequest("no_updates");
+      }
+
+      bindings.push(workspaceId, userId);
+
+      await env.DB.prepare(
+        `UPDATE users
+         SET ${updates.join(", ")}
+         WHERE workspace_id = ? AND user_id = ?`
+      )
+        .bind(...bindings)
+        .run();
+
+      const user = await env.DB.prepare(
+        `SELECT workspace_id, user_id, name, email, workspace_admin, system_admin
+         FROM users
+         WHERE workspace_id = ? AND user_id = ?`
+      )
+        .bind(workspaceId, userId)
+        .first();
+
+      if (!user) {
+        return notFound("User not found");
+      }
+
+      return json(user);
+    }
+
+    if (request.method === "DELETE") {
+      const result = await env.DB.prepare(
+        "DELETE FROM users WHERE workspace_id = ? AND user_id = ?"
+      )
+        .bind(workspaceId, userId)
+        .run();
+
+      if (!result.success) {
+        return notFound("User not found");
+      }
+
+      return json({ ok: true });
+    }
+
+    return methodNotAllowed(["PATCH", "DELETE"]);
+  }
+
   if (segments.length === 1 && request.method === "PATCH") {
     const workspaceId = segments[0];
     let body: { slug?: string; name?: string } = {};

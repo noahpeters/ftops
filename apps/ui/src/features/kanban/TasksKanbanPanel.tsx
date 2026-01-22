@@ -18,17 +18,17 @@ import {
 import { addTaskNote, listTaskNotes, type TaskNote } from "@/features/projects/api";
 import { buildUrl } from "@/lib/api";
 
-type LaneKey = "overdue" | "due_this_week" | "doing" | "blocked" | "canceled";
+type LaneKey = "overdue" | "due_this_week" | "in_progress" | "blocked" | "canceled";
 
 const LANE_CONFIG: Array<{ key: LaneKey; label: string }> = [
   { key: "overdue", label: "Overdue" },
   { key: "due_this_week", label: "Due This Week" },
-  { key: "doing", label: "Doing" },
+  { key: "in_progress", label: "In Progress" },
   { key: "blocked", label: "Blocked" },
   { key: "canceled", label: "Canceled" },
 ];
 
-const STATUS_OPTIONS = ["overdue", "due_this_week", "doing", "blocked", "canceled", "done"];
+const STATUS_OPTIONS = ["scheduled", "in progress", "blocked", "done", "canceled"];
 
 const styles = stylex.create({
   panel: {
@@ -389,7 +389,7 @@ export function TasksKanbanPanel(): JSX.Element {
       };
     });
 
-    await updateLanePriorities(lane, targetTasks, lane, moved.id);
+    await updateLanePriorities(lane, targetTasks, statusForLane(lane), moved.id);
   }
 
   async function bumpTask(task: KanbanTask, lane: LaneKey, direction: "up" | "down") {
@@ -674,6 +674,21 @@ export function TasksKanbanPanel(): JSX.Element {
             </section>
 
             <section className={stylex(styles.drawerSection)}>
+              <div className={stylex(styles.drawerLabel)}>Details</div>
+              <div className={stylex(styles.metaText)}>
+                {activeTask.description || "No description."}
+              </div>
+              <div className={stylex(styles.drawerRow)}>
+                <span className={stylex(styles.metaText)}>
+                  Template ID: {activeTask.template_id || "—"}
+                </span>
+                <span className={stylex(styles.metaText)}>
+                  Customer ID: {activeTask.customer_id || "—"}
+                </span>
+              </div>
+            </section>
+
+            <section className={stylex(styles.drawerSection)}>
               <div className={stylex(styles.drawerLabel)}>Notes</div>
               {notesLoading && <span className={stylex(styles.metaText)}>Loading notes...</span>}
               {noteError && <span className={stylex(styles.error)}>{noteError}</span>}
@@ -733,6 +748,13 @@ export function TasksKanbanPanel(): JSX.Element {
       )}
     </section>
   );
+}
+
+function statusForLane(lane: LaneKey) {
+  if (lane === "in_progress") return "in progress";
+  if (lane === "blocked") return "blocked";
+  if (lane === "canceled") return "canceled";
+  return "scheduled";
 }
 
 function formatDate(value: string) {

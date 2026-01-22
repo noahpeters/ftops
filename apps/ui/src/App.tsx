@@ -25,7 +25,8 @@ import { IntegrationsPanel } from "./features/integrations/IntegrationsPanel";
 import { IngestPanel } from "./features/ingest/IngestPanel";
 import { listWorkspaces, type WorkspaceRow } from "./features/workspaces/api";
 import { WorkspacesPanel } from "./features/workspaces/WorkspacesPanel";
-import { TasksKanbanPanel } from "./features/kanban/TasksKanbanPanel";
+import { TasksBoard } from "./features/tasks/TasksBoard";
+import { UsersPanel } from "./features/users/UsersPanel";
 
 const EXAMPLE_URIS = ["manual://proposal/demo", "shopify://order/example", "qbo://invoice/example"];
 
@@ -670,9 +671,9 @@ export default function App(): JSX.Element {
             className={({ isActive }) =>
               stylex(styles.tabButton, isActive && styles.tabButtonActive)
             }
-            to="/tasks/kanban"
+            to="/tasks"
           >
-            Kanban
+            Tasks
           </NavLink>
           <NavLink
             className={({ isActive }) =>
@@ -697,6 +698,14 @@ export default function App(): JSX.Element {
             to="/workspaces"
           >
             Workspaces
+          </NavLink>
+          <NavLink
+            className={({ isActive }) =>
+              stylex(styles.tabButton, isActive && styles.tabButtonActive)
+            }
+            to="/users"
+          >
+            Users
           </NavLink>
         </nav>
 
@@ -1171,8 +1180,9 @@ export function ProjectsRoute(): JSX.Element {
   );
 }
 
-export function TasksKanbanRoute(): JSX.Element {
-  return <TasksKanbanPanel />;
+export function TasksRoute(): JSX.Element {
+  const { selectedWorkspaceId } = useAppState();
+  return <TasksBoard workspaceId={selectedWorkspaceId} />;
 }
 
 export function IntegrationsRoute(): JSX.Element {
@@ -1193,4 +1203,9 @@ export function WorkspacesRoute(): JSX.Element {
       onSelectWorkspace={setSelectedWorkspaceId}
     />
   );
+}
+
+export function UsersRoute(): JSX.Element {
+  const { selectedWorkspaceId } = useAppState();
+  return <UsersPanel workspaceId={selectedWorkspaceId} />;
 }

@@ -11,10 +11,12 @@ export default [
     route("templates/:templateKey", "routes/templates-template.tsx"),
     route("projects", "routes/projects.tsx"),
     route("projects/:projectId", "routes/projects-project.tsx"),
+    route("tasks", "routes/tasks.tsx"),
     route("tasks/kanban", "routes/tasks-kanban.tsx"),
     route("integrations", "routes/integrations.tsx"),
     route("ingest", "routes/ingest.tsx"),
     route("workspaces", "routes/workspaces.tsx"),
+    route("users", "routes/users.tsx"),
     route("*", "routes/not-found.tsx"),
   ]),
 ] satisfies RouteConfig;

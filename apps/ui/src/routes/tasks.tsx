@@ -2,6 +2,6 @@
 
 import { TasksRoute } from "@/App";
 
-export default function TasksKanban(): JSX.Element {
+export default function Tasks(): JSX.Element {
   return <TasksRoute />;
 }

@@ -102,7 +102,7 @@ describe("materialize tasks integration", () => {
       .all();
     expect(tasksResult.results?.length).toBe(payload.tasksCreated);
     const task = tasksResult.results?.[0] as Record<string, unknown>;
-    expect(task.status).toBe("todo");
+    expect(task.status).toBe("scheduled");
 
     const materializedResult = await db
       .prepare("SELECT * FROM project_materializations WHERE project_id = ? AND workspace_id = ?")

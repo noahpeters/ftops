@@ -5,15 +5,7 @@ import { getActorEmail } from "../lib/identity";
 import { presignR2S3Url, tryCreatePresignedUrl } from "../lib/r2";
 import { handleTasksKanban } from "./tasksKanban";
 
-const ALLOWED_STATUSES = new Set([
-  "todo",
-  "doing",
-  "blocked",
-  "done",
-  "canceled",
-  "overdue",
-  "due_this_week",
-]);
+const ALLOWED_STATUSES = new Set(["scheduled", "blocked", "in progress", "done", "canceled"]);
 
 export async function handleTasks(
   segments: string[],
@@ -32,10 +24,36 @@ export async function handleTasks(
     return await handleTasksKanban(request, env, url);
   }
 
+  if (!sub && request.method === "GET") {
+    const task = await env.DB.prepare("SELECT * FROM tasks WHERE id = ?").bind(taskId).first();
+    if (!task) {
+      return notFound("Task not found");
+    }
+    return json(task);
+  }
+
   if (!sub && request.method === "PATCH") {
-    let body: { status?: string; priority?: number } = {};
+    let body: {
+      status?: string;
+      priority?: number;
+      due_at?: string | null;
+      assigned_to?: string | null;
+      description?: string | null;
+      template_id?: string | null;
+      customer_id?: string | null;
+      title?: string | null;
+    } = {};
     try {
-      body = (await request.json()) as { status?: string; priority?: number };
+      body = (await request.json()) as {
+        status?: string;
+        priority?: number;
+        due_at?: string | null;
+        assigned_to?: string | null;
+        description?: string | null;
+        template_id?: string | null;
+        customer_id?: string | null;
+        title?: string | null;
+      };
     } catch {
       body = {};
     }
@@ -46,8 +64,23 @@ export async function handleTasks(
 
     const hasPriority = typeof body.priority === "number" && Number.isFinite(body.priority);
     const hasStatus = Boolean(body.status);
+    const hasDueAt = Object.prototype.hasOwnProperty.call(body, "due_at");
+    const hasAssignedTo = Object.prototype.hasOwnProperty.call(body, "assigned_to");
+    const hasDescription = Object.prototype.hasOwnProperty.call(body, "description");
+    const hasTemplateId = Object.prototype.hasOwnProperty.call(body, "template_id");
+    const hasCustomerId = Object.prototype.hasOwnProperty.call(body, "customer_id");
+    const hasTitle = Object.prototype.hasOwnProperty.call(body, "title");
 
-    if (!hasPriority && !hasStatus) {
+    if (
+      !hasPriority &&
+      !hasStatus &&
+      !hasDueAt &&
+      !hasAssignedTo &&
+      !hasDescription &&
+      !hasTemplateId &&
+      !hasCustomerId &&
+      !hasTitle
+    ) {
       return badRequest("missing_fields");
     }
 
@@ -58,15 +91,41 @@ export async function handleTasks(
 
     const nextStatus = body.status ?? null;
     const nextPriority = hasPriority ? body.priority : null;
+    const nextDueAt = hasDueAt ? (body.due_at ?? null) : null;
+    const nextAssignedTo = hasAssignedTo ? (body.assigned_to ?? null) : null;
+    const nextDescription = hasDescription ? (body.description ?? null) : null;
+    const nextTemplateId = hasTemplateId ? (body.template_id ?? null) : null;
+    const nextCustomerId = hasCustomerId ? (body.customer_id ?? null) : null;
+    const nextTitle = hasTitle ? (body.title ?? null) : null;
+    const completedAt = nextStatus === "done" ? nowISO() : null;
 
     const result = await env.DB.prepare(
       `UPDATE tasks
        SET status = COALESCE(?, status),
            priority = COALESCE(?, priority),
+           due_at = COALESCE(?, due_at),
+           assigned_to = COALESCE(?, assigned_to),
+           description = COALESCE(?, description),
+           template_id = COALESCE(?, template_id),
+           customer_id = COALESCE(?, customer_id),
+           title = COALESCE(?, title),
+           completed_at = COALESCE(?, completed_at),
            updated_at = ?
        WHERE id = ?`
     )
-      .bind(nextStatus, nextPriority, nowISO(), taskId)
+      .bind(
+        nextStatus,
+        nextPriority,
+        nextDueAt,
+        nextAssignedTo,
+        nextDescription,
+        nextTemplateId,
+        nextCustomerId,
+        nextTitle,
+        completedAt,
+        nowISO(),
+        taskId
+      )
       .run();
 
     if (!result.success) {
@@ -328,5 +387,5 @@ export async function handleTasks(
     return methodNotAllowed(["GET", "POST"]);
   }
 
-  return methodNotAllowed(["PATCH"]);
+  return methodNotAllowed(["GET", "PATCH"]);
 }

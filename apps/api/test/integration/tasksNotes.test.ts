@@ -123,12 +123,12 @@ describe("task lifecycle integration", () => {
     const request = new Request(`http://localhost/tasks/${task?.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status: "doing" }),
+      body: JSON.stringify({ status: "in progress" }),
     });
     const response = await route(request, env, {} as ExecutionContext);
     expect(response.status).toBe(200);
     const updated = (await response.json()) as { status: string };
-    expect(updated.status).toBe("doing");
+    expect(updated.status).toBe("in progress");
 
     await mf.dispose();
   });
