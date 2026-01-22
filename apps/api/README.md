@@ -69,6 +69,17 @@ Migration manifest:
 - It runs automatically via `prebuild` and `pretest` hooks.
 - Unit tests fail if it is stale; run `npm run gen:migrations`.
 
+## R2 CORS
+
+The task attachments use direct-to-R2 uploads/downloads, so the bucket needs CORS rules.
+Apply the policy in `apps/api/r2-cors.json`:
+
+```sh
+wrangler r2 bucket cors set ftops-task-files --file ./r2-cors.json
+```
+
+If you need to add more origins (e.g., staging), edit the JSON and re-apply.
+
 ## Local testing
 
 Health:
