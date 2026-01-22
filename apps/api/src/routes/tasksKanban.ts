@@ -51,7 +51,12 @@ type KanbanResponse = {
   canceled: TaskRow[];
 };
 
-export async function handleTasksKanban(request: Request, env: Env, url: URL): Promise<Response> {
+export async function handleTasksKanban(
+  request: Request,
+  env: Env,
+  url: URL,
+  workspaceId: string
+): Promise<Response> {
   if (request.method !== "GET") {
     return methodNotAllowed(["GET"]);
   }
@@ -77,10 +82,11 @@ export async function handleTasksKanban(request: Request, env: Env, url: URL): P
             (SELECT COUNT(1) FROM task_files WHERE task_files.task_id = tasks.id) as attachments_count,
             (SELECT COUNT(1) FROM task_notes WHERE task_notes.task_id = tasks.id) as notes_count
      FROM tasks
-     WHERE status IN ('scheduled', 'blocked', 'in progress', 'done', 'canceled')
+     WHERE workspace_id = ?
+       AND status IN ('scheduled', 'blocked', 'in progress', 'done', 'canceled')
        AND (due_at IS NULL OR due_at <= ?)`
   )
-    .bind(weekEndIso)
+    .bind(workspaceId, weekEndIso)
     .all<TaskRow>();
 
   const lanes: Record<LaneKey, TaskRow[]> = {

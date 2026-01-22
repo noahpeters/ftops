@@ -1,9 +1,10 @@
-import { badRequest, json, methodNotAllowed, notFound, serverError } from "../lib/http";
+import { badRequest, forbidden, json, methodNotAllowed, notFound, serverError } from "../lib/http";
 import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { getActorEmail } from "../lib/identity";
 import { presignR2S3Url, tryCreatePresignedUrl } from "../lib/r2";
 import { handleTasksKanban } from "./tasksKanban";
+import { canAccessWorkspace, requireActor } from "../lib/access";
 
 const ALLOWED_STATUSES = new Set(["scheduled", "blocked", "in progress", "done", "canceled"]);
 
@@ -14,6 +15,12 @@ export async function handleTasks(
   _ctx: ExecutionContext,
   url: URL
 ) {
+  const actorResult = await requireActor(env, request);
+  if ("response" in actorResult) {
+    return actorResult.response;
+  }
+  const { actor } = actorResult;
+
   if (segments.length === 0) {
     return notFound("Route not found");
   }
@@ -21,13 +28,23 @@ export async function handleTasks(
   const [taskId, sub, action] = segments;
 
   if (taskId === "kanban") {
-    return await handleTasksKanban(request, env, url);
+    const workspaceId = url.searchParams.get("workspaceId");
+    if (!workspaceId) {
+      return badRequest("missing_workspace_id");
+    }
+    if (!canAccessWorkspace(actor, workspaceId)) {
+      return forbidden("forbidden");
+    }
+    return await handleTasksKanban(request, env, url, workspaceId);
   }
 
   if (!sub && request.method === "GET") {
     const task = await env.DB.prepare("SELECT * FROM tasks WHERE id = ?").bind(taskId).first();
     if (!task) {
       return notFound("Task not found");
+    }
+    if (!canAccessWorkspace(actor, (task as { workspace_id: string }).workspace_id)) {
+      return forbidden("forbidden");
     }
     return json(task);
   }
@@ -84,9 +101,14 @@ export async function handleTasks(
       return badRequest("missing_fields");
     }
 
-    const existing = await env.DB.prepare("SELECT id FROM tasks WHERE id = ?").bind(taskId).first();
+    const existing = await env.DB.prepare("SELECT id, workspace_id FROM tasks WHERE id = ?")
+      .bind(taskId)
+      .first<{ id: string; workspace_id: string }>();
     if (!existing) {
       return notFound("Task not found");
+    }
+    if (!canAccessWorkspace(actor, existing.workspace_id)) {
+      return forbidden("forbidden");
     }
 
     const nextStatus = body.status ?? null;
@@ -139,6 +161,15 @@ export async function handleTasks(
 
   if (sub === "notes") {
     if (request.method === "GET") {
+      const workspaceRow = await env.DB.prepare("SELECT workspace_id FROM tasks WHERE id = ?")
+        .bind(taskId)
+        .first<{ workspace_id: string }>();
+      if (!workspaceRow) {
+        return notFound("Task not found");
+      }
+      if (!canAccessWorkspace(actor, workspaceRow.workspace_id)) {
+        return forbidden("forbidden");
+      }
       const notes = await env.DB.prepare(
         `SELECT id, workspace_id, task_id, author_email, created_at, body
          FROM task_notes
@@ -169,6 +200,9 @@ export async function handleTasks(
 
       if (!workspaceRow) {
         return notFound("Task not found");
+      }
+      if (!canAccessWorkspace(actor, workspaceRow.workspace_id)) {
+        return forbidden("forbidden");
       }
 
       const note = {
@@ -203,6 +237,15 @@ export async function handleTasks(
 
   if (sub === "files") {
     if (!action && request.method === "GET") {
+      const task = await env.DB.prepare("SELECT workspace_id FROM tasks WHERE id = ?")
+        .bind(taskId)
+        .first<{ workspace_id: string }>();
+      if (!task) {
+        return notFound("Task not found");
+      }
+      if (!canAccessWorkspace(actor, task.workspace_id)) {
+        return forbidden("forbidden");
+      }
       const files = await env.DB.prepare(
         `SELECT id, workspace_id, task_id, uploaded_by_email, original_filename, content_type,
                 size_bytes, storage_key, sha256, created_at
@@ -241,6 +284,12 @@ export async function handleTasks(
 
       if (!taskRow) {
         return notFound("Task not found");
+      }
+      if (!canAccessWorkspace(actor, taskRow.workspace_id)) {
+        return forbidden("forbidden");
+      }
+      if (!canAccessWorkspace(actor, taskRow.workspace_id)) {
+        return forbidden("forbidden");
       }
 
       const storageKey = `tasks/${taskRow.workspace_id}/${taskId}/${crypto.randomUUID()}-${filename}`;
@@ -291,6 +340,15 @@ export async function handleTasks(
     }
 
     if (action === "upload" && request.method === "PUT") {
+      const taskRow = await env.DB.prepare("SELECT workspace_id FROM tasks WHERE id = ?")
+        .bind(taskId)
+        .first<{ workspace_id: string }>();
+      if (!taskRow) {
+        return notFound("Task not found");
+      }
+      if (!canAccessWorkspace(actor, taskRow.workspace_id)) {
+        return forbidden("forbidden");
+      }
       const storageKey = url.searchParams.get("storageKey");
       if (!storageKey) {
         return badRequest("missing_storage_key");

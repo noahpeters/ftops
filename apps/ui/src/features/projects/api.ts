@@ -30,8 +30,8 @@ export type TaskNote = {
   body: string;
 };
 
-export async function listProjects() {
-  return await fetchJson<ProjectRow[]>(buildUrl("/projects"));
+export async function listProjects(workspaceId: string) {
+  return await fetchJson<ProjectRow[]>(buildUrl("/projects", { workspaceId }));
 }
 
 export async function getProject(id: string) {
@@ -62,13 +62,13 @@ export async function addTaskNote(taskId: string, body: string) {
   });
 }
 
-export async function createProjectFromRecord(recordUri: string) {
+export async function createProjectFromRecord(recordUri: string, workspaceId?: string | null) {
   return await fetchJson<{ project: ProjectRow; created: boolean }>(
     buildUrl("/projects/from-record"),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recordUri }),
+      body: JSON.stringify({ recordUri, workspaceId: workspaceId ?? undefined }),
     }
   );
 }

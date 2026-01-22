@@ -1,7 +1,8 @@
-import { json, methodNotAllowed, notFound } from "../lib/http";
+import { forbidden, json, methodNotAllowed, notFound } from "../lib/http";
 import { handleSegment } from "../lib/router";
 import type { Env } from "../lib/types";
 import { buildIdempotencyKey, nowISO } from "../lib/utils";
+import { requireActor } from "../lib/access";
 
 type EventTestRequest = {
   source?: string;
@@ -17,6 +18,14 @@ export async function handleEvents(
   _ctx: ExecutionContext,
   url: URL
 ) {
+  const actorResult = await requireActor(env, request);
+  if ("response" in actorResult) {
+    return actorResult.response;
+  }
+  if (!actorResult.actor.isSystemAdmin) {
+    return forbidden("forbidden");
+  }
+
   return await handleSegment(
     segments,
     request,

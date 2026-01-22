@@ -19,7 +19,8 @@ export const MIGRATIONS = [
   "0015_create_raw_events.sql",
   "0016_task_priority_and_files.sql",
   "0017_tasks_fields_and_statuses.sql",
-  "0018_create_users.sql"
+  "0018_create_users.sql",
+  "0019_users_admin_flags.sql"
 ] as const;
-export const LATEST_MIGRATION = "0018_create_users.sql";
-export const MIGRATIONS_COUNT = 20;
+export const LATEST_MIGRATION = "0019_users_admin_flags.sql";
+export const MIGRATIONS_COUNT = 21;

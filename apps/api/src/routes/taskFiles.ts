@@ -1,6 +1,7 @@
-import { badRequest, json, methodNotAllowed, notFound, serverError } from "../lib/http";
+import { badRequest, forbidden, json, methodNotAllowed, notFound, serverError } from "../lib/http";
 import { presignR2S3Url, tryCreatePresignedUrl } from "../lib/r2";
 import type { Env } from "../lib/types";
+import { canAccessWorkspace, requireActor } from "../lib/access";
 
 type TaskFileRow = {
   id: string;
@@ -20,6 +21,12 @@ export async function handleTaskFiles(
   request: Request,
   env: Env
 ): Promise<Response> {
+  const actorResult = await requireActor(env, request);
+  if ("response" in actorResult) {
+    return actorResult.response;
+  }
+  const { actor } = actorResult;
+
   if (segments.length === 0) {
     return notFound("Route not found");
   }
@@ -28,15 +35,20 @@ export async function handleTaskFiles(
 
   if (sub === "download" && request.method === "GET") {
     const file = await env.DB.prepare(
-      `SELECT id, storage_key, original_filename, content_type, size_bytes, created_at
-       FROM task_files
-       WHERE id = ?`
+      `SELECT tf.id, tf.storage_key, tf.original_filename, tf.content_type, tf.size_bytes,
+              tf.created_at, t.workspace_id
+       FROM task_files tf
+       JOIN tasks t ON t.id = tf.task_id
+       WHERE tf.id = ?`
     )
       .bind(fileId)
-      .first<TaskFileRow>();
+      .first<TaskFileRow & { workspace_id: string }>();
 
     if (!file) {
       return notFound("File not found");
+    }
+    if (!canAccessWorkspace(actor, file.workspace_id)) {
+      return forbidden("forbidden");
     }
 
     const bucketName = env.R2_TASK_FILES_BUCKET_NAME;
@@ -78,15 +90,19 @@ export async function handleTaskFiles(
 
   if (sub === "blob" && request.method === "GET") {
     const file = await env.DB.prepare(
-      `SELECT id, storage_key, original_filename, content_type
-       FROM task_files
-       WHERE id = ?`
+      `SELECT tf.id, tf.storage_key, tf.original_filename, tf.content_type, t.workspace_id
+       FROM task_files tf
+       JOIN tasks t ON t.id = tf.task_id
+       WHERE tf.id = ?`
     )
       .bind(fileId)
-      .first<TaskFileRow>();
+      .first<TaskFileRow & { workspace_id: string }>();
 
     if (!file) {
       return notFound("File not found");
+    }
+    if (!canAccessWorkspace(actor, file.workspace_id)) {
+      return forbidden("forbidden");
     }
 
     const object = await env.R2_TASK_FILES_BUCKET.get(file.storage_key);
@@ -104,15 +120,19 @@ export async function handleTaskFiles(
 
   if (!sub && request.method === "DELETE") {
     const file = await env.DB.prepare(
-      `SELECT id, storage_key
-       FROM task_files
-       WHERE id = ?`
+      `SELECT tf.id, tf.storage_key, t.workspace_id
+       FROM task_files tf
+       JOIN tasks t ON t.id = tf.task_id
+       WHERE tf.id = ?`
     )
       .bind(fileId)
-      .first<TaskFileRow>();
+      .first<TaskFileRow & { workspace_id: string }>();
 
     if (!file) {
       return notFound("File not found");
+    }
+    if (!canAccessWorkspace(actor, file.workspace_id)) {
+      return forbidden("forbidden");
     }
 
     try {

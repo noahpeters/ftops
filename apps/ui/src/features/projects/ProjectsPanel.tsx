@@ -164,10 +164,12 @@ const styles = stylex.create({
 });
 
 export function ProjectsPanel({
+  workspaceId,
   selectedProjectId,
   onSelectProject,
   contextLookup,
 }: {
+  workspaceId: string | null;
   selectedProjectId: string | null;
   onSelectProject: (id: string | null) => void;
   contextLookup?: ContextLookup;
@@ -190,7 +192,7 @@ export function ProjectsPanel({
 
   useEffect(() => {
     void refreshProjects();
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     if (!selectedProjectId) {
@@ -203,9 +205,14 @@ export function ProjectsPanel({
   }, [selectedProjectId]);
 
   async function refreshProjects() {
+    if (!workspaceId) {
+      setProjects([]);
+      setProjectsError("Select a workspace to view projects.");
+      return;
+    }
     setProjectsLoading(true);
     setProjectsError(null);
-    const result = await listProjects();
+    const result = await listProjects(workspaceId);
     if (!result.ok) {
       setProjectsError(result.text || "Failed to load projects.");
     } else {

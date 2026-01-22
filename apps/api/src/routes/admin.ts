@@ -1,8 +1,9 @@
-import { json, methodNotAllowed, notFound } from "../lib/http";
+import { forbidden, json, methodNotAllowed, notFound } from "../lib/http";
 import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { buildEventFromIngestMessage } from "../processors/ingestQueue";
 import type { IngestQueueMessage } from "@ftops/webhooks";
+import { requireActor } from "../lib/access";
 
 export async function handleAdmin(
   segments: string[],
@@ -11,6 +12,14 @@ export async function handleAdmin(
   _ctx: ExecutionContext,
   url: URL
 ) {
+  const actorResult = await requireActor(env, request);
+  if ("response" in actorResult) {
+    return actorResult.response;
+  }
+  if (!actorResult.actor.isSystemAdmin) {
+    return forbidden("forbidden");
+  }
+
   if (segments.length < 3) {
     return notFound("Route not found");
   }

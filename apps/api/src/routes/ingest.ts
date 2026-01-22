@@ -1,5 +1,6 @@
-import { json, methodNotAllowed, notFound } from "../lib/http";
+import { forbidden, json, methodNotAllowed, notFound } from "../lib/http";
 import type { Env } from "../lib/types";
+import { canAdminWorkspace, requireActor, type Actor } from "../lib/access";
 
 const PROVIDERS = ["shopify", "qbo"] as const;
 const ENVIRONMENTS = ["sandbox", "production"] as const;
@@ -11,6 +12,12 @@ export async function handleIngest(
   _ctx: ExecutionContext,
   url: URL
 ) {
+  const actorResult = await requireActor(env, request);
+  if ("response" in actorResult) {
+    return actorResult.response;
+  }
+  const { actor } = actorResult;
+
   if (segments.length === 0) {
     return notFound("Route not found");
   }
@@ -26,12 +33,12 @@ export async function handleIngest(
   }
 
   if (tail) {
-    return await getIngestRequestById(env, tail);
+    return await getIngestRequestById(env, tail, actor);
   }
-  return await listIngestRequests(env, url);
+  return await listIngestRequests(env, url, actor);
 }
 
-async function listIngestRequests(env: Env, url: URL) {
+async function listIngestRequests(env: Env, url: URL, actor: Actor) {
   const provider = url.searchParams.get("provider");
   const workspaceId = url.searchParams.get("workspaceId");
   const environment = url.searchParams.get("environment");
@@ -48,8 +55,14 @@ async function listIngestRequests(env: Env, url: URL) {
     bindings.push(source);
   }
   if (workspaceId) {
+    if (!canAdminWorkspace(actor, workspaceId)) {
+      return forbidden("forbidden");
+    }
     filters.push("req.workspace_id = ?");
     bindings.push(workspaceId);
+  }
+  if (!workspaceId && !actor.isSystemAdmin) {
+    return forbidden("forbidden");
   }
   if (environment && ENVIRONMENTS.includes(environment as (typeof ENVIRONMENTS)[number])) {
     filters.push("req.environment = ?");
@@ -101,11 +114,18 @@ async function listIngestRequests(env: Env, url: URL) {
   return json({ requests: summaries, limit });
 }
 
-async function getIngestRequestById(env: Env, id: string) {
+async function getIngestRequestById(env: Env, id: string, actor: Actor) {
   const row = await env.DB.prepare(`SELECT * FROM raw_events WHERE id = ?`).bind(id).first();
 
   if (!row) {
     return notFound("Ingest request not found");
+  }
+  const workspaceId = row.workspace_id as string | null | undefined;
+  if (workspaceId && !canAdminWorkspace(actor, workspaceId)) {
+    return forbidden("forbidden");
+  }
+  if (!workspaceId && !actor.isSystemAdmin) {
+    return forbidden("forbidden");
   }
 
   return json(row);

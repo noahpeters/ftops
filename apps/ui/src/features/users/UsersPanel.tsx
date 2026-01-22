@@ -88,9 +88,10 @@ const styles = stylex.create({
 
 type Props = {
   workspaceId: string | null;
+  canEditSystemAdmin?: boolean;
 };
 
-export function UsersPanel({ workspaceId }: Props): JSX.Element {
+export function UsersPanel({ workspaceId, canEditSystemAdmin = false }: Props): JSX.Element {
   const [users, setUsers] = useState<WorkspaceUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -233,6 +234,7 @@ export function UsersPanel({ workspaceId }: Props): JSX.Element {
                 type="checkbox"
                 checked={systemAdmin}
                 onChange={(event) => setSystemAdmin(event.target.checked)}
+                disabled={!canEditSystemAdmin}
               />
               System admin
             </label>
@@ -249,6 +251,7 @@ export function UsersPanel({ workspaceId }: Props): JSX.Element {
         <table className={stylex(styles.table)}>
           <thead>
             <tr>
+              <th className={stylex(styles.th)}>Workspace</th>
               <th className={stylex(styles.th)}>Name</th>
               <th className={stylex(styles.th)}>Email</th>
               <th className={stylex(styles.th)}>Workspace admin</th>
@@ -259,13 +262,14 @@ export function UsersPanel({ workspaceId }: Props): JSX.Element {
           <tbody>
             {normalizedUsers.length === 0 && (
               <tr>
-                <td className={stylex(styles.td)} colSpan={5}>
+                <td className={stylex(styles.td)} colSpan={6}>
                   {workspaceId ? "No users yet." : "Select a workspace to view users."}
                 </td>
               </tr>
             )}
             {normalizedUsers.map((user) => (
               <tr key={user.user_id}>
+                <td className={stylex(styles.td)}>{user.workspace_id}</td>
                 <td className={stylex(styles.td)}>
                   <input
                     className={stylex(styles.input)}
@@ -314,6 +318,7 @@ export function UsersPanel({ workspaceId }: Props): JSX.Element {
                     onChange={(event) =>
                       void handleUpdate(user, { system_admin: event.target.checked })
                     }
+                    disabled={!canEditSystemAdmin}
                   />
                 </td>
                 <td className={stylex(styles.td)}>

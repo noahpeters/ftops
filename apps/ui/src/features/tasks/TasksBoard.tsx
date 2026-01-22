@@ -146,9 +146,14 @@ export function TasksBoard({ workspaceId }: { workspaceId: string | null }): JSX
   const [projects, setProjects] = useState<ProjectRow[]>([]);
 
   const loadKanban = useCallback(async () => {
+    if (!workspaceId) {
+      setKanban(null);
+      setError("Select a workspace to view tasks.");
+      return;
+    }
     setLoading(true);
     setError(null);
-    const result = await fetchKanban();
+    const result = await fetchKanban(workspaceId);
     if (!result.ok) {
       setError(result.text || "Failed to load tasks.");
       setKanban(null);
@@ -156,7 +161,7 @@ export function TasksBoard({ workspaceId }: { workspaceId: string | null }): JSX
       setKanban(result.data);
     }
     setLoading(false);
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     void loadKanban();
@@ -178,13 +183,17 @@ export function TasksBoard({ workspaceId }: { workspaceId: string | null }): JSX
   }, [workspaceId]);
 
   useEffect(() => {
+    if (!workspaceId) {
+      setProjects([]);
+      return;
+    }
     void (async () => {
-      const result = await listProjects();
+      const result = await listProjects(workspaceId);
       if (result.ok) {
         setProjects(result.data ?? []);
       }
     })();
-  }, []);
+  }, [workspaceId]);
 
   const activeTask = useMemo(() => {
     if (!activeTaskId || !kanban) return null;

@@ -1,7 +1,8 @@
-import { badRequest, json, methodNotAllowed, notFound, serverError } from "../lib/http";
+import { badRequest, forbidden, json, methodNotAllowed, notFound, serverError } from "../lib/http";
 import { handleSegment } from "../lib/router";
 import type { Env } from "../lib/types";
 import { NotFoundError, getPlanPreview } from "../planning/preview";
+import { requireActor } from "../lib/access";
 
 export async function handlePlan(
   segments: string[],
@@ -10,6 +11,14 @@ export async function handlePlan(
   ctx: ExecutionContext,
   url: URL
 ) {
+  const actorResult = await requireActor(env, request);
+  if ("response" in actorResult) {
+    return actorResult.response;
+  }
+  if (!actorResult.actor.isSystemAdmin) {
+    return forbidden("forbidden");
+  }
+
   return await handleSegment(
     segments,
     request,

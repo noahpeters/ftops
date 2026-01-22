@@ -1,8 +1,9 @@
-import { badRequest, json, methodNotAllowed, notFound, serverError } from "../lib/http";
+import { badRequest, forbidden, json, methodNotAllowed, notFound, serverError } from "../lib/http";
 import type { Env } from "../lib/types";
 import { compilePlanForRecord } from "../plan/compilePlan";
 import { stableStringify } from "../lib/jsonStable";
 import { sha256Hex } from "../lib/hash";
+import { canAccessWorkspace, requireActor } from "../lib/access";
 
 export async function handleProjects(
   segments: string[],
@@ -11,11 +12,29 @@ export async function handleProjects(
   _ctx: ExecutionContext,
   _url: URL
 ) {
+  const actorResult = await requireActor(env, request);
+  if ("response" in actorResult) {
+    return actorResult.response;
+  }
+  const { actor } = actorResult;
+
   if (segments.length === 0) {
     if (request.method === "GET") {
-      const result = await env.DB.prepare("SELECT * FROM projects ORDER BY created_at DESC").all();
+      const workspaceId = _url.searchParams.get("workspaceId");
+      if (workspaceId && !canAccessWorkspace(actor, workspaceId)) {
+        return forbidden("forbidden");
+      }
+      if (!workspaceId && !actor.isSystemAdmin) {
+        return forbidden("forbidden");
+      }
+      const where = workspaceId ? "WHERE workspace_id = ?" : "";
+      const result = await env.DB.prepare(
+        `SELECT * FROM projects ${where} ORDER BY created_at DESC`
+      )
+        .bind(...(workspaceId ? [workspaceId] : []))
+        .all();
 
-      return json(result.results);
+      return json(result.results ?? []);
     }
 
     if (request.method === "POST") {
@@ -38,9 +57,13 @@ export async function handleProjects(
   }
 
   if (segments.length === 1 && segments[0] === "from-record" && request.method === "POST") {
-    let body: { recordUri?: string; title?: string } = {};
+    let body: { recordUri?: string; title?: string; workspaceId?: string } = {};
     try {
-      body = (await request.json()) as { recordUri?: string; title?: string };
+      body = (await request.json()) as {
+        recordUri?: string;
+        title?: string;
+        workspaceId?: string;
+      };
     } catch {
       body = {};
     }
@@ -62,7 +85,10 @@ export async function handleProjects(
       return notFound("Commercial record not found");
     }
 
-    const workspaceId = "default";
+    const workspaceId = body.workspaceId?.trim() || "default";
+    if (!canAccessWorkspace(actor, workspaceId)) {
+      return forbidden("forbidden");
+    }
     const existing = await env.DB.prepare(
       `SELECT * FROM projects
        WHERE workspace_id = ? AND commercial_record_uri = ?
@@ -101,12 +127,19 @@ export async function handleProjects(
       return badRequest("missing_record_uri");
     }
 
+    const workspaceIdParam = new URL(request.url).searchParams.get("workspaceId");
+    if (workspaceIdParam && !canAccessWorkspace(actor, workspaceIdParam)) {
+      return forbidden("forbidden");
+    }
+    if (!workspaceIdParam && !actor.isSystemAdmin) {
+      return forbidden("forbidden");
+    }
     const project = await env.DB.prepare(
       `SELECT * FROM projects
        WHERE workspace_id = ? AND commercial_record_uri = ?
        LIMIT 1`
     )
-      .bind("default", recordUri.trim())
+      .bind(workspaceIdParam ?? "default", recordUri.trim())
       .first();
 
     if (!project) {
@@ -125,12 +158,24 @@ export async function handleProjects(
     if (!project) {
       return notFound("Project not found");
     }
+    if (!canAccessWorkspace(actor, (project as { workspace_id: string }).workspace_id)) {
+      return forbidden("forbidden");
+    }
 
     return json(project);
   }
 
   if (segments.length === 2 && segments[1] === "tasks" && request.method === "GET") {
     const projectId = segments[0];
+    const project = await env.DB.prepare("SELECT workspace_id FROM projects WHERE id = ?")
+      .bind(projectId)
+      .first<{ workspace_id: string }>();
+    if (!project) {
+      return notFound("Project not found");
+    }
+    if (!canAccessWorkspace(actor, project.workspace_id)) {
+      return forbidden("forbidden");
+    }
     const result = await env.DB.prepare(
       `SELECT * FROM tasks
        WHERE project_id = ?
@@ -150,6 +195,11 @@ export async function handleProjects(
 
     if (!project) {
       return notFound("Project not found");
+    }
+    const projectWorkspaceId =
+      (project as { workspace_id?: string | null }).workspace_id ?? "default";
+    if (!canAccessWorkspace(actor, projectWorkspaceId)) {
+      return forbidden("forbidden");
     }
 
     const recordUri = (project as { commercial_record_uri?: string | null }).commercial_record_uri;

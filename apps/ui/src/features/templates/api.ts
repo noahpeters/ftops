@@ -66,51 +66,32 @@ export type UpdateRuleInput = {
   is_active?: boolean;
 };
 
-export function listTemplates() {
-  return fetchJson<TemplateListItem[]>(buildUrl("/templates"), {
+export function listTemplates(workspaceId: string) {
+  return fetchJson<TemplateListItem[]>(buildUrl("/templates", { workspaceId }), {
     method: "GET",
   });
 }
 
-export function getTemplate(key: string) {
-  return fetchJson<TemplateDetail>(buildUrl(`/templates/${encodeURIComponent(key)}`), {
-    method: "GET",
-  });
+export function getTemplate(key: string, workspaceId: string) {
+  return fetchJson<TemplateDetail>(
+    buildUrl(`/templates/${encodeURIComponent(key)}`, { workspaceId }),
+    {
+      method: "GET",
+    }
+  );
 }
 
-export function createTemplate(body: CreateTemplateInput) {
-  return fetchJson<TemplateDetail>(buildUrl("/templates"), {
+export function createTemplate(body: CreateTemplateInput, workspaceId: string) {
+  return fetchJson<TemplateDetail>(buildUrl("/templates", { workspaceId }), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
 
-export function updateTemplate(key: string, body: UpdateTemplateInput) {
-  return fetchJson<TemplateDetail>(buildUrl(`/templates/${encodeURIComponent(key)}`), {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
-
-export function deleteTemplate(key: string) {
-  return fetchJson<{ deleted: boolean }>(buildUrl(`/templates/${encodeURIComponent(key)}`), {
-    method: "DELETE",
-  });
-}
-
-export function createRule(templateKey: string, body: CreateRuleInput) {
-  return fetchJson<TemplateRule>(buildUrl(`/templates/${encodeURIComponent(templateKey)}/rules`), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
-
-export function updateRule(templateKey: string, ruleId: string, body: UpdateRuleInput) {
-  return fetchJson<TemplateRule>(
-    buildUrl(`/templates/${encodeURIComponent(templateKey)}/rules/${ruleId}`),
+export function updateTemplate(key: string, body: UpdateTemplateInput, workspaceId: string) {
+  return fetchJson<TemplateDetail>(
+    buildUrl(`/templates/${encodeURIComponent(key)}`, { workspaceId }),
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -119,9 +100,43 @@ export function updateRule(templateKey: string, ruleId: string, body: UpdateRule
   );
 }
 
-export function deleteRule(templateKey: string, ruleId: string) {
+export function deleteTemplate(key: string, workspaceId: string) {
   return fetchJson<{ deleted: boolean }>(
-    buildUrl(`/templates/${encodeURIComponent(templateKey)}/rules/${ruleId}`),
+    buildUrl(`/templates/${encodeURIComponent(key)}`, { workspaceId }),
+    { method: "DELETE" }
+  );
+}
+
+export function createRule(templateKey: string, body: CreateRuleInput, workspaceId: string) {
+  return fetchJson<TemplateRule>(
+    buildUrl(`/templates/${encodeURIComponent(templateKey)}/rules`, { workspaceId }),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function updateRule(
+  templateKey: string,
+  ruleId: string,
+  body: UpdateRuleInput,
+  workspaceId: string
+) {
+  return fetchJson<TemplateRule>(
+    buildUrl(`/templates/${encodeURIComponent(templateKey)}/rules/${ruleId}`, { workspaceId }),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function deleteRule(templateKey: string, ruleId: string, workspaceId: string) {
+  return fetchJson<{ deleted: boolean }>(
+    buildUrl(`/templates/${encodeURIComponent(templateKey)}/rules/${ruleId}`, { workspaceId }),
     { method: "DELETE" }
   );
 }

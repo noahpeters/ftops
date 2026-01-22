@@ -68,8 +68,8 @@ export type WorkspaceUser = {
   system_admin?: number | boolean;
 };
 
-export async function fetchKanban(scope: "this_week" = "this_week") {
-  return await fetchJson<KanbanResponse>(buildUrl("/tasks/kanban", { scope }));
+export async function fetchKanban(workspaceId: string, scope: "this_week" = "this_week") {
+  return await fetchJson<KanbanResponse>(buildUrl("/tasks/kanban", { scope, workspaceId }));
 }
 
 export async function getTask(id: string) {

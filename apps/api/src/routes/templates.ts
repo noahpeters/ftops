@@ -1,4 +1,4 @@
-import { badRequest, json, methodNotAllowed, notFound } from "../lib/http";
+import { badRequest, forbidden, json, methodNotAllowed, notFound } from "../lib/http";
 import type { Env } from "../lib/types";
 import {
   createRule,
@@ -11,6 +11,7 @@ import {
   updateTemplate,
 } from "../config/templatesRepo";
 import { parseJsonInput, stableStringify } from "../lib/jsonStable";
+import { canAdminWorkspace, requireActor } from "../lib/access";
 
 const TEMPLATE_KEY_RE = /^[a-z0-9]+(\.[a-z0-9_]+)+$/;
 const VALID_SCOPES = new Set(["project", "shared", "deliverable"] as const);
@@ -40,11 +41,24 @@ export async function handleTemplates(
   request: Request,
   env: Env,
   _ctx: ExecutionContext,
-  _url: URL
+  url: URL
 ) {
+  const actorResult = await requireActor(env, request);
+  if ("response" in actorResult) {
+    return actorResult.response;
+  }
+  const { actor } = actorResult;
+  const workspaceId = url.searchParams.get("workspaceId") ?? undefined;
+
   if (segments.length === 0) {
     if (request.method === "GET") {
-      const templates = await listTemplates(env);
+      if (!workspaceId) {
+        return badRequest("missing_workspace_id");
+      }
+      if (!canAdminWorkspace(actor, workspaceId)) {
+        return forbidden("forbidden");
+      }
+      const templates = await listTemplates(env, workspaceId);
       return json(
         templates.map((template) => ({
           key: template.key,
@@ -61,6 +75,12 @@ export async function handleTemplates(
     }
 
     if (request.method === "POST") {
+      if (!workspaceId) {
+        return badRequest("missing_workspace_id");
+      }
+      if (!canAdminWorkspace(actor, workspaceId)) {
+        return forbidden("forbidden");
+      }
       const body = await readJsonBody<TemplateBody>(request);
       if (!body) {
         return badRequest("invalid_json");
@@ -94,22 +114,26 @@ export async function handleTemplates(
         return badRequest("invalid_template", { details: "default_position_invalid" });
       }
 
-      const existing = await getTemplateDetailByKey(env, key!);
+      const existing = await getTemplateDetailByKey(env, key!, workspaceId);
       if (existing) {
         return json({ error: "template_key_exists" }, 409);
       }
 
-      const detail = await createTemplate(env, {
-        key: key!,
-        title: title!,
-        kind,
-        scope: scope!,
-        category_key: categoryKey,
-        deliverable_key: deliverableKey,
-        default_state_json: defaultStateJson.value ?? null,
-        default_position: defaultPosition.value ?? null,
-        is_active: isActive,
-      });
+      const detail = await createTemplate(
+        env,
+        {
+          key: key!,
+          title: title!,
+          kind,
+          scope: scope!,
+          category_key: categoryKey,
+          deliverable_key: deliverableKey,
+          default_state_json: defaultStateJson.value ?? null,
+          default_position: defaultPosition.value ?? null,
+          is_active: isActive,
+        },
+        workspaceId
+      );
 
       return json(detail, 201);
     }
@@ -122,7 +146,13 @@ export async function handleTemplates(
 
     if (segments.length === 1) {
       if (request.method === "GET") {
-        const detail = await getTemplateDetailByKey(env, templateKey);
+        if (!workspaceId) {
+          return badRequest("missing_workspace_id");
+        }
+        if (!canAdminWorkspace(actor, workspaceId)) {
+          return forbidden("forbidden");
+        }
+        const detail = await getTemplateDetailByKey(env, templateKey, workspaceId);
         if (!detail) {
           return notFound("Template not found");
         }
@@ -140,6 +170,12 @@ export async function handleTemplates(
       }
 
       if (request.method === "PATCH") {
+        if (!workspaceId) {
+          return badRequest("missing_workspace_id");
+        }
+        if (!canAdminWorkspace(actor, workspaceId)) {
+          return forbidden("forbidden");
+        }
         const body = await readJsonBody<TemplateBody>(request);
         if (!body) {
           return badRequest("invalid_json");
@@ -166,7 +202,7 @@ export async function handleTemplates(
           is_active: normalizeIsActive(body.is_active, undefined),
         };
 
-        const existing = await getTemplateDetailByKey(env, templateKey);
+        const existing = await getTemplateDetailByKey(env, templateKey, workspaceId);
         if (!existing) {
           return notFound("Template not found");
         }
@@ -190,7 +226,7 @@ export async function handleTemplates(
           return badRequest("invalid_template", { details: "default_position_invalid" });
         }
 
-        const detail = await updateTemplate(env, templateKey, patch);
+        const detail = await updateTemplate(env, templateKey, patch, workspaceId);
         if (!detail) {
           return notFound("Template not found");
         }
@@ -199,7 +235,13 @@ export async function handleTemplates(
       }
 
       if (request.method === "DELETE") {
-        const deleted = await deleteTemplate(env, templateKey);
+        if (!workspaceId) {
+          return badRequest("missing_workspace_id");
+        }
+        if (!canAdminWorkspace(actor, workspaceId)) {
+          return forbidden("forbidden");
+        }
+        const deleted = await deleteTemplate(env, templateKey, workspaceId);
         if (!deleted) {
           return notFound("Template not found");
         }
@@ -213,6 +255,12 @@ export async function handleTemplates(
       if (segments.length === 2) {
         if (request.method !== "POST") {
           return methodNotAllowed(["POST"]);
+        }
+        if (!workspaceId) {
+          return badRequest("missing_workspace_id");
+        }
+        if (!canAdminWorkspace(actor, workspaceId)) {
+          return forbidden("forbidden");
         }
 
         const body = await readJsonBody<RuleBody>(request);
@@ -231,16 +279,21 @@ export async function handleTemplates(
           return badRequest("invalid_rule", { details: matchParse.error });
         }
 
-        const template = await getTemplateDetailByKey(env, templateKey);
+        const template = await getTemplateDetailByKey(env, templateKey, workspaceId);
         if (!template) {
           return notFound("Template not found");
         }
 
-        const rule = await createRule(env, templateKey, {
-          priority,
-          match_json: matchParse.matchJson,
-          is_active: isActive,
-        });
+        const rule = await createRule(
+          env,
+          templateKey,
+          {
+            priority,
+            match_json: matchParse.matchJson,
+            is_active: isActive,
+          },
+          workspaceId
+        );
 
         return json(rule, 201);
       }
@@ -249,6 +302,12 @@ export async function handleTemplates(
         const ruleId = subId as string;
 
         if (request.method === "PATCH") {
+          if (!workspaceId) {
+            return badRequest("missing_workspace_id");
+          }
+          if (!canAdminWorkspace(actor, workspaceId)) {
+            return forbidden("forbidden");
+          }
           const body = await readJsonBody<RuleBody>(request);
           if (!body) {
             return badRequest("invalid_json");
@@ -269,7 +328,7 @@ export async function handleTemplates(
             is_active: normalizeIsActive(body.is_active, undefined),
           };
 
-          const updated = await updateRule(env, templateKey, ruleId, patch);
+          const updated = await updateRule(env, templateKey, ruleId, patch, workspaceId);
           if (!updated) {
             return notFound("Rule not found");
           }
@@ -278,7 +337,13 @@ export async function handleTemplates(
         }
 
         if (request.method === "DELETE") {
-          const deleted = await deleteRule(env, templateKey, ruleId);
+          if (!workspaceId) {
+            return badRequest("missing_workspace_id");
+          }
+          if (!canAdminWorkspace(actor, workspaceId)) {
+            return forbidden("forbidden");
+          }
+          const deleted = await deleteRule(env, templateKey, ruleId, workspaceId);
           if (!deleted) {
             return notFound("Rule not found");
           }

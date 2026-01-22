@@ -12,7 +12,7 @@ import {
 import { NavLink, Outlet, useNavigate, useParams } from "react-router";
 import stylex from "~/lib/stylex";
 import { colors, spacing, radius } from "./theme/tokens.stylex";
-import { buildUrl, fetchJson, setDebugEmailHeader } from "./lib/api";
+import { buildUrl, fetchJson, fetchMe, setDebugEmailHeader } from "./lib/api";
 import { DevMigrationBanner } from "./components/DevMigrationBanner";
 import { JsonView } from "./components/JsonView";
 import { DemoPanel } from "./features/demo/DemoPanel";
@@ -220,6 +220,13 @@ type EventsTestState = {
   error?: string;
 };
 
+type ActorInfo = {
+  email: string;
+  isSystemAdmin: boolean;
+  workspaceIds: string[];
+  workspaceAdminIds: string[];
+};
+
 type AppContextValue = {
   recordUri: string;
   setRecordUri: (value: string) => void;
@@ -262,6 +269,8 @@ type AppContextValue = {
   workspaceLoading: boolean;
   selectedWorkspaceId: string | null;
   setSelectedWorkspaceId: (value: string | null) => void;
+  actor: ActorInfo | null;
+  actorLoading: boolean;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -301,6 +310,8 @@ export default function App(): JSX.Element {
   const [workspaces, setWorkspaces] = useState<WorkspaceRow[]>([]);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [actor, setActor] = useState<ActorInfo | null>(null);
+  const [actorLoading, setActorLoading] = useState(false);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -322,11 +333,26 @@ export default function App(): JSX.Element {
       }
     }
     setWorkspaceLoading(false);
-  }, [selectedWorkspaceId]);
+  }, [selectedWorkspaceId, debugEmail]);
+
+  const refreshActor = useCallback(async () => {
+    setActorLoading(true);
+    const result = await fetchMe();
+    if (result.ok && result.data) {
+      setActor(result.data);
+    } else {
+      setActor(null);
+    }
+    setActorLoading(false);
+  }, []);
 
   useEffect(() => {
     void refreshWorkspaces();
-  }, [refreshWorkspaces]);
+  }, [refreshWorkspaces, debugEmail]);
+
+  useEffect(() => {
+    void refreshActor();
+  }, [refreshActor, debugEmail]);
 
   const previewUrl = useMemo(() => {
     if (!recordUri.trim()) return "";
@@ -400,7 +426,7 @@ export default function App(): JSX.Element {
     setMaterializeMessage(null);
 
     try {
-      const projectResult = await createProjectFromRecord(uri);
+      const projectResult = await createProjectFromRecord(uri, selectedWorkspaceId);
       if (!projectResult.ok || !projectResult.data) {
         setMaterializeMessage(projectResult.text || "Failed to create project.");
         return;
@@ -521,6 +547,14 @@ export default function App(): JSX.Element {
       ? (previewState.data as { warnings?: string[] }).warnings
       : undefined;
 
+  const isSystemAdmin = actor?.isSystemAdmin ?? false;
+  const isWorkspaceAdmin = Boolean(
+    isSystemAdmin || (selectedWorkspaceId && actor?.workspaceAdminIds.includes(selectedWorkspaceId))
+  );
+  const isWorkspaceMember = Boolean(
+    isSystemAdmin || (selectedWorkspaceId && actor?.workspaceIds.includes(selectedWorkspaceId))
+  );
+
   const idempotencyKey =
     typeof testState.data === "object" && testState.data
       ? (testState.data as { idempotencyKey?: string; idempotency_key?: string }).idempotencyKey ||
@@ -584,6 +618,8 @@ export default function App(): JSX.Element {
     workspaceLoading,
     selectedWorkspaceId,
     setSelectedWorkspaceId,
+    actor,
+    actorLoading,
   };
 
   return (
@@ -627,86 +663,106 @@ export default function App(): JSX.Element {
         <DevMigrationBanner />
 
         <nav className={stylex(styles.tabs)}>
-          <NavLink
-            className={({ isActive }) =>
-              stylex(styles.tabButton, isActive && styles.tabButtonActive)
-            }
-            to="/plan-preview"
-          >
-            Plan Preview
-          </NavLink>
-          <NavLink
-            className={({ isActive }) =>
-              stylex(styles.tabButton, isActive && styles.tabButtonActive)
-            }
-            to="/events"
-          >
-            Events Viewer
-          </NavLink>
-          <NavLink
-            className={({ isActive }) =>
-              stylex(styles.tabButton, isActive && styles.tabButtonActive)
-            }
-            to="/demo"
-          >
-            Demo
-          </NavLink>
-          <NavLink
-            className={({ isActive }) =>
-              stylex(styles.tabButton, isActive && styles.tabButtonActive)
-            }
-            to="/templates"
-          >
-            Templates
-          </NavLink>
-          <NavLink
-            className={({ isActive }) =>
-              stylex(styles.tabButton, isActive && styles.tabButtonActive)
-            }
-            to="/projects"
-          >
-            Projects
-          </NavLink>
-          <NavLink
-            className={({ isActive }) =>
-              stylex(styles.tabButton, isActive && styles.tabButtonActive)
-            }
-            to="/tasks"
-          >
-            Tasks
-          </NavLink>
-          <NavLink
-            className={({ isActive }) =>
-              stylex(styles.tabButton, isActive && styles.tabButtonActive)
-            }
-            to="/integrations"
-          >
-            Integrations
-          </NavLink>
-          <NavLink
-            className={({ isActive }) =>
-              stylex(styles.tabButton, isActive && styles.tabButtonActive)
-            }
-            to="/ingest"
-          >
-            Ingest
-          </NavLink>
-          <NavLink
-            className={({ isActive }) =>
-              stylex(styles.tabButton, isActive && styles.tabButtonActive)
-            }
-            to="/workspaces"
-          >
-            Workspaces
-          </NavLink>
-          <NavLink
-            className={({ isActive }) =>
-              stylex(styles.tabButton, isActive && styles.tabButtonActive)
-            }
-            to="/users"
-          >
-            Users
-          </NavLink>
+          {isSystemAdmin && (
+            <NavLink
+              className={({ isActive }) =>
+                stylex(styles.tabButton, isActive && styles.tabButtonActive)
+              }
+              to="/plan-preview"
+            >
+              Plan Preview
+            </NavLink>
+          )}
+          {isSystemAdmin && (
+            <NavLink
+              className={({ isActive }) =>
+                stylex(styles.tabButton, isActive && styles.tabButtonActive)
+              }
+              to="/events"
+            >
+              Events Viewer
+            </NavLink>
+          )}
+          {isSystemAdmin && (
+            <NavLink
+              className={({ isActive }) =>
+                stylex(styles.tabButton, isActive && styles.tabButtonActive)
+              }
+              to="/demo"
+            >
+              Demo
+            </NavLink>
+          )}
+          {isWorkspaceAdmin && (
+            <NavLink
+              className={({ isActive }) =>
+                stylex(styles.tabButton, isActive && styles.tabButtonActive)
+              }
+              to="/templates"
+            >
+              Templates
+            </NavLink>
+          )}
+          {isWorkspaceMember && (
+            <NavLink
+              className={({ isActive }) =>
+                stylex(styles.tabButton, isActive && styles.tabButtonActive)
+              }
+              to="/projects"
+            >
+              Projects
+            </NavLink>
+          )}
+          {isWorkspaceMember && (
+            <NavLink
+              className={({ isActive }) =>
+                stylex(styles.tabButton, isActive && styles.tabButtonActive)
+              }
+              to="/tasks"
+            >
+              Tasks
+            </NavLink>
+          )}
+          {isWorkspaceAdmin && (
+            <NavLink
+              className={({ isActive }) =>
+                stylex(styles.tabButton, isActive && styles.tabButtonActive)
+              }
+              to="/integrations"
+            >
+              Integrations
+            </NavLink>
+          )}
+          {isWorkspaceAdmin && (
+            <NavLink
+              className={({ isActive }) =>
+                stylex(styles.tabButton, isActive && styles.tabButtonActive)
+              }
+              to="/ingest"
+            >
+              Ingest
+            </NavLink>
+          )}
+          {isSystemAdmin && (
+            <NavLink
+              className={({ isActive }) =>
+                stylex(styles.tabButton, isActive && styles.tabButtonActive)
+              }
+              to="/workspaces"
+            >
+              Workspaces
+            </NavLink>
+          )}
+          {isWorkspaceAdmin && (
+            <NavLink
+              className={({ isActive }) =>
+                stylex(styles.tabButton, isActive && styles.tabButtonActive)
+              }
+              to="/users"
+            >
+              Users
+            </NavLink>
+          )}
         </nav>
 
         <Outlet />
@@ -716,6 +772,13 @@ export default function App(): JSX.Element {
 }
 
 export function PlanPreviewRoute(): JSX.Element {
+  const { actor, actorLoading } = useAppState();
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!actor?.isSystemAdmin) {
+    return <NotAuthorized />;
+  }
   const {
     recordUri,
     setRecordUri,
@@ -920,6 +983,13 @@ export function PlanPreviewRoute(): JSX.Element {
 }
 
 export function EventsRoute(): JSX.Element {
+  const { actor, actorLoading } = useAppState();
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!actor?.isSystemAdmin) {
+    return <NotAuthorized />;
+  }
   const {
     eventsState,
     eventsLoading,
@@ -1112,6 +1182,13 @@ export function EventsRoute(): JSX.Element {
 }
 
 export function DemoRoute(): JSX.Element {
+  const { actor, actorLoading } = useAppState();
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!actor?.isSystemAdmin) {
+    return <NotAuthorized />;
+  }
   return (
     <section className={stylex(styles.panel)}>
       <DemoPanel />
@@ -1120,6 +1197,17 @@ export function DemoRoute(): JSX.Element {
 }
 
 export function TemplatesRoute(): JSX.Element {
+  const { selectedWorkspaceId, actor, actorLoading } = useAppState();
+  const isWorkspaceAdmin = Boolean(
+    actor?.isSystemAdmin ||
+    (selectedWorkspaceId && actor?.workspaceAdminIds.includes(selectedWorkspaceId))
+  );
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!isWorkspaceAdmin) {
+    return <NotAuthorized />;
+  }
   const { templateKey } = useParams();
   const navigate = useNavigate();
   const selectedKey = templateKey ? decodeURIComponent(templateKey) : undefined;
@@ -1128,6 +1216,7 @@ export function TemplatesRoute(): JSX.Element {
     <section className={stylex(styles.panel)}>
       <h2>Templates</h2>
       <TemplatesPanel
+        workspaceId={selectedWorkspaceId}
         selectedTemplateKeyOverride={selectedKey}
         onSelectedTemplateKeyChange={(nextKey) => {
           if (nextKey) {
@@ -1142,7 +1231,24 @@ export function TemplatesRoute(): JSX.Element {
 }
 
 export function ProjectsRoute(): JSX.Element {
-  const { selectedProjectId, setSelectedProjectId, contextLookup } = useAppState();
+  const {
+    selectedProjectId,
+    setSelectedProjectId,
+    contextLookup,
+    selectedWorkspaceId,
+    actor,
+    actorLoading,
+  } = useAppState();
+  const isWorkspaceMember = Boolean(
+    actor?.isSystemAdmin ||
+    (selectedWorkspaceId && actor?.workspaceIds.includes(selectedWorkspaceId))
+  );
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!isWorkspaceMember) {
+    return <NotAuthorized />;
+  }
   const { projectId } = useParams();
   const navigate = useNavigate();
 
@@ -1173,6 +1279,7 @@ export function ProjectsRoute(): JSX.Element {
 
   return (
     <ProjectsPanel
+      workspaceId={selectedWorkspaceId}
       selectedProjectId={selectedProjectId}
       onSelectProject={handleSelectProject}
       contextLookup={contextLookup}
@@ -1181,22 +1288,58 @@ export function ProjectsRoute(): JSX.Element {
 }
 
 export function TasksRoute(): JSX.Element {
-  const { selectedWorkspaceId } = useAppState();
+  const { selectedWorkspaceId, actor, actorLoading } = useAppState();
+  const isWorkspaceMember = Boolean(
+    actor?.isSystemAdmin ||
+    (selectedWorkspaceId && actor?.workspaceIds.includes(selectedWorkspaceId))
+  );
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!isWorkspaceMember) {
+    return <NotAuthorized />;
+  }
   return <TasksBoard workspaceId={selectedWorkspaceId} />;
 }
 
 export function IntegrationsRoute(): JSX.Element {
-  const { selectedWorkspaceId, workspaces } = useAppState();
+  const { selectedWorkspaceId, workspaces, actor, actorLoading } = useAppState();
+  const isWorkspaceAdmin = Boolean(
+    actor?.isSystemAdmin ||
+    (selectedWorkspaceId && actor?.workspaceAdminIds.includes(selectedWorkspaceId))
+  );
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!isWorkspaceAdmin) {
+    return <NotAuthorized />;
+  }
   return <IntegrationsPanel workspaceId={selectedWorkspaceId} workspaces={workspaces} />;
 }
 
 export function IngestRoute(): JSX.Element {
-  const { selectedWorkspaceId, workspaces } = useAppState();
+  const { selectedWorkspaceId, workspaces, actor, actorLoading } = useAppState();
+  const isWorkspaceAdmin = Boolean(
+    actor?.isSystemAdmin ||
+    (selectedWorkspaceId && actor?.workspaceAdminIds.includes(selectedWorkspaceId))
+  );
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!isWorkspaceAdmin) {
+    return <NotAuthorized />;
+  }
   return <IngestPanel workspaceId={selectedWorkspaceId} workspaces={workspaces} />;
 }
 
 export function WorkspacesRoute(): JSX.Element {
-  const { selectedWorkspaceId, setSelectedWorkspaceId } = useAppState();
+  const { selectedWorkspaceId, setSelectedWorkspaceId, actor, actorLoading } = useAppState();
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!actor?.isSystemAdmin) {
+    return <NotAuthorized />;
+  }
   return (
     <WorkspacesPanel
       selectedWorkspaceId={selectedWorkspaceId}
@@ -1206,6 +1349,30 @@ export function WorkspacesRoute(): JSX.Element {
 }
 
 export function UsersRoute(): JSX.Element {
-  const { selectedWorkspaceId } = useAppState();
-  return <UsersPanel workspaceId={selectedWorkspaceId} />;
+  const { selectedWorkspaceId, actor, actorLoading } = useAppState();
+  const isWorkspaceAdmin = Boolean(
+    actor?.isSystemAdmin ||
+    (selectedWorkspaceId && actor?.workspaceAdminIds.includes(selectedWorkspaceId))
+  );
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!isWorkspaceAdmin) {
+    return <NotAuthorized />;
+  }
+  return (
+    <UsersPanel
+      workspaceId={selectedWorkspaceId}
+      canEditSystemAdmin={Boolean(actor?.isSystemAdmin)}
+    />
+  );
+}
+
+function NotAuthorized(): JSX.Element {
+  return (
+    <section className={stylex(styles.panel)}>
+      <h2>Not authorized</h2>
+      <p className={stylex(styles.metaText)}>Ask an admin for access to this section.</p>
+    </section>
+  );
 }

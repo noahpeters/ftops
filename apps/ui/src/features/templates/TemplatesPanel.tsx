@@ -250,11 +250,13 @@ type NewTemplateFormState = TemplateFormState & {
 };
 
 type TemplatesPanelProps = {
+  workspaceId: string | null;
   selectedTemplateKeyOverride?: string;
   onSelectedTemplateKeyChange?: (key: string) => void;
 };
 
 export function TemplatesPanel({
+  workspaceId,
   selectedTemplateKeyOverride,
   onSelectedTemplateKeyChange,
 }: TemplatesPanelProps): JSX.Element {
@@ -305,6 +307,12 @@ export function TemplatesPanel({
   const [savingRuleId, setSavingRuleId] = useState<string | null>(null);
   const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
 
+  useEffect(() => {
+    setTemplatesState({});
+    setTemplateDetailState({});
+    setSelectedTemplateKey("");
+  }, [workspaceId]);
+
   const updateSelectedTemplateKey = useCallback(
     (nextKey: string, syncRoute = true) => {
       setSelectedTemplateKey(nextKey);
@@ -322,9 +330,15 @@ export function TemplatesPanel({
   }, [selectedTemplateKey, selectedTemplateKeyOverride, updateSelectedTemplateKey]);
 
   const refreshTemplates = useCallback(async (): Promise<void> => {
+    if (!workspaceId) {
+      setTemplatesState({
+        error: "Select a workspace to load templates.",
+      });
+      return;
+    }
     setTemplatesLoading(true);
     setActionError(null);
-    const result = await listTemplates();
+    const result = await listTemplates(workspaceId);
     setTemplatesState({
       status: result.status,
       durationMs: result.durationMs,
@@ -340,25 +354,32 @@ export function TemplatesPanel({
       }
     }
     setTemplatesLoading(false);
-  }, [selectedTemplateKey, selectedTemplateKeyOverride, updateSelectedTemplateKey]);
+  }, [selectedTemplateKey, selectedTemplateKeyOverride, updateSelectedTemplateKey, workspaceId]);
 
-  const loadTemplateDetail = useCallback(async (key: string): Promise<void> => {
-    if (!key) {
-      setTemplateDetailState({});
-      return;
-    }
-    setTemplateDetailLoading(true);
-    setActionError(null);
-    const result = await getTemplate(key);
-    setTemplateDetailState({
-      status: result.status,
-      durationMs: result.durationMs,
-      data: result.data ?? undefined,
-      text: result.text,
-      error: result.ok ? undefined : formatApiError(result, "Failed to load template."),
-    });
-    setTemplateDetailLoading(false);
-  }, []);
+  const loadTemplateDetail = useCallback(
+    async (key: string): Promise<void> => {
+      if (!key) {
+        setTemplateDetailState({});
+        return;
+      }
+      if (!workspaceId) {
+        setTemplateDetailState({ error: "Select a workspace to load templates." });
+        return;
+      }
+      setTemplateDetailLoading(true);
+      setActionError(null);
+      const result = await getTemplate(key, workspaceId);
+      setTemplateDetailState({
+        status: result.status,
+        durationMs: result.durationMs,
+        data: result.data ?? undefined,
+        text: result.text,
+        error: result.ok ? undefined : formatApiError(result, "Failed to load template."),
+      });
+      setTemplateDetailLoading(false);
+    },
+    [workspaceId]
+  );
 
   useEffect(() => {
     if (templatesState.data) {
@@ -422,6 +443,10 @@ export function TemplatesPanel({
   const rules = templateDetail?.rules ?? [];
 
   async function handleCreateTemplate(): Promise<void> {
+    if (!workspaceId) {
+      setActionError("Select a workspace to create templates.");
+      return;
+    }
     if (!newTemplateForm.key.trim() || !newTemplateForm.title.trim()) {
       setActionError("Template key and title are required.");
       return;
@@ -435,17 +460,20 @@ export function TemplatesPanel({
 
     setCreatingTemplate(true);
     setActionError(null);
-    const result = await createTemplate({
-      key: newTemplateForm.key.trim(),
-      title: newTemplateForm.title.trim(),
-      kind: newTemplateForm.kind,
-      scope: newTemplateForm.scope,
-      category_key: newTemplateForm.category_key || undefined,
-      deliverable_key: newTemplateForm.deliverable_key || undefined,
-      default_state_json: defaultState.value,
-      default_position: normalizePosition(newTemplateForm.default_position),
-      is_active: newTemplateForm.is_active,
-    });
+    const result = await createTemplate(
+      {
+        key: newTemplateForm.key.trim(),
+        title: newTemplateForm.title.trim(),
+        kind: newTemplateForm.kind,
+        scope: newTemplateForm.scope,
+        category_key: newTemplateForm.category_key || undefined,
+        deliverable_key: newTemplateForm.deliverable_key || undefined,
+        default_state_json: defaultState.value,
+        default_position: normalizePosition(newTemplateForm.default_position),
+        is_active: newTemplateForm.is_active,
+      },
+      workspaceId
+    );
 
     if (!result.ok) {
       setActionError(formatApiError(result, "Failed to create template."));
@@ -484,6 +512,10 @@ export function TemplatesPanel({
     if (!templateDetail?.template?.key) {
       return;
     }
+    if (!workspaceId) {
+      setActionError("Select a workspace to update templates.");
+      return;
+    }
 
     const defaultState = parseJsonOrError(templateForm.default_state_json);
     if (defaultState.error) {
@@ -493,16 +525,20 @@ export function TemplatesPanel({
 
     setSavingTemplate(true);
     setActionError(null);
-    const result = await updateTemplate(templateDetail.template.key, {
-      title: templateForm.title,
-      kind: templateForm.kind,
-      scope: templateForm.scope,
-      category_key: templateForm.category_key || null,
-      deliverable_key: templateForm.deliverable_key || null,
-      default_state_json: defaultState.value,
-      default_position: normalizePosition(templateForm.default_position),
-      is_active: templateForm.is_active,
-    });
+    const result = await updateTemplate(
+      templateDetail.template.key,
+      {
+        title: templateForm.title,
+        kind: templateForm.kind,
+        scope: templateForm.scope,
+        category_key: templateForm.category_key || null,
+        deliverable_key: templateForm.deliverable_key || null,
+        default_state_json: defaultState.value,
+        default_position: normalizePosition(templateForm.default_position),
+        is_active: templateForm.is_active,
+      },
+      workspaceId
+    );
 
     if (!result.ok) {
       setActionError(formatApiError(result, "Failed to update template."));
@@ -525,12 +561,16 @@ export function TemplatesPanel({
     if (!templateDetail?.template?.key) {
       return;
     }
+    if (!workspaceId) {
+      setActionError("Select a workspace to delete templates.");
+      return;
+    }
     if (!confirm(`Delete template ${templateDetail.template.key}?`)) {
       return;
     }
     setDeletingTemplate(true);
     setActionError(null);
-    const result = await deleteTemplate(templateDetail.template.key);
+    const result = await deleteTemplate(templateDetail.template.key, workspaceId);
     if (!result.ok) {
       setActionError(formatApiError(result, "Failed to delete template."));
       setDeletingTemplate(false);
@@ -547,6 +587,10 @@ export function TemplatesPanel({
     if (!templateDetail?.template?.key) {
       return;
     }
+    if (!workspaceId) {
+      setActionError("Select a workspace to manage rules.");
+      return;
+    }
     setCreatingRule(true);
     setActionError(null);
 
@@ -557,11 +601,15 @@ export function TemplatesPanel({
       return;
     }
 
-    const result = await createRule(templateDetail.template.key, {
-      priority,
-      match_json: ruleCreateForm.match_json,
-      is_active: ruleCreateForm.is_active,
-    });
+    const result = await createRule(
+      templateDetail.template.key,
+      {
+        priority,
+        match_json: ruleCreateForm.match_json,
+        is_active: ruleCreateForm.is_active,
+      },
+      workspaceId
+    );
 
     if (!result.ok) {
       setActionError(formatApiError(result, "Failed to create rule."));
@@ -583,6 +631,10 @@ export function TemplatesPanel({
     if (!templateDetail?.template?.key) {
       return;
     }
+    if (!workspaceId) {
+      setActionError("Select a workspace to manage rules.");
+      return;
+    }
     const edit = ruleEdits[rule.id];
     if (!edit) {
       return;
@@ -597,11 +649,16 @@ export function TemplatesPanel({
     setSavingRuleId(rule.id);
     setActionError(null);
 
-    const result = await updateRule(templateDetail.template.key, rule.id, {
-      priority,
-      match_json: edit.match_json,
-      is_active: edit.is_active,
-    });
+    const result = await updateRule(
+      templateDetail.template.key,
+      rule.id,
+      {
+        priority,
+        match_json: edit.match_json,
+        is_active: edit.is_active,
+      },
+      workspaceId
+    );
 
     if (!result.ok) {
       setActionError(formatApiError(result, "Failed to update rule."));
@@ -617,13 +674,17 @@ export function TemplatesPanel({
     if (!templateDetail?.template?.key) {
       return;
     }
+    if (!workspaceId) {
+      setActionError("Select a workspace to manage rules.");
+      return;
+    }
     if (!confirm(`Delete rule ${rule.id}?`)) {
       return;
     }
     setDeletingRuleId(rule.id);
     setActionError(null);
 
-    const result = await deleteRule(templateDetail.template.key, rule.id);
+    const result = await deleteRule(templateDetail.template.key, rule.id, workspaceId);
     if (!result.ok) {
       setActionError(formatApiError(result, "Failed to delete rule."));
       setDeletingRuleId(null);

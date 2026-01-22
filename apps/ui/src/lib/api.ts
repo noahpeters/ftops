@@ -96,3 +96,12 @@ export async function fetchJson<T>(
     durationMs,
   };
 }
+
+export async function fetchMe() {
+  return await fetchJson<{
+    email: string;
+    isSystemAdmin: boolean;
+    workspaceIds: string[];
+    workspaceAdminIds: string[];
+  }>(buildUrl("/me"));
+}

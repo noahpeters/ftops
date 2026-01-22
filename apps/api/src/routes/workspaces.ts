@@ -1,6 +1,7 @@
-import { badRequest, json, methodNotAllowed, notFound } from "../lib/http";
+import { badRequest, forbidden, json, methodNotAllowed, notFound } from "../lib/http";
 import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
+import { canAccessWorkspace, canAdminWorkspace, requireActor } from "../lib/access";
 
 const SLUG_REGEX = /^[a-z0-9-]{3,40}$/;
 
@@ -11,15 +12,41 @@ export async function handleWorkspaces(
   _ctx: ExecutionContext,
   _url: URL
 ) {
+  const actorResult = await requireActor(env, request);
+  if ("response" in actorResult) {
+    return actorResult.response;
+  }
+  const { actor } = actorResult;
+
   if (segments.length === 0) {
     if (request.method === "GET") {
+      if (actor.isSystemAdmin) {
+        const result = await env.DB.prepare(
+          "SELECT id, slug, name, created_at, updated_at FROM workspaces ORDER BY created_at ASC"
+        ).all();
+        return json(result.results ?? []);
+      }
+
+      if (actor.workspaceIds.length === 0) {
+        return json([]);
+      }
+
+      const placeholders = actor.workspaceIds.map(() => "?").join(", ");
       const result = await env.DB.prepare(
-        "SELECT id, slug, name, created_at, updated_at FROM workspaces ORDER BY created_at ASC"
-      ).all();
+        `SELECT id, slug, name, created_at, updated_at
+         FROM workspaces
+         WHERE id IN (${placeholders})
+         ORDER BY created_at ASC`
+      )
+        .bind(...actor.workspaceIds)
+        .all();
       return json(result.results ?? []);
     }
 
     if (request.method === "POST") {
+      if (!actor.isSystemAdmin) {
+        return forbidden("forbidden");
+      }
       let body: { slug?: string; name?: string } = {};
       try {
         body = (await request.json()) as { slug?: string; name?: string };
@@ -72,11 +99,17 @@ export async function handleWorkspaces(
     if (!workspace) {
       return notFound("Workspace not found");
     }
+    if (!canAccessWorkspace(actor, segments[0])) {
+      return forbidden("forbidden");
+    }
     return json(workspace);
   }
 
   if (segments.length === 2 && segments[1] === "users") {
     const workspaceId = segments[0];
+    if (!canAccessWorkspace(actor, workspaceId)) {
+      return forbidden("forbidden");
+    }
     const workspace = await env.DB.prepare("SELECT id FROM workspaces WHERE id = ?")
       .bind(workspaceId)
       .first();
@@ -98,6 +131,9 @@ export async function handleWorkspaces(
     }
 
     if (request.method === "POST") {
+      if (!canAdminWorkspace(actor, workspaceId)) {
+        return forbidden("forbidden");
+      }
       let body: {
         name?: string;
         email?: string;
@@ -119,6 +155,9 @@ export async function handleWorkspaces(
       const email = body.email?.trim();
       if (!name || !email) {
         return badRequest("missing_name_or_email");
+      }
+      if (body.system_admin && !actor.isSystemAdmin) {
+        return forbidden("forbidden");
       }
 
       const userId = crypto.randomUUID();
@@ -158,6 +197,9 @@ export async function handleWorkspaces(
     }
 
     if (request.method === "PATCH") {
+      if (!canAdminWorkspace(actor, workspaceId)) {
+        return forbidden("forbidden");
+      }
       let body: {
         name?: string;
         email?: string;
@@ -202,6 +244,9 @@ export async function handleWorkspaces(
       }
 
       if (body.system_admin !== undefined) {
+        if (!actor.isSystemAdmin) {
+          return forbidden("forbidden");
+        }
         updates.push("system_admin = ?");
         bindings.push(body.system_admin ? 1 : 0);
       }
@@ -236,6 +281,9 @@ export async function handleWorkspaces(
     }
 
     if (request.method === "DELETE") {
+      if (!canAdminWorkspace(actor, workspaceId)) {
+        return forbidden("forbidden");
+      }
       const result = await env.DB.prepare(
         "DELETE FROM users WHERE workspace_id = ? AND user_id = ?"
       )
@@ -254,6 +302,9 @@ export async function handleWorkspaces(
 
   if (segments.length === 1 && request.method === "PATCH") {
     const workspaceId = segments[0];
+    if (!canAdminWorkspace(actor, workspaceId)) {
+      return forbidden("forbidden");
+    }
     let body: { slug?: string; name?: string } = {};
     try {
       body = (await request.json()) as { slug?: string; name?: string };
@@ -313,6 +364,9 @@ export async function handleWorkspaces(
 
   if (segments.length === 1 && request.method === "DELETE") {
     const workspaceId = segments[0];
+    if (!canAdminWorkspace(actor, workspaceId)) {
+      return forbidden("forbidden");
+    }
     const workspace = await env.DB.prepare("SELECT id, slug FROM workspaces WHERE id = ?")
       .bind(workspaceId)
       .first<{ id: string; slug: string | null }>();

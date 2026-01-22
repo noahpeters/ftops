@@ -1,7 +1,8 @@
-import { badRequest, json, methodNotAllowed, notFound, serverError } from "../lib/http";
+import { badRequest, forbidden, json, methodNotAllowed, notFound, serverError } from "../lib/http";
 import type { Env } from "../lib/types";
 import { encryptSecrets } from "../lib/crypto/secrets";
 import { nowISO } from "../lib/utils";
+import { canAdminWorkspace, requireActor } from "../lib/access";
 
 const PROVIDERS = ["shopify", "qbo"] as const;
 const ENVIRONMENTS = ["sandbox", "production"] as const;
@@ -13,9 +14,21 @@ export async function handleIntegrations(
   _ctx: ExecutionContext,
   url: URL
 ) {
+  const actorResult = await requireActor(env, request);
+  if ("response" in actorResult) {
+    return actorResult.response;
+  }
+  const { actor } = actorResult;
+
   if (segments.length === 0) {
     if (request.method === "GET") {
       const workspaceId = url.searchParams.get("workspaceId");
+      if (workspaceId && !canAdminWorkspace(actor, workspaceId)) {
+        return forbidden("forbidden");
+      }
+      if (!workspaceId && !actor.isSystemAdmin) {
+        return forbidden("forbidden");
+      }
       const filters: string[] = [];
       const bindings: string[] = [];
       if (workspaceId) {
@@ -56,6 +69,9 @@ export async function handleIntegrations(
       const externalAccountId = body.externalAccountId?.trim();
       if (!workspaceId || !provider || !environment || !externalAccountId) {
         return badRequest("missing_required_fields");
+      }
+      if (!canAdminWorkspace(actor, workspaceId)) {
+        return forbidden("forbidden");
       }
       if (!PROVIDERS.includes(provider as (typeof PROVIDERS)[number])) {
         return badRequest("invalid_provider");
@@ -135,6 +151,9 @@ export async function handleIntegrations(
       if (!existing) {
         return notFound("Integration not found");
       }
+      if (!canAdminWorkspace(actor, (existing as { workspace_id: string }).workspace_id)) {
+        return forbidden("forbidden");
+      }
 
       const updates: string[] = [];
       const bindings: unknown[] = [];
@@ -193,6 +212,16 @@ export async function handleIntegrations(
     }
 
     if (request.method === "DELETE") {
+      const existing = await env.DB.prepare(`SELECT workspace_id FROM integrations WHERE id = ?`)
+        .bind(integrationId)
+        .first<{ workspace_id: string }>();
+      if (!existing) {
+        return notFound("Integration not found");
+      }
+      if (!canAdminWorkspace(actor, existing.workspace_id)) {
+        return forbidden("forbidden");
+      }
+
       const result = await env.DB.prepare("DELETE FROM integrations WHERE id = ?")
         .bind(integrationId)
         .run();

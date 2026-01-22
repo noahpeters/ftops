@@ -1,5 +1,6 @@
-import { badRequest, json, methodNotAllowed, notFound, serverError } from "../lib/http";
+import { badRequest, forbidden, json, methodNotAllowed, notFound, serverError } from "../lib/http";
 import type { Env } from "../lib/types";
+import { requireActor } from "../lib/access";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -11,6 +12,13 @@ export async function handleCommercialRecords(
   _ctx: ExecutionContext,
   url: URL
 ) {
+  const actorResult = await requireActor(env, request);
+  if ("response" in actorResult) {
+    return actorResult.response;
+  }
+  if (!actorResult.actor) {
+    return forbidden("forbidden");
+  }
   if (request.method !== "GET") {
     return methodNotAllowed(["GET"]);
   }

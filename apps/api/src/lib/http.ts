@@ -15,6 +15,10 @@ export function notFound(message: string, extra: Record<string, unknown> = {}) {
   return json({ error: message, ...extra }, 404);
 }
 
+export function forbidden(message: string, extra: Record<string, unknown> = {}) {
+  return json({ error: message, ...extra }, 403);
+}
+
 export function methodNotAllowed(allowed: string[]) {
   return json({ error: "Method Not Allowed", allowed }, 405, {
     allow: allowed.join(", "),
