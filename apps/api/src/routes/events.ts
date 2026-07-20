@@ -19,7 +19,7 @@ export async function handleEvents(
   url: URL
 ) {
   const actorResult = await requireActor(env, request);
-  if ("response" in actorResult) {
+  if (!actorResult.ok) {
     return actorResult.response;
   }
   if (!actorResult.actor.isSystemAdmin) {

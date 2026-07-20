@@ -1,8 +1,10 @@
 import { createRequestHandler } from "@react-router/cloudflare";
 import { handleApiProxyRequest } from "./src/worker/apiProxy";
+import type { ExecutionContext, IncomingRequestCfProperties } from "@cloudflare/workers-types";
 
 type Env = {
-  API?: Fetcher;
+  ASSETS: { fetch: typeof fetch };
+  API?: { fetch: typeof fetch };
 };
 
 let handlerPromise: Promise<ReturnType<typeof createRequestHandler>> | null = null;
@@ -23,10 +25,11 @@ async function getHandler() {
       createRequestHandler({
         build,
         getLoadContext({ request, context }) {
+          const cf = (request as Request & { cf?: IncomingRequestCfProperties }).cf ?? {};
           return {
             cloudflare: {
               ...context.cloudflare,
-              cf: request.cf ?? {},
+              cf,
             },
           };
         },
@@ -43,7 +46,15 @@ export default {
         return await handleApiProxyRequest(request, env);
       }
       const handler = await getHandler();
-      return handler({
+      const handlerFn = handler as unknown as (context: {
+        request: Request;
+        env: Env;
+        params: Record<string, string>;
+        waitUntil: ExecutionContext["waitUntil"];
+        passThroughOnException: ExecutionContext["passThroughOnException"];
+        next: () => Promise<Response>;
+      }) => Promise<Response>;
+      return await handlerFn({
         request,
         env,
         params: {},

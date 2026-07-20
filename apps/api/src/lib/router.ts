@@ -13,6 +13,7 @@ import { handleWorkspaces } from "../routes/workspaces";
 import { handleIntegrations } from "../routes/integrations";
 import { handleAdmin } from "../routes/admin";
 import { handleMe } from "../routes/me";
+import { handleCustomers } from "../routes/customers";
 
 export type SegmentHandler = (
   segments: string[],
@@ -83,6 +84,7 @@ async function routesRoot(
       integrations: handleIntegrations,
       admin: handleAdmin,
       me: handleMe,
+      customers: handleCustomers,
     },
     () => notFound("Route not found")
   );

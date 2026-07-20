@@ -1,6 +1,7 @@
 import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import type { WebhookEnvelope } from "@ftops/webhooks";
+import { processQuickbooksWebhook } from "./quickbooksWebhook";
 
 export async function processWebhookEnvelope(msg: WebhookEnvelope, env: Env): Promise<void> {
   const now = nowISO();
@@ -9,6 +10,12 @@ export async function processWebhookEnvelope(msg: WebhookEnvelope, env: Env): Pr
   const externalAccountId = msg.externalAccountId ?? msg.realmId ?? null;
 
   try {
+    if (msg.source === "quickbooks" && msg.signatureVerified && bodyJson.ok) {
+      await processQuickbooksWebhook(env, {
+        integrationId: msg.integrationId,
+        body: bodyJson.value,
+      });
+    }
     await env.DB.prepare(
       `INSERT INTO raw_events
         (id, source, workspace_id, environment, external_account_id, integration_id,

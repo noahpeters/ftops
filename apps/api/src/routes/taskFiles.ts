@@ -22,7 +22,7 @@ export async function handleTaskFiles(
   env: Env
 ): Promise<Response> {
   const actorResult = await requireActor(env, request);
-  if ("response" in actorResult) {
+  if (!actorResult.ok) {
     return actorResult.response;
   }
   const { actor } = actorResult;

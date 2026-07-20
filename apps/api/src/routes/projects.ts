@@ -13,7 +13,7 @@ export async function handleProjects(
   _url: URL
 ) {
   const actorResult = await requireActor(env, request);
-  if ("response" in actorResult) {
+  if (!actorResult.ok) {
     return actorResult.response;
   }
   const { actor } = actorResult;

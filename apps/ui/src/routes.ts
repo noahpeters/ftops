@@ -11,6 +11,8 @@ export default [
     route("templates/:templateKey", "routes/templates-template.tsx"),
     route("projects", "routes/projects.tsx"),
     route("projects/:projectId", "routes/projects-project.tsx"),
+    route("customers", "routes/customers.tsx"),
+    route("customers/:customerId", "routes/customers-customer.tsx"),
     route("tasks", "routes/tasks.tsx"),
     route("tasks/kanban", "routes/tasks-kanban.tsx"),
     route("integrations", "routes/integrations.tsx"),

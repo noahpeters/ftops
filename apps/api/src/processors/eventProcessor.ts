@@ -1,6 +1,7 @@
 import type { Env, EventQueuePayload } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { processCommercialRecordUpserted } from "./commercialRecordUpserted";
+import { processQuickbooksWebhook } from "./quickbooksWebhook";
 
 export async function processEventMessage(msg: EventQueuePayload, env: Env): Promise<void> {
   const now = nowISO();
@@ -30,6 +31,23 @@ export async function processEventMessage(msg: EventQueuePayload, env: Env): Pro
   try {
     if (msg.type === "commercial_record_upserted") {
       await processCommercialRecordUpserted(env, msg, eventId);
+    }
+
+    if (msg.source === "quickbooks" && msg.type === "quickbooks.webhook") {
+      const ingestRequestId = (msg.payload as { ingestRequestId?: string } | undefined)
+        ?.ingestRequestId;
+      if (!ingestRequestId) throw new Error("quickbooks_ingest_request_missing");
+      const ingest = await env.DB.prepare(
+        `SELECT integration_id, body_json, body_text FROM ingest_requests WHERE id = ?`
+      )
+        .bind(ingestRequestId)
+        .first<{ integration_id: string | null; body_json: string | null; body_text: string }>();
+      if (!ingest) throw new Error("quickbooks_ingest_request_not_found");
+      const raw = ingest.body_json || ingest.body_text;
+      await processQuickbooksWebhook(env, {
+        integrationId: ingest.integration_id,
+        body: JSON.parse(raw),
+      });
     }
 
     await env.DB.prepare(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import stylex from "~/lib/stylex";
 import { colors, radius } from "../../theme/tokens.stylex";
 import {
@@ -190,21 +190,7 @@ export function ProjectsPanel({
   const [statusSaving, setStatusSaving] = useState<Record<string, boolean>>({});
   const [noteError, setNoteError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void refreshProjects();
-  }, [workspaceId]);
-
-  useEffect(() => {
-    if (!selectedProjectId) {
-      setProject(null);
-      setTasks([]);
-      return;
-    }
-    void loadProject(selectedProjectId);
-    void loadTasks(selectedProjectId);
-  }, [selectedProjectId]);
-
-  async function refreshProjects() {
+  const refreshProjects = useCallback(async () => {
     if (!workspaceId) {
       setProjects([]);
       setProjectsError("Select a workspace to view projects.");
@@ -219,7 +205,21 @@ export function ProjectsPanel({
       setProjects(result.data ?? []);
     }
     setProjectsLoading(false);
-  }
+  }, [workspaceId]);
+
+  useEffect(() => {
+    void refreshProjects();
+  }, [refreshProjects]);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setProject(null);
+      setTasks([]);
+      return;
+    }
+    void loadProject(selectedProjectId);
+    void loadTasks(selectedProjectId);
+  }, [selectedProjectId]);
 
   async function loadProject(projectId: string) {
     const result = await getProject(projectId);

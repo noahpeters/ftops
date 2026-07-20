@@ -58,9 +58,9 @@ export async function getActor(env: Env, request: Request): Promise<Actor | null
 export async function requireActor(env: Env, request: Request) {
   const actor = await getActor(env, request);
   if (!actor) {
-    return { response: forbidden("forbidden") } as const;
+    return { ok: false as const, response: forbidden("forbidden") };
   }
-  return { actor } as const;
+  return { ok: true as const, actor };
 }
 
 export function canAccessWorkspace(actor: Actor, workspaceId: string) {

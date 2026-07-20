@@ -44,7 +44,7 @@ export async function handleTemplates(
   url: URL
 ) {
   const actorResult = await requireActor(env, request);
-  if ("response" in actorResult) {
+  if (!actorResult.ok) {
     return actorResult.response;
   }
   const { actor } = actorResult;

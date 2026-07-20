@@ -27,6 +27,7 @@ import { listWorkspaces, type WorkspaceRow } from "./features/workspaces/api";
 import { WorkspacesPanel } from "./features/workspaces/WorkspacesPanel";
 import { TasksBoard } from "./features/tasks/TasksBoard";
 import { UsersPanel } from "./features/users/UsersPanel";
+import { CustomersPanel } from "./features/customers/CustomersPanel";
 
 const EXAMPLE_URIS = ["manual://proposal/demo", "shopify://order/example", "qbo://invoice/example"];
 
@@ -153,6 +154,11 @@ const styles = stylex.create({
     gap: "12px",
     fontSize: "12px",
     color: colors.textSubtle,
+  },
+  metaText: {
+    fontSize: "14px",
+    lineHeight: "1.5",
+    color: colors.textMuted,
   },
   jsonBlock: {
     border: `1px solid ${colors.border}`,
@@ -333,7 +339,7 @@ export default function App(): JSX.Element {
       }
     }
     setWorkspaceLoading(false);
-  }, [selectedWorkspaceId, debugEmail]);
+  }, [selectedWorkspaceId]);
 
   const refreshActor = useCallback(async () => {
     setActorLoading(true);
@@ -708,6 +714,16 @@ export default function App(): JSX.Element {
               className={({ isActive }) =>
                 stylex(styles.tabButton, isActive && styles.tabButtonActive)
               }
+              to="/customers"
+            >
+              Customers
+            </NavLink>
+          )}
+          {isWorkspaceMember && (
+            <NavLink
+              className={({ isActive }) =>
+                stylex(styles.tabButton, isActive && styles.tabButtonActive)
+              }
               to="/projects"
             >
               Projects
@@ -772,14 +788,9 @@ export default function App(): JSX.Element {
 }
 
 export function PlanPreviewRoute(): JSX.Element {
-  const { actor, actorLoading } = useAppState();
-  if (actorLoading) {
-    return <section className={stylex(styles.panel)}>Loading...</section>;
-  }
-  if (!actor?.isSystemAdmin) {
-    return <NotAuthorized />;
-  }
   const {
+    actor,
+    actorLoading,
     recordUri,
     setRecordUri,
     autoRunOnSelect,
@@ -826,6 +837,13 @@ export function PlanPreviewRoute(): JSX.Element {
     },
     [navigate, recordUriParam, runPreview, setRecordUri]
   );
+
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!actor?.isSystemAdmin) {
+    return <NotAuthorized />;
+  }
 
   return (
     <section className={stylex(styles.panel)}>
@@ -983,14 +1001,9 @@ export function PlanPreviewRoute(): JSX.Element {
 }
 
 export function EventsRoute(): JSX.Element {
-  const { actor, actorLoading } = useAppState();
-  if (actorLoading) {
-    return <section className={stylex(styles.panel)}>Loading...</section>;
-  }
-  if (!actor?.isSystemAdmin) {
-    return <NotAuthorized />;
-  }
   const {
+    actor,
+    actorLoading,
     eventsState,
     eventsLoading,
     refreshEvents,
@@ -1011,6 +1024,13 @@ export function EventsRoute(): JSX.Element {
     idempotencyKey,
     copyToClipboard,
   } = useAppState();
+
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!actor?.isSystemAdmin) {
+    return <NotAuthorized />;
+  }
 
   return (
     <section className={stylex(styles.panel)}>
@@ -1198,6 +1218,9 @@ export function DemoRoute(): JSX.Element {
 
 export function TemplatesRoute(): JSX.Element {
   const { selectedWorkspaceId, actor, actorLoading } = useAppState();
+  const { templateKey } = useParams();
+  const navigate = useNavigate();
+  const selectedKey = templateKey ? decodeURIComponent(templateKey) : undefined;
   const isWorkspaceAdmin = Boolean(
     actor?.isSystemAdmin ||
     (selectedWorkspaceId && actor?.workspaceAdminIds.includes(selectedWorkspaceId))
@@ -1208,9 +1231,6 @@ export function TemplatesRoute(): JSX.Element {
   if (!isWorkspaceAdmin) {
     return <NotAuthorized />;
   }
-  const { templateKey } = useParams();
-  const navigate = useNavigate();
-  const selectedKey = templateKey ? decodeURIComponent(templateKey) : undefined;
 
   return (
     <section className={stylex(styles.panel)}>
@@ -1230,6 +1250,23 @@ export function TemplatesRoute(): JSX.Element {
   );
 }
 
+export function CustomersRoute(): JSX.Element {
+  const { selectedWorkspaceId, actor, actorLoading } = useAppState();
+  const { customerId } = useParams();
+  const isWorkspaceMember = Boolean(
+    actor?.isSystemAdmin ||
+    (selectedWorkspaceId && actor?.workspaceIds.includes(selectedWorkspaceId))
+  );
+  if (actorLoading) return <section className={stylex(styles.panel)}>Loading...</section>;
+  if (!isWorkspaceMember) return <NotAuthorized />;
+  return (
+    <CustomersPanel
+      workspaceId={selectedWorkspaceId}
+      customerId={customerId ? decodeURIComponent(customerId) : undefined}
+    />
+  );
+}
+
 export function ProjectsRoute(): JSX.Element {
   const {
     selectedProjectId,
@@ -1239,26 +1276,20 @@ export function ProjectsRoute(): JSX.Element {
     actor,
     actorLoading,
   } = useAppState();
+  const { projectId } = useParams();
+  const navigate = useNavigate();
   const isWorkspaceMember = Boolean(
     actor?.isSystemAdmin ||
     (selectedWorkspaceId && actor?.workspaceIds.includes(selectedWorkspaceId))
   );
-  if (actorLoading) {
-    return <section className={stylex(styles.panel)}>Loading...</section>;
-  }
-  if (!isWorkspaceMember) {
-    return <NotAuthorized />;
-  }
-  const { projectId } = useParams();
-  const navigate = useNavigate();
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!isWorkspaceMember || !projectId) return;
     const decoded = decodeURIComponent(projectId);
     if (decoded && decoded !== selectedProjectId) {
       setSelectedProjectId(decoded);
     }
-  }, [projectId, selectedProjectId, setSelectedProjectId]);
+  }, [isWorkspaceMember, projectId, selectedProjectId, setSelectedProjectId]);
 
   const handleSelectProject = useCallback(
     (nextId: string | null) => {
@@ -1276,6 +1307,13 @@ export function ProjectsRoute(): JSX.Element {
     },
     [navigate, projectId, setSelectedProjectId]
   );
+
+  if (actorLoading) {
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  }
+  if (!isWorkspaceMember) {
+    return <NotAuthorized />;
+  }
 
   return (
     <ProjectsPanel

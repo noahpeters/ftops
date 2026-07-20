@@ -1,5 +1,5 @@
 import path from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig, type PluginOption } from "vite";
 import { reactRouter } from "@react-router/dev/vite";
 import stylex from "@stylexjs/unplugin";
 
@@ -13,8 +13,8 @@ export default defineConfig({
       },
       devMode: "full",
       devPersistToDisk: true,
-    }),
-    reactRouter(),
+    }) as unknown as PluginOption,
+    reactRouter() as unknown as PluginOption,
   ],
   resolve: {
     alias: {

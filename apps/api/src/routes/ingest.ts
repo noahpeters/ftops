@@ -13,7 +13,7 @@ export async function handleIngest(
   url: URL
 ) {
   const actorResult = await requireActor(env, request);
-  if ("response" in actorResult) {
+  if (!actorResult.ok) {
     return actorResult.response;
   }
   const { actor } = actorResult;

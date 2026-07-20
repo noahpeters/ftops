@@ -1,5 +1,5 @@
 type FetcherLike = {
-  fetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>;
+  fetch: typeof fetch;
 };
 
 type ApiProxyEnv = {

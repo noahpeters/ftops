@@ -15,7 +15,7 @@ export async function handleIntegrations(
   url: URL
 ) {
   const actorResult = await requireActor(env, request);
-  if ("response" in actorResult) {
+  if (!actorResult.ok) {
     return actorResult.response;
   }
   const { actor } = actorResult;
@@ -260,6 +260,9 @@ function validateSecrets(provider: string, secrets: Record<string, unknown>) {
   if (provider === "qbo") {
     if (typeof secrets.webhookVerifierToken !== "string" || !secrets.webhookVerifierToken.trim()) {
       return { ok: false, error: "missing_webhook_verifier_token" };
+    }
+    if (secrets.accessToken !== undefined && typeof secrets.accessToken !== "string") {
+      return { ok: false, error: "invalid_access_token" };
     }
   }
   return { ok: true as const };
