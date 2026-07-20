@@ -1,6 +1,7 @@
-import { decryptSecrets } from "../lib/crypto/secrets";
+import { decryptSecrets, encryptSecrets } from "../lib/crypto/secrets";
 import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
+import { exchangeRefreshToken, tokensWithExpiry, type QboSecrets } from "./quickbooksOAuth";
 
 type Integration = {
   id: string;
@@ -9,6 +10,7 @@ type Integration = {
   external_account_id: string;
   secrets_key_id: string;
   secrets_ciphertext: string;
+  token_version?: number;
 };
 
 type QboEntity = Record<string, unknown> & {
@@ -27,30 +29,15 @@ type QboEntity = Record<string, unknown> & {
   MetaData?: { LastUpdatedTime?: string };
 };
 
-type QboSecrets = {
-  accessToken?: string;
-  apiBaseUrl?: string;
-  minorVersion?: string;
-};
-
 const ENTITY_KEYS = { customer: "Customer", estimate: "Estimate", invoice: "Invoice" } as const;
 
 export async function getQboIntegration(env: Env, integrationId: string) {
   return await env.DB.prepare(
-    `SELECT id, workspace_id, environment, external_account_id, secrets_key_id, secrets_ciphertext
+    `SELECT id, workspace_id, environment, external_account_id, secrets_key_id, secrets_ciphertext, token_version
      FROM integrations WHERE id = ? AND provider = 'qbo' AND is_active = 1`
   )
     .bind(integrationId)
     .first<Integration>();
-}
-
-async function getSecrets(env: Env, integration: Integration): Promise<QboSecrets> {
-  const decrypted = await decryptSecrets(
-    env,
-    integration.secrets_key_id,
-    integration.secrets_ciphertext
-  );
-  return JSON.parse(decrypted) as QboSecrets;
 }
 
 async function qboRequest(
@@ -59,26 +46,19 @@ async function qboRequest(
   path: string,
   init: RequestInit = {}
 ) {
-  const secrets = await getSecrets(env, integration);
-  if (!secrets.accessToken) throw new Error("quickbooks_access_token_missing");
+  let secrets = await ensureAccessToken(env, integration, false);
   const defaultBase =
     integration.environment === "sandbox"
       ? "https://sandbox-quickbooks.api.intuit.com"
       : "https://quickbooks.api.intuit.com";
   const base = (secrets.apiBaseUrl || defaultBase).replace(/\/$/, "");
   const separator = path.includes("?") ? "&" : "?";
-  const response = await fetch(
-    `${base}/v3/company/${encodeURIComponent(integration.external_account_id)}${path}${separator}minorversion=${encodeURIComponent(secrets.minorVersion || "75")}`,
-    {
-      ...init,
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${secrets.accessToken}`,
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-        ...init.headers,
-      },
-    }
-  );
+  const url = `${base}/v3/company/${encodeURIComponent(integration.external_account_id)}${path}${separator}minorversion=${encodeURIComponent(secrets.minorVersion || "75")}`;
+  let response = await authorizedFetch(url, init, secrets.accessToken!);
+  if (response.status === 401) {
+    secrets = await ensureAccessToken(env, integration, true);
+    response = await authorizedFetch(url, init, secrets.accessToken!);
+  }
   const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok) {
     const error = new Error(`quickbooks_http_${response.status}`) as Error & { status?: number };
@@ -86,6 +66,91 @@ async function qboRequest(
     throw error;
   }
   return payload;
+}
+
+async function authorizedFetch(url: string, init: RequestInit, accessToken: string) {
+  return await fetch(url, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...init.headers,
+    },
+  });
+}
+
+export async function ensureAccessToken(
+  env: Env,
+  integration: Integration,
+  force: boolean
+): Promise<QboSecrets> {
+  const current = await env.DB.prepare(
+    `SELECT secrets_key_id,secrets_ciphertext,token_version FROM integrations WHERE id=? AND is_active=1`
+  )
+    .bind(integration.id)
+    .first<{ secrets_key_id: string; secrets_ciphertext: string; token_version: number }>();
+  if (!current) throw new Error("quickbooks_integration_not_found");
+  const secrets = JSON.parse(
+    await decryptSecrets(env, current.secrets_key_id, current.secrets_ciphertext)
+  ) as QboSecrets;
+  const expiresAt = secrets.accessTokenExpiresAt ? Date.parse(secrets.accessTokenExpiresAt) : 0;
+  if (!force && secrets.accessToken && expiresAt > Date.now() + 5 * 60 * 1000) return secrets;
+  if (!secrets.refreshToken) throw new Error("quickbooks_refresh_token_missing");
+  try {
+    const refreshed = tokensWithExpiry(
+      await exchangeRefreshToken(env, secrets.refreshToken),
+      secrets
+    );
+    const encrypted = await encryptSecrets(env, JSON.stringify(refreshed));
+    const update = await env.DB.prepare(
+      `UPDATE integrations SET secrets_key_id=?,secrets_ciphertext=?,token_version=token_version+1,connection_status='connected',connection_error=NULL,updated_at=? WHERE id=? AND token_version=?`
+    )
+      .bind(encrypted.keyId, encrypted.ciphertext, nowISO(), integration.id, current.token_version)
+      .run();
+    if (update.meta?.changes === 1) return refreshed;
+    const winner = await env.DB.prepare(
+      `SELECT secrets_key_id,secrets_ciphertext FROM integrations WHERE id=?`
+    )
+      .bind(integration.id)
+      .first<{ secrets_key_id: string; secrets_ciphertext: string }>();
+    if (!winner) throw new Error("quickbooks_integration_not_found");
+    return JSON.parse(
+      await decryptSecrets(env, winner.secrets_key_id, winner.secrets_ciphertext)
+    ) as QboSecrets;
+  } catch (error) {
+    const latest = await env.DB.prepare(
+      `SELECT secrets_key_id,secrets_ciphertext,token_version FROM integrations WHERE id=?`
+    )
+      .bind(integration.id)
+      .first<{ secrets_key_id: string; secrets_ciphertext: string; token_version: number }>();
+    if (latest && latest.token_version !== current.token_version) {
+      return JSON.parse(
+        await decryptSecrets(env, latest.secrets_key_id, latest.secrets_ciphertext)
+      ) as QboSecrets;
+    }
+    const message = error instanceof Error ? error.message : "quickbooks_refresh_failed";
+    await env.DB.prepare(
+      `UPDATE integrations SET connection_status='reconnect_required',connection_error=?,updated_at=? WHERE id=?`
+    )
+      .bind(message, nowISO(), integration.id)
+      .run();
+    throw error;
+  }
+}
+
+export async function queryQboPage(
+  env: Env,
+  integration: Integration,
+  entityType: keyof typeof ENTITY_KEYS,
+  startPosition: number,
+  maxResults = 100
+) {
+  const key = ENTITY_KEYS[entityType];
+  const query = `select * from ${key} startposition ${startPosition} maxresults ${maxResults}`;
+  const payload = await qboRequest(env, integration, `/query?query=${encodeURIComponent(query)}`);
+  const response = payload.QueryResponse as Record<string, unknown> | undefined;
+  return Array.isArray(response?.[key]) ? (response[key] as QboEntity[]) : [];
 }
 
 export async function fetchQboEntity(

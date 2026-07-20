@@ -33,6 +33,11 @@ export async function processQuickbooksWebhook(
       throw error;
     }
   }
+  await env.DB.prepare(
+    `UPDATE integrations SET last_successful_sync_at=?, connection_error=NULL WHERE id=?`
+  )
+    .bind(new Date().toISOString(), integration.id)
+    .run();
 }
 
 export function extractChanges(body: unknown): Change[] {

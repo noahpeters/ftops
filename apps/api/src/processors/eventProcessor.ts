@@ -2,6 +2,7 @@ import type { Env, EventQueuePayload } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { processCommercialRecordUpserted } from "./commercialRecordUpserted";
 import { processQuickbooksWebhook } from "./quickbooksWebhook";
+import { processQuickbooksBootstrap } from "./quickbooksBootstrap";
 
 export async function processEventMessage(msg: EventQueuePayload, env: Env): Promise<void> {
   const now = nowISO();
@@ -48,6 +49,10 @@ export async function processEventMessage(msg: EventQueuePayload, env: Env): Pro
         integrationId: ingest.integration_id,
         body: JSON.parse(raw),
       });
+    }
+
+    if (msg.source === "quickbooks" && msg.type === "quickbooks.bootstrap") {
+      await processQuickbooksBootstrap(env, msg);
     }
 
     await env.DB.prepare(

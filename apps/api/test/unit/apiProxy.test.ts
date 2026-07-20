@@ -54,6 +54,10 @@ describe("ops api proxy allowlist", () => {
     ["GET", "/api/customers/customer_1/estimates"],
     ["GET", "/api/customers/customer_1/quickbooks/search?integrationId=qbo_1"],
     ["POST", "/api/customers/customer_1/quickbooks/link"],
+    ["GET", "/api/integrations/qbo/connect?workspaceId=ws_123&environment=production"],
+    ["GET", "/api/integrations/qbo/status?workspaceId=ws_123"],
+    ["POST", "/api/integrations/qbo/disconnect"],
+    ["POST", "/api/integrations/qbo/bootstrap"],
   ])("forwards customer API %s %s", async (method, path) => {
     const fetch = vi.fn(async () => new Response("ok"));
     const env = { API: { fetch } } as unknown as ApiProxyEnv;

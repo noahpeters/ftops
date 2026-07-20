@@ -26,7 +26,46 @@ Mappings use `linked`, `pending_push`, `pending_refresh`, `conflict`, and `error
 
 ## Configuration and local tests
 
-QuickBooks integration secrets remain encrypted using `INTEGRATIONS_MASTER_KEY` and `INTEGRATIONS_KEY_ID`. In addition to `webhookVerifierToken`, API synchronization needs an OAuth `accessToken`. `apiBaseUrl` may be set to a mock server in tests; otherwise sandbox/production Intuit URLs are selected from the integration environment. `minorVersion` is optional.
+QuickBooks integration secrets remain encrypted using `INTEGRATIONS_MASTER_KEY` and `INTEGRATIONS_KEY_ID`. Company access and refresh tokens are stored only in each encrypted integration record; they are not static Worker secrets and are never returned to the UI or logs. `apiBaseUrl` may be set to a mock server in tests; otherwise sandbox/production Intuit URLs are selected from the integration environment. `minorVersion` is optional.
+
+### Intuit and Cloudflare setup
+
+Configure the Intuit Developer Portal application with this exact redirect URI:
+
+```text
+https://api.from-trees.com/integrations/qbo/callback
+```
+
+The only requested OAuth scope is `com.intuit.quickbooks.accounting`. Configure the QuickBooks webhook endpoint as:
+
+```text
+https://api.from-trees.com/ingest/qbo/webhook?env=production
+```
+
+Set these API Worker secrets with `wrangler secret put`; do not commit them or add them to `wrangler.toml`:
+
+- `QBO_CLIENT_ID`
+- `QBO_CLIENT_SECRET`
+- `QBO_OAUTH_STATE_SECRET` (a long, random signing secret)
+- `INTEGRATIONS_MASTER_KEY` (32-byte key used for integration-secret encryption)
+
+`INTEGRATIONS_KEY_ID` and the production `QBO_REDIRECT_URI` are non-secret bindings. Sandbox and production use separate Intuit application credentials in their respective Worker environments. Ensure the encrypted integration also retains the Intuit webhook verifier token so the ingress worker can verify signatures.
+
+### Connecting and importing
+
+1. A workspace administrator opens **Integrations**, selects sandbox or production, and chooses **Connect or reconnect QuickBooks**.
+2. ftops creates a signed, one-time, ten-minute state bound to that workspace, administrator, and environment, then redirects to Intuit.
+3. The callback consumes the state and authorization code once and stores the realm ID plus encrypted rotating tokens.
+4. The administrator chooses **Start or resume bootstrap**. The existing event queue imports Customers, then Estimates, then Invoices in 100-record pages. Progress and sanitized errors are visible on the Integrations page.
+5. Once complete, the existing verified webhook flow supplies incremental changes.
+
+Bootstrap jobs persist their current entity type, `STARTPOSITION`, imported count, timestamps, and errors. Repeating a completed import is safe because external mappings are unique and entity upserts are idempotent. Restarting a failed job resumes its saved page.
+
+### Token refresh and reconnects
+
+Before a QuickBooks request, ftops refreshes an access token when it is expired or within five minutes of expiration. A 401 forces one refresh and one retry. Intuit refresh-token rotation is always persisted. A D1 token-version compare prevents a slower concurrent refresh from overwriting a newer token. Revoked or expired authorization marks the integration `reconnect_required`; an administrator must reconnect through OAuth.
+
+Troubleshooting information is limited to sanitized state such as `quickbooks_authorization_revoked`, token health, and bootstrap position. Never paste authorization codes, tokens, client secrets, decrypted integration JSON, or raw Authorization headers into logs or support messages.
 
 Run migrations and verification with:
 

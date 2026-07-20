@@ -9,6 +9,11 @@ import {
   listIntegrations,
   updateIntegration,
   type IntegrationRow,
+  qboBootstrap,
+  qboConnectUrl,
+  qboDisconnect,
+  qboStatus,
+  type QboConnectionStatus,
 } from "./api";
 import type { WorkspaceRow } from "../workspaces/api";
 
@@ -87,6 +92,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
   const [displayName, setDisplayName] = useState("");
   const [secretValue, setSecretValue] = useState("");
   const [secretUpdate, setSecretUpdate] = useState<Record<string, string>>({});
+  const [qboConnections, setQboConnections] = useState<QboConnectionStatus[]>([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -96,6 +102,10 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
       setIntegrations(result.data ?? []);
     } else {
       setError(result.text || "Failed to load integrations.");
+    }
+    if (workspaceId) {
+      const status = await qboStatus(workspaceId);
+      if (status.ok) setQboConnections(status.data ?? []);
     }
     setLoading(false);
   }, [workspaceId]);
@@ -151,6 +161,25 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
     await refresh();
   }
 
+  function connectQbo() {
+    if (!workspaceId) return setError("Select a workspace first.");
+    window.location.assign(qboConnectUrl(workspaceId, environment));
+  }
+
+  async function disconnectQbo(id: string) {
+    if (!workspaceId) return;
+    const result = await qboDisconnect(workspaceId, id);
+    if (!result.ok) setError(result.text || "Failed to disconnect QuickBooks.");
+    await refresh();
+  }
+
+  async function bootstrapQbo(id: string) {
+    if (!workspaceId) return;
+    const result = await qboBootstrap(workspaceId, id);
+    if (!result.ok) setError(result.text || "Failed to start bootstrap import.");
+    await refresh();
+  }
+
   return (
     <section className={stylex(styles.panel)}>
       <h2>Integrations</h2>
@@ -161,6 +190,62 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
         <br />
         QBO: <code>https://api.from-trees.com/ingest/qbo/webhook?env=production</code>
       </p>
+
+      <div className={stylex(styles.panelSub)}>
+        <h3>QuickBooks connection</h3>
+        <div className={stylex(styles.actions)}>
+          <select
+            value={environment}
+            onChange={(event) => setEnvironment(event.target.value as "sandbox" | "production")}
+          >
+            {ENVIRONMENTS.map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
+          <button type="button" onClick={connectQbo}>
+            Connect or reconnect QuickBooks
+          </button>
+        </div>
+        {qboConnections.length === 0 && (
+          <p className={stylex(styles.muted)}>QuickBooks is disconnected.</p>
+        )}
+        {qboConnections.map((connection) => (
+          <div key={connection.id} className={stylex(styles.panelSub)}>
+            <strong>{connection.connection_status}</strong> · {connection.environment} · realm{" "}
+            {connection.external_account_id}
+            <p>
+              Token health: {connection.token_health} · Last sync:{" "}
+              {connection.last_successful_sync_at ?? "Never"}
+            </p>
+            {connection.connection_error && (
+              <p className={stylex(styles.error)}>{connection.connection_error}</p>
+            )}
+            {connection.bootstrap_status && (
+              <p>
+                Bootstrap: {connection.bootstrap_status} · {connection.entity_type} at{" "}
+                {connection.start_position} · {connection.imported_count} imported
+                {connection.bootstrap_error ? ` · ${connection.bootstrap_error}` : ""}
+              </p>
+            )}
+            <div className={stylex(styles.actions)}>
+              <button
+                type="button"
+                onClick={() => bootstrapQbo(connection.id)}
+                disabled={!connection.is_active}
+              >
+                Start or resume bootstrap
+              </button>
+              <button
+                type="button"
+                className={stylex(styles.dangerButton)}
+                onClick={() => disconnectQbo(connection.id)}
+              >
+                Disconnect
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
 
       <div className={stylex(styles.panelSub)}>
         <h3>Create Integration</h3>

@@ -1,8 +1,9 @@
 import { badRequest, forbidden, json, methodNotAllowed, notFound, serverError } from "../lib/http";
 import type { Env } from "../lib/types";
-import { encryptSecrets } from "../lib/crypto/secrets";
+import { decryptSecrets, encryptSecrets } from "../lib/crypto/secrets";
 import { nowISO } from "../lib/utils";
 import { canAdminWorkspace, requireActor } from "../lib/access";
+import { handleQboIntegration } from "./qboIntegration";
 
 const PROVIDERS = ["shopify", "qbo"] as const;
 const ENVIRONMENTS = ["sandbox", "production"] as const;
@@ -19,6 +20,10 @@ export async function handleIntegrations(
     return actorResult.response;
   }
   const { actor } = actorResult;
+
+  if (segments[0] === "qbo" && segments.length === 2) {
+    return await handleQboIntegration(segments.slice(1), request, env, url, actor);
+  }
 
   if (segments.length === 0) {
     if (request.method === "GET") {
@@ -168,13 +173,26 @@ export async function handleIntegrations(
       }
       if (body.secrets) {
         const provider = (existing as { provider: string }).provider;
-        const secretsValid = validateSecrets(provider, body.secrets);
+        let mergedSecrets = body.secrets;
+        try {
+          const previous = JSON.parse(
+            await decryptSecrets(
+              env,
+              (existing as { secrets_key_id: string }).secrets_key_id,
+              (existing as { secrets_ciphertext: string }).secrets_ciphertext
+            )
+          ) as Record<string, unknown>;
+          mergedSecrets = { ...previous, ...body.secrets };
+        } catch {
+          return serverError("secrets_decrypt_failed");
+        }
+        const secretsValid = validateSecrets(provider, mergedSecrets);
         if (!secretsValid.ok) {
           return badRequest(secretsValid.error);
         }
         let encrypted;
         try {
-          encrypted = await encryptSecrets(env, JSON.stringify(body.secrets));
+          encrypted = await encryptSecrets(env, JSON.stringify(mergedSecrets));
         } catch (error) {
           const message = error instanceof Error ? error.message : "secrets_encrypt_failed";
           return serverError(message);

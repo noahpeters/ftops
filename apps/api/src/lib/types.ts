@@ -10,6 +10,10 @@ export type Env = {
   ALLOW_R2_FALLBACK_UPLOADS?: string;
   INTEGRATIONS_MASTER_KEY?: string;
   INTEGRATIONS_KEY_ID?: string;
+  QBO_CLIENT_ID?: string;
+  QBO_CLIENT_SECRET?: string;
+  QBO_OAUTH_STATE_SECRET?: string;
+  QBO_REDIRECT_URI?: string;
 };
 
 export type EventQueuePayload = {
