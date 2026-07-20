@@ -42,4 +42,30 @@ describe("ops api proxy allowlist", () => {
     expect(response.status).toBe(403);
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["GET", "/api/customers?workspaceId=ws_123"],
+    ["POST", "/api/customers"],
+    ["GET", "/api/customers/customer_1"],
+    ["PATCH", "/api/customers/customer_1"],
+    ["POST", "/api/customers/customer_1/contacts"],
+    ["PATCH", "/api/customers/customer_1/addresses/address_1"],
+    ["POST", "/api/customers/customer_1/activities"],
+    ["GET", "/api/customers/customer_1/estimates"],
+    ["GET", "/api/customers/customer_1/quickbooks/search?integrationId=qbo_1"],
+    ["POST", "/api/customers/customer_1/quickbooks/link"],
+  ])("forwards customer API %s %s", async (method, path) => {
+    const fetch = vi.fn(async () => new Response("ok"));
+    const env = { API: { fetch } } as unknown as ApiProxyEnv;
+    const response = await handleApiProxyRequest(
+      new Request(`https://ops.from-trees.com${path}`, {
+        method,
+        headers: { "cf-access-authenticated-user-email": "noah@from-trees.com" },
+      }),
+      env
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
 });
