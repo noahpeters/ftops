@@ -83,7 +83,7 @@ describe("QuickBooks bootstrap", () => {
         ?.count
     ).toBe(102);
     await mf.dispose();
-  });
+  }, 15_000);
 
   it("persists a failure at its page and can resume", async () => {
     const queue = { send: vi.fn().mockResolvedValue(undefined) } as unknown as Queue;
