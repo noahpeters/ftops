@@ -62,7 +62,12 @@ Terraform 1.5+ supports import blocks (see `imports.tf`). Run `terraform plan` o
 ```sh
 terraform import cloudflare_zero_trust_access_application.ops 125d8016e23830dcaf86de127ce90576/2ff0566a-c5d5-4b3a-871a-222203a7ef73
 terraform import cloudflare_zero_trust_access_policy.admin account/125d8016e23830dcaf86de127ce90576/26d82360-264b-4102-84ea-690dfe3411f8
+terraform import cloudflare_zero_trust_access_policy.public_legal account/125d8016e23830dcaf86de127ce90576/af136f20-30a8-4b01-b6e8-449da982ea92
 ```
+
+CI discovers and imports the exact-path legal applications before planning or applying. This is
+necessary while Terraform state is stored in the repository, because state changes from a failed
+Actions apply are not persisted.
 
 If you prefer to bootstrap with cf-terraforming, use it to generate Access apps and policies for the account and then reconcile with the files here. Example (adjust for your installed cf-terraforming version):
 

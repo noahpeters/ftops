@@ -41,6 +41,9 @@ jobs:
       - name: Terraform init
         run: terraform init -input=false
         working-directory: infra/cloudflare/zero-trust
+      - name: Import existing legal Access applications
+        run: node tools/import-existing-legal-apps.mjs
+        working-directory: infra/cloudflare/zero-trust
       - name: Terraform validate
         run: terraform validate
         working-directory: infra/cloudflare/zero-trust

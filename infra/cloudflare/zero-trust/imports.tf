@@ -7,3 +7,8 @@ import {
   to = cloudflare_zero_trust_access_policy.admin
   id = "account/125d8016e23830dcaf86de127ce90576/26d82360-264b-4102-84ea-690dfe3411f8"
 }
+
+import {
+  to = cloudflare_zero_trust_access_policy.public_legal
+  id = "account/125d8016e23830dcaf86de127ce90576/af136f20-30a8-4b01-b6e8-449da982ea92"
+}
