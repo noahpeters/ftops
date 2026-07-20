@@ -4,6 +4,7 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "worker.ts",
+    "worker.deploy.ts",
     "vite.config.ts",
     "react-router.config.ts",
     "vite.config.d.ts"

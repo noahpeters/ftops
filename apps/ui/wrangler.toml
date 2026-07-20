@@ -1,7 +1,7 @@
 name = "ftops-ui"
 compatibility_date = "2026-01-01"
 compatibility_flags = ["nodejs_compat"]
-main = "worker.ts"
+main = "worker.deploy.ts"
 
 routes = [
   { pattern = "ops.from-trees.com/*", zone_name = "from-trees.com" }
