@@ -4,6 +4,10 @@ This directory codifies Access configuration for:
 
 - ops.from-trees.com (Access application)
 - shared Access policy used by the app
+- exact-path public bypass applications for `/legal/privacy` and `/legal/eula`
+
+The legal bypass applications are intentionally limited to those two paths. The broader
+`ops.from-trees.com/*` application remains protected by the administrator email policy.
 
 ## Authenticate
 

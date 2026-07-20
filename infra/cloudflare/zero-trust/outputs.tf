@@ -7,3 +7,8 @@ output "admin_policy_id" {
   description = "Reusable Access policy ID shared across apps."
   value       = cloudflare_zero_trust_access_policy.admin.id
 }
+
+output "public_legal_policy_id" {
+  description = "Access bypass policy used only by the public legal pages."
+  value       = cloudflare_zero_trust_access_policy.public_legal.id
+}
