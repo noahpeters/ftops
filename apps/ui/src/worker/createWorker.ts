@@ -26,7 +26,7 @@ export function createWorker(build: ServerBuild) {
     async fetch(request: Request, env: Env, ctx: ExecutionContext) {
       try {
         if (new URL(request.url).pathname.startsWith("/api/")) {
-          return await handleApiProxyRequest(request, env);
+          return noStore(await handleApiProxyRequest(request, env));
         }
         const handlerFn = handler as unknown as (context: {
           request: Request;
@@ -36,23 +36,37 @@ export function createWorker(build: ServerBuild) {
           passThroughOnException: ExecutionContext["passThroughOnException"];
           next: () => Promise<Response>;
         }) => Promise<Response>;
-        return await handlerFn({
-          request,
-          env,
-          params: {},
-          waitUntil: ctx.waitUntil.bind(ctx),
-          passThroughOnException:
-            "passThroughOnException" in ctx
-              ? (ctx.passThroughOnException as () => void).bind(ctx)
-              : () => {},
-          next() {
-            return Promise.resolve(new Response("Not Found", { status: 404 }));
-          },
-        });
+        return noStore(
+          await handlerFn({
+            request,
+            env,
+            params: {},
+            waitUntil: ctx.waitUntil.bind(ctx),
+            passThroughOnException:
+              "passThroughOnException" in ctx
+                ? (ctx.passThroughOnException as () => void).bind(ctx)
+                : () => {},
+            next() {
+              return Promise.resolve(new Response("Not Found", { status: 404 }));
+            },
+          })
+        );
       } catch (error) {
         console.error(error);
-        return new Response("Internal Server Error", { status: 500 });
+        return noStore(new Response("Internal Server Error", { status: 500 }));
       }
     },
   };
+}
+
+function noStore(response: Response) {
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  headers.set("Pragma", "no-cache");
+  headers.set("Expires", "0");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }

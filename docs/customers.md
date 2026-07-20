@@ -6,6 +6,8 @@ Phase one makes ftops the system of record for customer relationships and operat
 
 ftops owns customer status, lead source, multiple contacts, internal notes, operational addresses, projects, tasks, and activity history. QuickBooks owns the accounting customer identity, formal billing data, estimates, invoices, payment state, balances, tax, discount, and financial totals. QuickBooks financial records are read-only mirrors in the ftops UI.
 
+Mirrored QuickBooks fields are stored so ftops can show accounting context beside operational work, associate estimates and invoices with customers and projects, remain useful during short QuickBooks outages, process webhook changes idempotently, and audit the last successfully fetched canonical state. Document numbers, dates, status, currency, subtotal, tax, discount, total, invoice balance, `SyncToken`, external update time, and the raw canonical payload are retained for those purposes. They are never treated as ftops-owned editable values; QuickBooks remains authoritative and a refresh replaces the mirror.
+
 Customer records do not require a QuickBooks link. Their lifecycle is `lead`, `prospect`, `active`, `past`, then `archived`; archiving preserves history.
 
 ## Linking and synchronization
@@ -27,6 +29,8 @@ Mappings use `linked`, `pending_push`, `pending_refresh`, `conflict`, and `error
 ## Configuration and local tests
 
 QuickBooks integration secrets remain encrypted using `INTEGRATIONS_MASTER_KEY` and `INTEGRATIONS_KEY_ID`. Company access and refresh tokens are stored only in each encrypted integration record; they are not static Worker secrets and are never returned to the UI or logs. `apiBaseUrl` may be set to a mock server in tests; otherwise sandbox/production Intuit URLs are selected from the integration environment. `minorVersion` is optional.
+
+The QuickBooks realm ID is also stored inside the AES-GCM-encrypted integration secret. D1 stores a SHA-256 realm hash for webhook routing and a non-reversible abbreviated label for display. Legacy integrations retain plaintext realm IDs until their next successful OAuth reconnection, which migrates them to encrypted/hash storage.
 
 ### Intuit and Cloudflare setup
 
@@ -66,6 +70,10 @@ Bootstrap jobs persist their current entity type, `STARTPOSITION`, imported coun
 Before a QuickBooks request, ftops refreshes an access token when it is expired or within five minutes of expiration. A 401 forces one refresh and one retry. Intuit refresh-token rotation is always persisted. A D1 token-version compare prevents a slower concurrent refresh from overwriting a newer token. Revoked or expired authorization marks the integration `reconnect_required`; an administrator must reconnect through OAuth.
 
 Troubleshooting information is limited to sanitized state such as `quickbooks_authorization_revoked`, token health, and bootstrap position. Never paste authorization codes, tokens, client secrets, decrypted integration JSON, or raw Authorization headers into logs or support messages.
+
+Authenticated and OAuth responses use `Cache-Control: no-store` and related cache-prevention headers. Integration-changing requests require a trusted `Origin` in addition to workspace-administrator authorization; OAuth callback state supplies one-time CSRF protection for the authorization response. Redirect targets are checked against fixed Intuit and ftops URL allowlists.
+
+ftops does not create an application session cookie. Production authentication is performed by Cloudflare Access, which owns the `CF_Authorization` cookie and must be configured with `Secure`, `HttpOnly`, and an appropriate `SameSite` attribute in Zero Trust. Tests assert that ftops API and OAuth responses do not emit `Set-Cookie`. Cookie attributes must also be confirmed against the deployed Access application because they are outside this repository's runtime control.
 
 Run migrations and verification with:
 

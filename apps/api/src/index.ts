@@ -5,35 +5,45 @@ import { processEventMessage } from "./processors/eventProcessor";
 import { processWebhookEnvelope } from "./processors/webhookProcessor";
 import type { IngestQueueMessage, WebhookEnvelope } from "@ftops/webhooks";
 import { processIngestQueueMessage } from "./processors/ingestQueue";
+import { noStore, sanitizeExternalError } from "./lib/security";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === "OPTIONS") {
-      return corsPreflight(request);
+      return noStore(corsPreflight(request));
     }
 
     const cors = getCorsContext(request);
     if (!cors.allowed) {
-      return applyCorsHeaders(
-        new Response(JSON.stringify({ error: "origin_not_allowed" }), {
-          status: 403,
-          headers: { "content-type": "application/json" },
-        }),
-        cors.headers
+      return noStore(
+        applyCorsHeaders(
+          new Response(JSON.stringify({ error: "origin_not_allowed" }), {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          }),
+          cors.headers
+        )
       );
     }
 
     try {
       const response = await route(request, env, ctx);
-      return applyCorsHeaders(response, cors.headers);
+      return noStore(applyCorsHeaders(response, cors.headers));
     } catch (error) {
-      console.error(error);
-      return applyCorsHeaders(
-        new Response(JSON.stringify({ error: "internal_error" }), {
-          status: 500,
-          headers: { "content-type": "application/json" },
-        }),
-        cors.headers
+      console.error(
+        JSON.stringify({
+          event: "api_request_failed",
+          error: sanitizeExternalError(error, "internal_error"),
+        })
+      );
+      return noStore(
+        applyCorsHeaders(
+          new Response(JSON.stringify({ error: "internal_error" }), {
+            status: 500,
+            headers: { "content-type": "application/json" },
+          }),
+          cors.headers
+        )
       );
     }
   },

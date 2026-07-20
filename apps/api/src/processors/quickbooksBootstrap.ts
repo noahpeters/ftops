@@ -2,6 +2,7 @@ import type { Env, EventQueuePayload } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { getQboIntegration, queryQboPage, upsertQboEntity } from "../services/quickbooks";
 import { bootstrapMessage } from "../routes/qboIntegration";
+import { sanitizeExternalError } from "../lib/security";
 
 const TYPES = ["customer", "estimate", "invoice"] as const;
 const PAGE_SIZE = 100;
@@ -84,6 +85,5 @@ export async function processQuickbooksBootstrap(env: Env, message: EventQueuePa
   }
 }
 function sanitize(error: unknown) {
-  const value = error instanceof Error ? error.message : "quickbooks_bootstrap_failed";
-  return value.slice(0, 200);
+  return sanitizeExternalError(error, "quickbooks_bootstrap_failed");
 }

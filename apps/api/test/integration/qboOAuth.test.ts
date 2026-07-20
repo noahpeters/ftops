@@ -26,6 +26,9 @@ describe("QuickBooks OAuth", () => {
       "/integrations/qbo/connect?workspaceId=default&environment=production"
     );
     expect(response.status).toBe(302);
+    expect(await response.text()).toBe("");
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.get("set-cookie")).toBeNull();
     const location = new URL(response.headers.get("location")!);
     expect(location.origin + location.pathname).toBe("https://appcenter.intuit.com/connect/oauth2");
     expect(location.searchParams.get("scope")).toBe("com.intuit.quickbooks.accounting");
@@ -99,29 +102,82 @@ describe("QuickBooks OAuth", () => {
         `/integrations/qbo/callback?code=single-use-code&realmId=realm-1&state=${encodeURIComponent(state)}`
       );
       expect(callback.status).toBe(302);
+      expect(await callback.text()).toBe("");
+      expect(callback.headers.get("cache-control")).toContain("no-store");
+      expect(callback.headers.get("set-cookie")).toBeNull();
       expect(callback.headers.get("location")).toContain("qbo=connected");
     }
     const rows = await db
       .prepare(
-        `SELECT id,token_version,secrets_key_id,secrets_ciphertext FROM integrations WHERE provider='qbo'`
+        `SELECT id,token_version,external_account_id,external_account_hash,secrets_key_id,secrets_ciphertext FROM integrations WHERE provider='qbo'`
       )
       .all<{
         id: string;
         token_version: number;
+        external_account_id: string;
+        external_account_hash: string;
         secrets_key_id: string;
         secrets_ciphertext: string;
       }>();
     expect(rows.results).toHaveLength(1);
     expect(rows.results[0].token_version).toBe(1);
+    expect(rows.results[0].external_account_id).not.toContain("realm-1");
+    expect(rows.results[0].external_account_hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(rows.results[0].secrets_ciphertext).not.toContain("realm-1");
     const secrets = JSON.parse(
       await decryptSecrets(env, rows.results[0].secrets_key_id, rows.results[0].secrets_ciphertext)
     );
-    expect(secrets).toMatchObject({ accessToken: "access-2", refreshToken: "refresh-2" });
+    expect(secrets).toMatchObject({
+      accessToken: "access-2",
+      refreshToken: "refresh-2",
+      realmId: "realm-1",
+    });
     expect(
       JSON.stringify(
         await (await request(env, "/integrations/qbo/status?workspaceId=default")).json()
       )
     ).not.toContain("access-2");
+    await mf.dispose();
+  });
+
+  it("rejects untrusted redirects, CSRF attempts, unsupported methods, and cross-workspace IDs", async () => {
+    const context = await createTestEnv({
+      env: { ...config, QBO_REDIRECT_URI: "https://evil.example/callback" },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    await db
+      .prepare(
+        `INSERT INTO users (workspace_id,user_id,name,email,workspace_admin,system_admin) VALUES ('default','security-user','Security User','unknown@local',1,0)`
+      )
+      .run();
+    const redirect = await request(env, "/integrations/qbo/connect?workspaceId=default");
+    expect(redirect.status).toBe(503);
+    expect(await redirect.json()).toEqual({ error: "redirect_not_allowed" });
+    expect(
+      (await request(env, "/integrations/qbo/connect?workspaceId=default", { method: "POST" }))
+        .status
+    ).toBe(405);
+
+    const encrypted = await encryptSecrets(env, JSON.stringify({ realmId: "other-realm" }));
+    await db
+      .prepare(
+        `INSERT INTO integrations (id,workspace_id,provider,environment,external_account_id,secrets_key_id,secrets_ciphertext,is_active,created_at,updated_at) VALUES ('other-qbo','ws_unknown','qbo','production','masked',?,?,1,datetime('now'),datetime('now'))`
+      )
+      .bind(encrypted.keyId, encrypted.ciphertext)
+      .run();
+    const csrf = await request(env, "/integrations/qbo/disconnect", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: "default", integrationId: "other-qbo" }),
+    });
+    expect(csrf.status).toBe(403);
+    expect(await csrf.json()).toEqual({ error: "csrf_origin_invalid" });
+    const idor = await request(env, "/integrations/qbo/disconnect", {
+      method: "POST",
+      headers: { Origin: "https://ops.from-trees.com", "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId: "default", integrationId: "other-qbo" }),
+    });
+    expect(idor.status).toBe(404);
     await mf.dispose();
   });
 

@@ -30,6 +30,9 @@ describe("CORS for integrations", () => {
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
     expect(response.headers.get("Access-Control-Allow-Credentials")).toBe("true");
     expect(response.headers.get("Vary")).toBe("Origin");
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(response.headers.get("Pragma")).toBe("no-cache");
+    expect(response.headers.get("Set-Cookie")).toBeNull();
 
     await mf.dispose();
   });
@@ -55,6 +58,8 @@ describe("CORS for integrations", () => {
     expect([200, 400, 500]).toContain(response.status);
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
     expect(response.headers.get("Vary")).toBe("Origin");
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(response.headers.get("Set-Cookie")).toBeNull();
 
     await mf.dispose();
   });

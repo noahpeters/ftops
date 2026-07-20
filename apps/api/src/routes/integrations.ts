@@ -4,6 +4,7 @@ import { decryptSecrets, encryptSecrets } from "../lib/crypto/secrets";
 import { nowISO } from "../lib/utils";
 import { canAdminWorkspace, requireActor } from "../lib/access";
 import { handleQboIntegration } from "./qboIntegration";
+import { isTrustedMutationOrigin } from "../lib/security";
 
 const PROVIDERS = ["shopify", "qbo"] as const;
 const ENVIRONMENTS = ["sandbox", "production"] as const;
@@ -23,6 +24,10 @@ export async function handleIntegrations(
 
   if (segments[0] === "qbo" && segments.length === 2) {
     return await handleQboIntegration(segments.slice(1), request, env, url, actor);
+  }
+
+  if (["POST", "PATCH", "DELETE"].includes(request.method) && !isTrustedMutationOrigin(request)) {
+    return forbidden("csrf_origin_invalid");
   }
 
   if (segments.length === 0) {

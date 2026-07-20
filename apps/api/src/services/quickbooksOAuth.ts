@@ -1,11 +1,17 @@
 import { decryptSecrets, encryptSecrets } from "../lib/crypto/secrets";
 import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
+import { safeRedirect } from "../lib/security";
 
 export const QBO_REDIRECT_URI = "https://api.from-trees.com/integrations/qbo/callback";
 const AUTHORIZE_URL = "https://appcenter.intuit.com/connect/oauth2";
 const TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
 const STATE_TTL_MS = 10 * 60 * 1000;
+const ALLOWED_INTUIT_REDIRECTS = new Set([AUTHORIZE_URL]);
+export const ALLOWED_CALLBACK_REDIRECTS = new Set([
+  QBO_REDIRECT_URI,
+  "http://localhost:8787/integrations/qbo/callback",
+]);
 
 export type QboSecrets = {
   webhookVerifierToken?: string;
@@ -15,6 +21,7 @@ export type QboSecrets = {
   refreshTokenExpiresAt?: string;
   apiBaseUrl?: string;
   minorVersion?: string;
+  realmId?: string;
 };
 
 type TokenPayload = {
@@ -92,9 +99,13 @@ export function buildAuthorizationUrl(env: Env, state: string) {
   url.searchParams.set("client_id", env.QBO_CLIENT_ID!);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "com.intuit.quickbooks.accounting");
-  url.searchParams.set("redirect_uri", env.QBO_REDIRECT_URI || QBO_REDIRECT_URI);
+  url.searchParams.set("redirect_uri", getRedirectUri(env));
   url.searchParams.set("state", state);
   return url.toString();
+}
+
+export function authorizationRedirect(env: Env, state: string) {
+  return safeRedirect(buildAuthorizationUrl(env, state), ALLOWED_INTUIT_REDIRECTS);
 }
 
 export async function exchangeAuthorizationCode(env: Env, code: string) {
@@ -103,7 +114,7 @@ export async function exchangeAuthorizationCode(env: Env, code: string) {
     new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: env.QBO_REDIRECT_URI || QBO_REDIRECT_URI,
+      redirect_uri: getRedirectUri(env),
     })
   );
 }
@@ -143,11 +154,12 @@ export async function saveOAuthIntegration(
     tokens: TokenPayload;
   }
 ) {
+  const realmHash = await sha256Hex(input.realmId);
   const existing = await env.DB.prepare(
     `SELECT id, workspace_id, secrets_key_id, secrets_ciphertext FROM integrations
-     WHERE provider='qbo' AND environment=? AND external_account_id=?`
+     WHERE provider='qbo' AND environment=? AND (external_account_hash=? OR external_account_id=?)`
   )
-    .bind(input.environment, input.realmId)
+    .bind(input.environment, realmHash, input.realmId)
     .first<{
       id: string;
       workspace_id: string;
@@ -163,29 +175,37 @@ export async function saveOAuthIntegration(
     ) as QboSecrets;
   const encrypted = await encryptSecrets(
     env,
-    JSON.stringify(tokensWithExpiry(input.tokens, previous))
+    JSON.stringify({ ...tokensWithExpiry(input.tokens, previous), realmId: input.realmId })
   );
   const now = nowISO();
   const id = existing?.id || crypto.randomUUID();
   if (existing)
     await env.DB.prepare(
-      `UPDATE integrations SET secrets_key_id=?,secrets_ciphertext=?,is_active=1,connection_status='connected',
+      `UPDATE integrations SET external_account_id=?,external_account_hash=?,secrets_key_id=?,secrets_ciphertext=?,is_active=1,connection_status='connected',
      connection_error=NULL,token_version=token_version+1,updated_at=? WHERE id=?`
     )
-      .bind(encrypted.keyId, encrypted.ciphertext, now, id)
+      .bind(
+        `qbo_${realmHash.slice(0, 16)}`,
+        realmHash,
+        encrypted.keyId,
+        encrypted.ciphertext,
+        now,
+        id
+      )
       .run();
   else
     await env.DB.prepare(
-      `INSERT INTO integrations (id,workspace_id,provider,environment,external_account_id,display_name,
+      `INSERT INTO integrations (id,workspace_id,provider,environment,external_account_id,external_account_hash,display_name,
      secrets_key_id,secrets_ciphertext,is_active,connection_status,created_at,updated_at)
-     VALUES (?,?,'qbo',?,?,?, ?,?,1,'connected',?,?)`
+     VALUES (?,?,'qbo',?,?,?,?, ?,?,1,'connected',?,?)`
     )
       .bind(
         id,
         input.workspaceId,
         input.environment,
-        input.realmId,
-        `QuickBooks ${input.realmId}`,
+        `qbo_${realmHash.slice(0, 16)}`,
+        realmHash,
+        "QuickBooks Online",
         encrypted.keyId,
         encrypted.ciphertext,
         now,
@@ -225,10 +245,23 @@ function requireOAuthConfig(env: Env) {
   if (!env.QBO_CLIENT_ID || !env.QBO_CLIENT_SECRET || !env.QBO_OAUTH_STATE_SECRET)
     throw new Error("quickbooks_oauth_not_configured");
 }
+function getRedirectUri(env: Env) {
+  const value = env.QBO_REDIRECT_URI || QBO_REDIRECT_URI;
+  if (!ALLOWED_CALLBACK_REDIRECTS.has(value)) throw new Error("redirect_not_allowed");
+  return value;
+}
 async function sha256(value: string) {
   return base64Url(
     new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))
   );
+}
+export async function sha256Hex(value: string) {
+  const bytes = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))
+  );
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 async function hmac(secret: string, value: string) {
   const key = await crypto.subtle.importKey(

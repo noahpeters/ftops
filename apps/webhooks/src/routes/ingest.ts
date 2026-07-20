@@ -223,7 +223,6 @@ async function handleQboWebhook(env: Env, request: Request, url: URL) {
       source: "quickbooks",
       received_at: message.received_at,
       verified,
-      realmId: realmId ?? undefined,
       error: verifyError ?? undefined,
       id: message.id,
     }),

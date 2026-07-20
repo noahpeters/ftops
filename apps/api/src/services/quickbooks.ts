@@ -2,6 +2,7 @@ import { decryptSecrets, encryptSecrets } from "../lib/crypto/secrets";
 import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { exchangeRefreshToken, tokensWithExpiry, type QboSecrets } from "./quickbooksOAuth";
+import { sanitizeExternalError } from "../lib/security";
 
 type Integration = {
   id: string;
@@ -52,8 +53,9 @@ async function qboRequest(
       ? "https://sandbox-quickbooks.api.intuit.com"
       : "https://quickbooks.api.intuit.com";
   const base = (secrets.apiBaseUrl || defaultBase).replace(/\/$/, "");
+  const realmId = secrets.realmId || integration.external_account_id;
   const separator = path.includes("?") ? "&" : "?";
-  const url = `${base}/v3/company/${encodeURIComponent(integration.external_account_id)}${path}${separator}minorversion=${encodeURIComponent(secrets.minorVersion || "75")}`;
+  const url = `${base}/v3/company/${encodeURIComponent(realmId)}${path}${separator}minorversion=${encodeURIComponent(secrets.minorVersion || "75")}`;
   let response = await authorizedFetch(url, init, secrets.accessToken!);
   if (response.status === 401) {
     secrets = await ensureAccessToken(env, integration, true);
@@ -129,7 +131,7 @@ export async function ensureAccessToken(
         await decryptSecrets(env, latest.secrets_key_id, latest.secrets_ciphertext)
       ) as QboSecrets;
     }
-    const message = error instanceof Error ? error.message : "quickbooks_refresh_failed";
+    const message = sanitizeExternalError(error, "quickbooks_refresh_failed");
     await env.DB.prepare(
       `UPDATE integrations SET connection_status='reconnect_required',connection_error=?,updated_at=? WHERE id=?`
     )
@@ -469,7 +471,7 @@ export async function persistSyncError(
   externalId: string,
   error: unknown
 ) {
-  const message = error instanceof Error ? error.message : "quickbooks_sync_failed";
+  const message = sanitizeExternalError(error, "quickbooks_sync_failed");
   const status = (error as { status?: number }).status === 409 ? "conflict" : "error";
   const now = nowISO();
   await env.DB.prepare(
@@ -483,7 +485,6 @@ export async function persistSyncError(
       event: "quickbooks_sync_error",
       integrationId: integration.id,
       entityType,
-      externalId,
       message,
     })
   );

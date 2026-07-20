@@ -10,6 +10,7 @@ import {
   syncQboEntity,
   upsertQboEntity,
 } from "../services/quickbooks";
+import { sanitizeExternalError } from "../lib/security";
 
 const STATUSES = ["lead", "prospect", "active", "past", "archived"];
 const ADDRESS_TYPES = ["billing", "shipping", "project_site", "other"];
@@ -457,7 +458,7 @@ async function handleQuickbooks(
     const status = (error as { status?: number }).status === 409 ? 409 : 502;
     return json(
       {
-        error: error instanceof Error ? error.message : "quickbooks_request_failed",
+        error: sanitizeExternalError(error, "quickbooks_request_failed"),
         syncStatus: status === 409 ? "conflict" : "error",
       },
       status

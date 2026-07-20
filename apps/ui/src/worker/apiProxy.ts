@@ -13,6 +13,7 @@ type AllowlistEntry = {
 
 const ACCESS_HEADER_KEYS = [
   "cf-access-authenticated-user-email",
+  "origin",
   "x-auth-request-email",
   "x-debug-user-email",
 ];

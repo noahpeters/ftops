@@ -6,10 +6,15 @@ import type { ExecutionContext } from "@cloudflare/workers-types";
 const MASTER_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
 async function requestJson(env: unknown, method: string, path: string, body?: unknown) {
+  const headers = new Headers(body ? { "content-type": "application/json" } : undefined);
+  if (["POST", "PATCH", "DELETE"].includes(method)) {
+    headers.set("origin", "https://ops.from-trees.com");
+  }
+
   return route(
     new Request(`http://localhost${path}`, {
       method,
-      headers: body ? { "content-type": "application/json" } : undefined,
+      headers,
       body: body ? JSON.stringify(body) : undefined,
     }),
     env as never,
@@ -83,13 +88,14 @@ describe("workspaces integration", () => {
     });
     const workspace = (await workspaceResponse.json()) as { id: string };
 
-    await requestJson(env, "POST", "/integrations", {
+    const integrationResponse = await requestJson(env, "POST", "/integrations", {
       workspaceId: workspace.id,
       provider: "shopify",
       environment: "production",
       externalAccountId: "gamma.myshopify.com",
       secrets: { webhookSecret: "shp" },
     });
+    expect(integrationResponse.status).toBe(201);
 
     const response = await requestJson(env, "DELETE", `/workspaces/${workspace.id}`);
     expect(response.status).toBe(409);

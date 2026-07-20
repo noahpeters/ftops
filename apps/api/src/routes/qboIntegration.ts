@@ -3,8 +3,9 @@ import { badRequest, forbidden, json, methodNotAllowed, notFound } from "../lib/
 import { decryptSecrets, encryptSecrets } from "../lib/crypto/secrets";
 import type { Env, EventQueuePayload } from "../lib/types";
 import { nowISO } from "../lib/utils";
+import { isTrustedMutationOrigin, safeRedirect, sanitizeExternalError } from "../lib/security";
 import {
-  buildAuthorizationUrl,
+  authorizationRedirect,
   consumeOAuthState,
   createOAuthState,
   exchangeAuthorizationCode,
@@ -13,6 +14,7 @@ import {
 } from "../services/quickbooksOAuth";
 
 const UI_STATUS_URL = "https://ops.from-trees.com/integrations";
+const ALLOWED_UI_REDIRECTS = new Set([UI_STATUS_URL]);
 
 export async function handleQboIntegration(
   segments: string[],
@@ -22,7 +24,17 @@ export async function handleQboIntegration(
   actor: Actor
 ) {
   const action = segments[0];
-  if (action === "connect" && request.method === "GET") {
+  const expectedMethod =
+    action === "connect" || action === "callback" || action === "status"
+      ? "GET"
+      : action === "disconnect" || action === "bootstrap"
+        ? "POST"
+        : null;
+  if (!expectedMethod) return notFound("Route not found");
+  if (request.method !== expectedMethod) return methodNotAllowed([expectedMethod]);
+  if (expectedMethod === "POST" && !isTrustedMutationOrigin(request))
+    return forbidden("csrf_origin_invalid");
+  if (action === "connect") {
     const workspaceId = url.searchParams.get("workspaceId")?.trim();
     const environment = url.searchParams.get("environment")?.trim() || "production";
     if (!workspaceId) return badRequest("missing_workspace_id");
@@ -35,12 +47,12 @@ export async function handleQboIntegration(
         requestedBy: actor.email,
         environment,
       });
-      return Response.redirect(buildAuthorizationUrl(env, state), 302);
+      return authorizationRedirect(env, state);
     } catch (error) {
       return json({ error: sanitize(error) }, 503);
     }
   }
-  if (action === "callback" && request.method === "GET") {
+  if (action === "callback") {
     const clean = new URL(UI_STATUS_URL);
     const state = url.searchParams.get("state") || "";
     try {
@@ -63,7 +75,7 @@ export async function handleQboIntegration(
       clean.searchParams.set("qbo", "error");
       clean.searchParams.set("reason", sanitize(error));
     }
-    return Response.redirect(clean.toString(), 302);
+    return safeRedirect(clean.toString(), ALLOWED_UI_REDIRECTS);
   }
   const workspaceId = (
     request.method === "GET"
@@ -72,9 +84,8 @@ export async function handleQboIntegration(
   )?.trim();
   if (!workspaceId) return badRequest("missing_workspace_id");
   if (!canAdminWorkspace(actor, workspaceId)) return forbidden("forbidden");
-  if (action === "status" && request.method === "GET")
-    return json(await connectionStatus(env, workspaceId));
-  if (action === "disconnect" && request.method === "POST") {
+  if (action === "status") return json(await connectionStatus(env, workspaceId));
+  if (action === "disconnect") {
     const body = await readBody(request);
     const integration = await ownedIntegration(env, workspaceId, string(body.integrationId));
     if (!integration) return notFound("QuickBooks integration not found");
@@ -85,6 +96,7 @@ export async function handleQboIntegration(
       webhookVerifierToken: secrets.webhookVerifierToken,
       apiBaseUrl: secrets.apiBaseUrl,
       minorVersion: secrets.minorVersion,
+      realmId: secrets.realmId,
     };
     const encrypted = await encryptSecrets(env, JSON.stringify(secrets));
     await env.DB.prepare(
@@ -94,7 +106,7 @@ export async function handleQboIntegration(
       .run();
     return json({ disconnected: true });
   }
-  if (action === "bootstrap" && request.method === "POST") {
+  if (action === "bootstrap") {
     const body = await readBody(request);
     const integration = await ownedIntegration(env, workspaceId, string(body.integrationId));
     if (!integration || !integration.is_active)
@@ -196,6 +208,5 @@ function string(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 function sanitize(error: unknown) {
-  const value = error instanceof Error ? error.message : "quickbooks_oauth_failed";
-  return /^[-a-z0-9_]+$/i.test(value) ? value : "quickbooks_oauth_failed";
+  return sanitizeExternalError(error, "quickbooks_oauth_failed");
 }

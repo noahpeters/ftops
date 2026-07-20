@@ -32,17 +32,21 @@ const styles = stylex.create({
 export function LegalDocument({
   title,
   effectiveDate,
+  effectiveDateLabel,
   children,
 }: {
   title: string;
   effectiveDate: string;
+  effectiveDateLabel?: string;
   children: ReactNode;
 }): JSX.Element {
   return (
     <article className={stylex(styles.article)}>
       <header>
         <h1 className={stylex(styles.title)}>{title}</h1>
-        <p className={stylex(styles.metadata)}>Effective Date: {effectiveDate}</p>
+        <p className={stylex(styles.metadata)}>
+          {effectiveDateLabel ?? "Effective Date:"} {effectiveDate}
+        </p>
       </header>
       <div className={stylex(styles.body)}>{children}</div>
       <p className={stylex(styles.publisher)}>Published by from trees, LLC</p>
