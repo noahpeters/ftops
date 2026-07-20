@@ -220,11 +220,14 @@ export function CustomersPanel({
                 <h4>Activity</h4>
                 <button onClick={note}>Add note</button>
                 {detail.activities.map((x) => (
-                  <p key={String(x.id)}>
-                    <b>{String(x.subject)}</b>{" "}
-                    <span className={stylex(styles.muted)}>{String(x.occurred_at)}</span>
+                  <p key={x.id}>
+                    <b>{x.subject}</b>{" "}
+                    <span className={stylex(styles.muted)}>
+                      {x.created_by ? `by ${x.created_by} · ` : ""}
+                      {x.occurred_at}
+                    </span>
                     <br />
-                    {String(x.body || "")}
+                    {x.body || ""}
                   </p>
                 ))}
               </div>

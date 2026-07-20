@@ -32,6 +32,21 @@ describe("customers API", () => {
     expect((await list.json()) as unknown[]).toHaveLength(1);
     const loaded = await request(env, `/customers/${detail.customer.id}`);
     expect(loaded.status).toBe(200);
+
+    const note = await request(env, `/customers/${detail.customer.id}/activities`, {
+      method: "POST",
+      headers: { "X-Debug-User-Email": "author@example.com" },
+      body: JSON.stringify({ subject: "Note", body: "Called about the estimate." }),
+    });
+    expect(note.status).toBe(201);
+    const activities = (await note.json()) as Array<{
+      body: string | null;
+      created_by: string | null;
+    }>;
+    expect(activities[0]).toMatchObject({
+      body: "Called about the estimate.",
+      created_by: "author@example.com",
+    });
     await mf.dispose();
   });
 

@@ -23,9 +23,18 @@ export type CustomerDetail = {
   };
   contacts: Array<Record<string, unknown>>;
   addresses: Array<Record<string, unknown>>;
-  activities: Array<Record<string, unknown>>;
+  activities: CustomerActivity[];
   estimates: Array<Record<string, unknown>>;
   invoices: Array<Record<string, unknown>>;
+};
+
+export type CustomerActivity = {
+  id: string;
+  activity_type: string;
+  subject: string;
+  body: string | null;
+  occurred_at: string;
+  created_by: string | null;
 };
 
 export function listCustomers(
