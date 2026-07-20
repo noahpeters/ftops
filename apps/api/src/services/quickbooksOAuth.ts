@@ -3,7 +3,7 @@ import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { safeRedirect } from "../lib/security";
 
-export const QBO_REDIRECT_URI = "https://api.from-trees.com/integrations/qbo/callback";
+export const QBO_REDIRECT_URI = "https://ops.from-trees.com/api/integrations/qbo/callback";
 const AUTHORIZE_URL = "https://appcenter.intuit.com/connect/oauth2";
 const TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
 const STATE_TTL_MS = 10 * 60 * 1000;

@@ -42,7 +42,7 @@ invocation_logs = true
 
 [vars]
 INTEGRATIONS_KEY_ID = "v1"
-QBO_REDIRECT_URI = "https://api.from-trees.com/integrations/qbo/callback"
+QBO_REDIRECT_URI = "https://ops.from-trees.com/api/integrations/qbo/callback"
 # Set true for dev-only direct upload fallback (no presigned URLs).
 ALLOW_R2_FALLBACK_UPLOADS = "false"
 R2_TASK_FILES_BUCKET_NAME = "ftops-task-files"

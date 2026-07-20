@@ -37,7 +37,7 @@ The QuickBooks realm ID is also stored inside the AES-GCM-encrypted integration 
 Configure the Intuit Developer Portal application with this exact redirect URI:
 
 ```text
-https://api.from-trees.com/integrations/qbo/callback
+https://ops.from-trees.com/api/integrations/qbo/callback
 ```
 
 The only requested OAuth scope is `com.intuit.quickbooks.accounting`. Configure the QuickBooks webhook endpoint as:

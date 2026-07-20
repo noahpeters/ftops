@@ -33,7 +33,7 @@ describe("QuickBooks OAuth", () => {
     expect(location.origin + location.pathname).toBe("https://appcenter.intuit.com/connect/oauth2");
     expect(location.searchParams.get("scope")).toBe("com.intuit.quickbooks.accounting");
     expect(location.searchParams.get("redirect_uri")).toBe(
-      "https://api.from-trees.com/integrations/qbo/callback"
+      "https://ops.from-trees.com/api/integrations/qbo/callback"
     );
     await db
       .prepare(

@@ -1,4 +1,4 @@
-import { buildUrl, fetchJson, getApiBase } from "../../lib/api";
+import { buildUrl, fetchJson } from "../../lib/api";
 
 export type IntegrationRow = {
   id: string;
@@ -76,11 +76,7 @@ export async function qboStatus(workspaceId: string) {
   );
 }
 export function qboConnectUrl(workspaceId: string, environment: string) {
-  const path = `/integrations/qbo/connect?${new URLSearchParams({ workspaceId, environment })}`;
-  const base = getApiBase();
-  return base === "/api"
-    ? `https://api.from-trees.com${path}`
-    : `${base.replace(/\/$/, "")}${path}`;
+  return buildUrl("/integrations/qbo/connect", { workspaceId, environment });
 }
 export async function qboDisconnect(workspaceId: string, integrationId: string) {
   return await fetchJson(buildUrl("/integrations/qbo/disconnect"), {
