@@ -13,6 +13,7 @@
     "react-router.config.ts",
     "vite.config.d.ts",
     "worker.ts",
-    "src/worker/**/*.ts"
+    "src/worker/**/*.ts",
+    "src/types/**/*.d.ts"
   ]
 }

@@ -1,4 +1,5 @@
 import { createRequestHandler } from "@react-router/cloudflare";
+import * as build from "virtual:react-router/server-build";
 import { handleApiProxyRequest } from "./src/worker/apiProxy";
 import type { ExecutionContext, IncomingRequestCfProperties } from "@cloudflare/workers-types";
 
@@ -7,37 +8,18 @@ type Env = {
   API?: { fetch: typeof fetch };
 };
 
-let handlerPromise: Promise<ReturnType<typeof createRequestHandler>> | null = null;
-
-async function loadBuild() {
-  const virtualSpecifier = ["virtual:react-router/server-build"].join("");
-  try {
-    return await import(virtualSpecifier);
-  } catch (error) {
-    console.warn("Falling back to build/server index.js for server build.", error);
-    return await import("./build/server/index.js");
-  }
-}
-
-async function getHandler() {
-  if (!handlerPromise) {
-    handlerPromise = loadBuild().then((build) =>
-      createRequestHandler({
-        build,
-        getLoadContext({ request, context }) {
-          const cf = (request as Request & { cf?: IncomingRequestCfProperties }).cf ?? {};
-          return {
-            cloudflare: {
-              ...context.cloudflare,
-              cf,
-            },
-          };
-        },
-      })
-    );
-  }
-  return await handlerPromise;
-}
+const handler = createRequestHandler({
+  build,
+  getLoadContext({ request, context }) {
+    const cf = (request as Request & { cf?: IncomingRequestCfProperties }).cf ?? {};
+    return {
+      cloudflare: {
+        ...context.cloudflare,
+        cf,
+      },
+    };
+  },
+});
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
@@ -45,7 +27,6 @@ export default {
       if (new URL(request.url).pathname.startsWith("/api/")) {
         return await handleApiProxyRequest(request, env);
       }
-      const handler = await getHandler();
       const handlerFn = handler as unknown as (context: {
         request: Request;
         env: Env;
