@@ -1,6 +1,10 @@
 import { type RouteConfig, index, route } from "@react-router/dev/routes";
 
 export default [
+  route("legal", "routes/legal-layout.tsx", [
+    route("privacy", "routes/legal-privacy.tsx"),
+    route("eula", "routes/legal-eula.tsx"),
+  ]),
   route("", "routes/root.tsx", [
     index("routes/index.tsx"),
     route("plan-preview", "routes/plan-preview.tsx"),

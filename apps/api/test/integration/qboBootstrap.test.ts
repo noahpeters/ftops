@@ -30,7 +30,7 @@ describe("QuickBooks bootstrap", () => {
       vi.fn(async (url) => {
         const query = decodeURIComponent(new URL(String(url)).searchParams.get("query") || "");
         let payload: unknown = { QueryResponse: {} };
-        if (query.includes("from Customer") && query.includes("startposition 1"))
+        if (query.includes("from Customer") && query.includes("startposition 1 maxresults"))
           payload = {
             QueryResponse: {
               Customer: Array.from({ length: 100 }, (_, i) => ({
