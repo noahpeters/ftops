@@ -30,7 +30,36 @@ import {
 
 const styles = stylex.create({
   panel: { padding: "24px 32px" },
-  toolbar: { display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" },
+  titleRow: { display: "flex", gap: "12px", alignItems: "center", marginBottom: "16px" },
+  toolbar: {
+    display: "flex",
+    gap: "8px",
+    flexWrap: "wrap",
+    alignItems: "center",
+    marginBottom: "16px",
+  },
+  search: { flex: "1 1 420px", minWidth: "300px" },
+  filterMenu: { position: "relative" },
+  filterSummary: {
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.sm,
+    padding: "8px 12px",
+    minWidth: "145px",
+    cursor: "pointer",
+    listStyle: "none",
+  },
+  filterOptions: {
+    position: "absolute",
+    zIndex: 10,
+    display: "grid",
+    gap: "8px",
+    minWidth: "180px",
+    padding: "12px",
+    marginTop: "4px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+  },
   layout: { display: "grid", gridTemplateColumns: "minmax(280px, 35%) 1fr", gap: "16px" },
   card: {
     border: `1px solid ${colors.border}`,
@@ -96,7 +125,6 @@ const styles = stylex.create({
     backgroundColor: colors.surfaceAlt,
     padding: "12px",
   },
-  multiSelect: { minHeight: "72px", minWidth: "150px" },
 });
 
 type CustomerTab = "summary" | "contacts" | "opportunities" | "activity" | "quickbooks";
@@ -120,7 +148,7 @@ export function CustomersPanel({
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [search, setSearch] = useState("");
   const [statuses, setStatuses] = useState<string[]>(["lead", "active"]);
-  const [sync, setSync] = useState("");
+  const [sort, setSort] = useState("name_asc");
   const [error, setError] = useState<string | null>(null);
   const [integrationId, setIntegrationId] = useState("");
   const [matches, setMatches] = useState<Array<{ id: string; displayName: string }>>([]);
@@ -134,10 +162,10 @@ export function CustomersPanel({
   const [activeTab, setActiveTab] = useState<CustomerTab>("summary");
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
-    const result = await listCustomers(workspaceId, { search, status: statuses, sync });
+    const result = await listCustomers(workspaceId, { search, status: statuses, sort });
     if (result.ok) setRows(result.data ?? []);
     else setError(result.text);
-  }, [workspaceId, search, statuses, sync]);
+  }, [workspaceId, search, statuses, sort]);
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -311,41 +339,46 @@ export function CustomersPanel({
   }
   return (
     <section className={stylex(styles.panel)}>
-      <h2>Customers</h2>
+      <div className={stylex(styles.titleRow)}>
+        <h2>Customers</h2>
+        <button onClick={create}>Create customer</button>
+      </div>
       <div className={stylex(styles.toolbar)}>
         <input
           aria-label="Search customers"
+          className={stylex(styles.search)}
           placeholder="Search name, email, company, phone"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <label>
-          <span className={stylex(styles.muted)}>Status</span>
-          <select
-            aria-label="Customer status"
-            className={stylex(styles.multiSelect)}
-            multiple
-            value={statuses}
-            onChange={(event) =>
-              setStatuses(Array.from(event.target.selectedOptions, (option) => option.value))
-            }
-          >
-            {["lead", "active", "completed", "archived"].map((x) => (
-              <option key={x}>{x}</option>
+        <details className={stylex(styles.filterMenu)}>
+          <summary className={stylex(styles.filterSummary)}>
+            Status: {statuses.length ? statuses.join(", ") : "all"}
+          </summary>
+          <div className={stylex(styles.filterOptions)}>
+            {["lead", "active", "completed", "archived"].map((status) => (
+              <label key={status} className={stylex(styles.check)}>
+                <input
+                  type="checkbox"
+                  checked={statuses.includes(status)}
+                  onChange={(event) =>
+                    setStatuses((current) =>
+                      event.target.checked
+                        ? [...current, status]
+                        : current.filter((value) => value !== status)
+                    )
+                  }
+                />
+                {status}
+              </label>
             ))}
-          </select>
-        </label>
-        <select
-          aria-label="QuickBooks sync state"
-          value={sync}
-          onChange={(e) => setSync(e.target.value)}
-        >
-          <option value="">All sync states</option>
-          {["not_linked", "linked", "error", "conflict", "pending_refresh"].map((x) => (
-            <option key={x}>{x}</option>
-          ))}
+          </div>
+        </details>
+        <select aria-label="Sort customers" value={sort} onChange={(e) => setSort(e.target.value)}>
+          <option value="name_asc">Name (A–Z)</option>
+          <option value="next_follow_up_asc">Next follow-up (soonest)</option>
+          <option value="last_note_desc">Last note (newest)</option>
         </select>
-        <button onClick={create}>Create customer</button>
       </div>
       {error && <p className={stylex(styles.error)}>{error}</p>}
       <div className={stylex(styles.layout)}>

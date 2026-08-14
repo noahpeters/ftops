@@ -55,6 +55,15 @@ export async function handleCustomers(
         filters.push(`c.status IN (${statuses.map(() => "?").join(",")})`);
         values.push(...statuses);
       }
+      const sort = url.searchParams.get("sort")?.trim() || "name_asc";
+      const orderBy = {
+        name_asc: "c.display_name COLLATE NOCASE ASC",
+        next_follow_up_asc:
+          "CASE WHEN next_follow_up_at IS NULL THEN 1 ELSE 0 END, next_follow_up_at ASC, c.display_name COLLATE NOCASE ASC",
+        last_note_desc:
+          "CASE WHEN last_note_at IS NULL THEN 1 ELSE 0 END, last_note_at DESC, c.display_name COLLATE NOCASE ASC",
+      }[sort];
+      if (!orderBy) return badRequest("invalid_sort");
       const sync = url.searchParams.get("sync")?.trim();
       if (sync === "not_linked") filters.push("ee.id IS NULL");
       else if (sync) {
@@ -70,11 +79,14 @@ export async function handleCustomers(
                  WHERE t.workspace_id=c.workspace_id AND t.customer_id=c.id
                    AND t.due_at IS NOT NULL
                    AND t.status IN ('scheduled','blocked','in progress')) AS next_follow_up_at,
+                (SELECT MAX(a.occurred_at) FROM customer_activities a
+                 WHERE a.workspace_id=c.workspace_id AND a.customer_id=c.id
+                   AND a.activity_type='note') AS last_note_at,
                 (SELECT COUNT(*) FROM estimates e WHERE e.customer_id=c.id AND COALESCE(e.status,'open') NOT IN ('closed','deleted','rejected')) AS open_estimate_count,
                 (SELECT COALESCE(SUM(i.balance),0) FROM invoices i WHERE i.customer_id=c.id AND COALESCE(i.balance,0)>0) AS open_invoice_balance
          FROM customers c LEFT JOIN contacts pc ON pc.id=c.primary_contact_id
          LEFT JOIN external_entities ee ON ee.workspace_id=c.workspace_id AND ee.local_entity_type='customer' AND ee.local_entity_id=c.id
-         WHERE ${filters.join(" AND ")} ORDER BY c.display_name COLLATE NOCASE`
+         WHERE ${filters.join(" AND ")} ORDER BY ${orderBy}`
       )
         .bind(...values)
         .all();

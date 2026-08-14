@@ -74,6 +74,16 @@ describe("customers API", () => {
       body: "## Decisions\n\n- Use **white oak**\n- Confirm hardware",
       created_by: "author@example.com",
     });
+    const sortedByLastNote = await request(
+      env,
+      "/customers?workspaceId=default&sort=last_note_desc"
+    );
+    expect(sortedByLastNote.status).toBe(200);
+    expect((await sortedByLastNote.json()) as unknown).toMatchObject([
+      { id: detail.customer.id, last_note_at: expect.any(String) },
+    ]);
+    const invalidSort = await request(env, "/customers?workspaceId=default&sort=unknown");
+    expect(invalidSort.status).toBe(400);
     await mf.dispose();
   });
 
@@ -137,6 +147,11 @@ describe("customers API", () => {
       status: "scheduled",
       due_at: dueAt,
     });
+    const sortedByFollowUp = await request(
+      env,
+      "/customers?workspaceId=default&sort=next_follow_up_asc"
+    );
+    expect(sortedByFollowUp.status).toBe(200);
 
     const completed = await request(env, `/tasks/${detail.tasks[0].id}`, {
       method: "PATCH",

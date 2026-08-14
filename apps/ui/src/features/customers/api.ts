@@ -14,6 +14,7 @@ export type CustomerSummary = {
   open_estimate_count: number;
   open_invoice_balance: number;
   next_follow_up_at: string | null;
+  last_note_at: string | null;
 };
 export type CustomerDetail = {
   customer: CustomerSummary & {
@@ -87,14 +88,14 @@ export type CustomerActivity = {
 
 export function listCustomers(
   workspaceId: string,
-  filters: { search?: string; status?: string[]; sync?: string }
+  filters: { search?: string; status?: string[]; sort?: string }
 ) {
   return fetchJson<CustomerSummary[]>(
     buildUrl("/customers", {
       workspaceId,
       search: filters.search,
       status: filters.status?.join(","),
-      sync: filters.sync,
+      sort: filters.sort,
     })
   );
 }
