@@ -8,3 +8,9 @@ variable "allowed_emails" {
   description = "Email addresses allowed to access protected apps."
   default     = ["noah@from-trees.com"]
 }
+
+variable "allowed_email_domains" {
+  type        = list(string)
+  description = "Email domains allowed to access protected apps."
+  default     = ["fromtrees.studio"]
+}

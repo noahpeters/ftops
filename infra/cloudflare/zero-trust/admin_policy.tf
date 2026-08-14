@@ -5,6 +5,7 @@ resource "cloudflare_zero_trust_access_policy" "admin" {
   session_duration = "24h"
 
   include {
-    email = var.allowed_emails
+    email        = var.allowed_emails
+    email_domain = var.allowed_email_domains
   }
 }

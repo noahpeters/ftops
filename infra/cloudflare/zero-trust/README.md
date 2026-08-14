@@ -7,7 +7,9 @@ This directory codifies Access configuration for:
 - exact-path public bypass applications for `/legal/privacy` and `/legal/eula`
 
 The legal bypass applications are intentionally limited to those two paths. The broader
-`ops.from-trees.com/*` application remains protected by the administrator email policy.
+`ops.from-trees.com/*` application remains protected by the administrator policy. Access is
+allowed for the explicitly configured administrator email addresses and users whose verified
+email belongs to an allowed domain, currently `fromtrees.studio`.
 
 ## Authenticate
 
