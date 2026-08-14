@@ -33,10 +33,30 @@ describe("customers API", () => {
     const loaded = await request(env, `/customers/${detail.customer.id}`);
     expect(loaded.status).toBe(200);
 
+    const updated = await request(env, `/customers/${detail.customer.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        displayName: "Acme Workshop",
+        status: "prospect",
+        leadSource: "Architect referral",
+      }),
+    });
+    expect(updated.status).toBe(200);
+    expect((await updated.json()) as unknown).toMatchObject({
+      customer: {
+        display_name: "Acme Workshop",
+        status: "prospect",
+        lead_source: "Architect referral",
+      },
+    });
+
     const note = await request(env, `/customers/${detail.customer.id}/activities`, {
       method: "POST",
       headers: { "X-Debug-User-Email": "author@example.com" },
-      body: JSON.stringify({ subject: "Note", body: "Called about the estimate." }),
+      body: JSON.stringify({
+        subject: "Site visit",
+        body: "## Decisions\n\n- Use **white oak**\n- Confirm hardware",
+      }),
     });
     expect(note.status).toBe(201);
     const activities = (await note.json()) as Array<{
@@ -44,7 +64,8 @@ describe("customers API", () => {
       created_by: string | null;
     }>;
     expect(activities[0]).toMatchObject({
-      body: "Called about the estimate.",
+      subject: "Site visit",
+      body: "## Decisions\n\n- Use **white oak**\n- Confirm hardware",
       created_by: "author@example.com",
     });
     await mf.dispose();

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import Markdown from "react-markdown";
 import stylex from "~/lib/stylex";
 import { colors, radius } from "../../theme/tokens.stylex";
 import {
@@ -13,6 +14,7 @@ import {
   qboAction,
   qboSearch,
   updateContact,
+  updateCustomer,
   type Contact,
   type CustomerDetail,
   type CustomerSummary,
@@ -57,6 +59,9 @@ const styles = stylex.create({
   form: { display: "grid", gap: "8px", padding: "12px 0" },
   check: { display: "flex", gap: "6px", alignItems: "center" },
   contact: { borderBottom: `1px solid ${colors.border}`, padding: "10px 0" },
+  textarea: { minHeight: "120px", resize: "vertical", font: "inherit" },
+  note: { borderBottom: `1px solid ${colors.border}`, padding: "10px 0" },
+  markdown: { lineHeight: 1.5 },
 });
 
 export function CustomersPanel({
@@ -77,6 +82,8 @@ export function CustomersPanel({
   const [matches, setMatches] = useState<Array<{ id: string; displayName: string }>>([]);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [creatingContact, setCreatingContact] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState(false);
+  const [creatingNote, setCreatingNote] = useState(false);
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
     const result = await listCustomers(workspaceId, { search, status, sync });
@@ -106,14 +113,24 @@ export function CustomersPanel({
       navigate(`/customers/${r.data.customer.id}`);
     } else setError(r.text);
   }
-  async function note() {
+  async function saveCustomer(input: CustomerInput) {
     if (!customerId) return;
-    const body = prompt("Internal note");
-    if (!body) return;
-    const r = await addNote(customerId, { subject: "Note", body });
+    const r = await updateCustomer(customerId, input);
+    if (r.ok && r.data) {
+      setDetail(r.data);
+      setEditingCustomer(false);
+      await refresh();
+    } else setError((r.data as { error?: string } | null)?.error || r.text);
+  }
+  async function saveNote(input: { subject: string; body: string }) {
+    if (!customerId) return;
+    const r = await addNote(customerId, input);
     if (r.ok) {
       const loaded = await getCustomer(customerId);
-      if (loaded.ok) setDetail(loaded.data);
+      if (loaded.ok) {
+        setDetail(loaded.data);
+        setCreatingNote(false);
+      }
     } else setError(r.text);
   }
   async function saveContact(input: ContactInput, contactId?: string) {
@@ -211,14 +228,27 @@ export function CustomersPanel({
             <p className={stylex(styles.muted)}>Select a customer.</p>
           ) : (
             <>
-              <h3>{detail.customer.display_name}</h3>
+              <div className={stylex(styles.actions)}>
+                <h3>{detail.customer.display_name}</h3>
+                {!editingCustomer && (
+                  <button onClick={() => setEditingCustomer(true)}>Edit customer</button>
+                )}
+              </div>
               <div className={stylex(styles.grid)}>
                 <div>
                   <b>ftops-owned</b>
-                  <p>Status: {detail.customer.status}</p>
-                  <p>Company: {detail.customer.company_name || "—"}</p>
-                  <p>Lead source: {detail.customer.lead_source || "—"}</p>
-                  <p>Notes: {detail.customer.notes || "—"}</p>
+                  {editingCustomer ? (
+                    <CustomerForm
+                      customer={detail.customer}
+                      onSave={saveCustomer}
+                      onCancel={() => setEditingCustomer(false)}
+                    />
+                  ) : (
+                    <>
+                      <p>Status: {detail.customer.status}</p>
+                      <p>Lead source: {detail.customer.lead_source || "—"}</p>
+                    </>
+                  )}
                 </div>
                 <div>
                   <b>QuickBooks-sourced</b>
@@ -278,17 +308,23 @@ export function CustomersPanel({
               </div>
               <div className={stylex(styles.section)}>
                 <h4>Activity</h4>
-                <button onClick={note}>Add note</button>
-                {detail.activities.map((x) => (
-                  <p key={x.id}>
-                    <b>{x.subject}</b>{" "}
+                {!creatingNote && <button onClick={() => setCreatingNote(true)}>Add note</button>}
+                {creatingNote && (
+                  <NoteForm onSave={saveNote} onCancel={() => setCreatingNote(false)} />
+                )}
+                {detail.activities.map((activity) => (
+                  <article key={activity.id} className={stylex(styles.note)}>
+                    <b>{activity.subject}</b>{" "}
                     <span className={stylex(styles.muted)}>
-                      {x.created_by ? `by ${x.created_by} · ` : ""}
-                      {x.occurred_at}
+                      {activity.created_by ? `by ${activity.created_by} · ` : ""}
+                      {activity.occurred_at}
                     </span>
-                    <br />
-                    {x.body || ""}
-                  </p>
+                    {activity.body && (
+                      <div className={stylex(styles.markdown)}>
+                        <Markdown>{activity.body}</Markdown>
+                      </div>
+                    )}
+                  </article>
                 ))}
               </div>
               <Financial title="Estimates" rows={detail.estimates} />
@@ -320,6 +356,111 @@ export function CustomersPanel({
         </div>
       </div>
     </section>
+  );
+}
+type CustomerInput = { displayName: string; status: string; leadSource: string };
+function CustomerForm({
+  customer,
+  onSave,
+  onCancel,
+}: {
+  customer: CustomerDetail["customer"];
+  onSave: (input: CustomerInput) => void;
+  onCancel: () => void;
+}) {
+  const [displayName, setDisplayName] = useState(customer.display_name);
+  const [status, setStatus] = useState(customer.status);
+  const [leadSource, setLeadSource] = useState(customer.lead_source || "");
+  return (
+    <form
+      className={stylex(styles.form)}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave({ displayName, status, leadSource });
+      }}
+    >
+      <label>
+        Name
+        <input
+          aria-label="Customer name"
+          required
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+        />
+      </label>
+      <label>
+        Status
+        <select
+          aria-label="Edit customer status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+        >
+          {["lead", "prospect", "active", "past", "archived"].map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Lead source
+        <input
+          aria-label="Lead source"
+          value={leadSource}
+          onChange={(e) => setLeadSource(e.target.value)}
+        />
+      </label>
+      <div className={stylex(styles.actions)}>
+        <button type="submit">Save customer</button>
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+function NoteForm({
+  onSave,
+  onCancel,
+}: {
+  onSave: (input: { subject: string; body: string }) => void;
+  onCancel: () => void;
+}) {
+  const [subject, setSubject] = useState("Note");
+  const [body, setBody] = useState("");
+  return (
+    <form
+      className={stylex(styles.form)}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (body.trim()) onSave({ subject, body });
+      }}
+    >
+      <input
+        aria-label="Note title"
+        placeholder="Note title"
+        required
+        value={subject}
+        onChange={(e) => setSubject(e.target.value)}
+      />
+      <textarea
+        aria-label="Note body"
+        className={stylex(styles.textarea)}
+        placeholder="Write a note… Markdown is supported."
+        required
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+      />
+      <span className={stylex(styles.muted)}>
+        Markdown supported: headings, lists, links, bold, italic, and code.
+      </span>
+      <div className={stylex(styles.actions)}>
+        <button type="submit">Save note</button>
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 type ContactInput = {
