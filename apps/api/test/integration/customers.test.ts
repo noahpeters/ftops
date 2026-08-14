@@ -138,6 +138,7 @@ describe("customers API", () => {
         customer_id: string;
         status: string;
         due_at: string;
+        assigned_to: string | null;
       }>;
     };
     expect(detail.customer.next_follow_up_at).toBe(dueAt);
@@ -146,6 +147,7 @@ describe("customers API", () => {
       customer_id: customer.customer.id,
       status: "scheduled",
       due_at: dueAt,
+      assigned_to: null,
     });
     const sortedByFollowUp = await request(
       env,
@@ -162,6 +164,53 @@ describe("customers API", () => {
       customer: { next_follow_up_at: string | null };
     };
     expect(after.customer.next_follow_up_at).toBeNull();
+    await mf.dispose();
+  });
+
+  it("assigns customer follow-up tasks to workspace users", async () => {
+    const context = await createTestEnv();
+    if (!context) return;
+    const { env, db, mf } = context;
+    const created = await request(env, "/customers", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: "default", displayName: "Assigned Customer" }),
+    });
+    const customer = (await created.json()) as { customer: { id: string } };
+    await db
+      .prepare(
+        `INSERT INTO users (workspace_id,user_id,name,email,workspace_admin,system_admin) VALUES ('default','followup-owner','Follow-up Owner','owner@example.com',0,0)`
+      )
+      .run();
+    const note = await request(env, `/customers/${customer.customer.id}/activities`, {
+      method: "POST",
+      headers: { "X-Debug-User-Email": "owner@example.com" },
+      body: JSON.stringify({
+        subject: "Assigned follow-up",
+        body: "Please call next week.",
+        followUpAt: "2030-05-01T17:00:00.000Z",
+        followUpDescription: "Call customer",
+        followUpAssignedTo: "followup-owner",
+      }),
+    });
+    expect(note.status).toBe(201);
+    const detail = (await (
+      await request(env, `/customers/${customer.customer.id}`, {
+        headers: { "X-Debug-User-Email": "owner@example.com" },
+      })
+    ).json()) as { tasks: Array<{ assigned_to: string | null }> };
+    expect(detail.tasks[0].assigned_to).toBe("followup-owner");
+
+    const invalid = await request(env, `/customers/${customer.customer.id}/activities`, {
+      method: "POST",
+      headers: { "X-Debug-User-Email": "owner@example.com" },
+      body: JSON.stringify({
+        subject: "Invalid assignee",
+        followUpAt: "2030-05-02T17:00:00.000Z",
+        followUpDescription: "Call customer",
+        followUpAssignedTo: "missing-user",
+      }),
+    });
+    expect(invalid.status).toBe(400);
     await mf.dispose();
   });
 

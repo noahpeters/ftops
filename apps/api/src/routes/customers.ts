@@ -387,9 +387,18 @@ export async function handleCustomers(
     if (!subject) return badRequest("subject_required");
     const followUpAt = nullable(body.followUpAt);
     const followUpDescription = nullable(body.followUpDescription);
+    const followUpAssignedTo = nullable(body.followUpAssignedTo);
     if (followUpAt && Number.isNaN(Date.parse(followUpAt)))
       return badRequest("invalid_follow_up_at");
     if (followUpAt && !followUpDescription) return badRequest("follow_up_description_required");
+    if (followUpAssignedTo) {
+      const assignee = await env.DB.prepare(
+        `SELECT user_id FROM users WHERE workspace_id=? AND user_id=?`
+      )
+        .bind(workspaceId, followUpAssignedTo)
+        .first();
+      if (!assignee) return badRequest("invalid_follow_up_assignee");
+    }
     const now = nowISO();
     const statements = [
       env.DB.prepare(
@@ -413,12 +422,13 @@ export async function handleCustomers(
         env.DB.prepare(
           `INSERT INTO tasks
            (id,workspace_id,project_id,scope,group_key,line_item_uri,template_key,title,kind,position,status,state_json,due_at,assigned_to,description,template_id,customer_id,completed_at,priority,created_at,updated_at)
-           VALUES (?,?,NULL,'customer',NULL,NULL,'customer-follow-up',?,'customer_follow_up',0,'scheduled',NULL,?,NULL,?,NULL,?,NULL,0,?,?)`
+           VALUES (?,?,NULL,'customer',NULL,NULL,'customer-follow-up',?,'customer_follow_up',0,'scheduled',NULL,?,?,?,NULL,?,NULL,0,?,?)`
         ).bind(
           taskId,
           workspaceId,
           followUpDescription,
           followUpAt,
+          followUpAssignedTo,
           followUpDescription,
           customerId,
           now,

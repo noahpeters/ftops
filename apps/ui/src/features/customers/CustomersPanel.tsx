@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import Markdown from "react-markdown";
 import stylex from "~/lib/stylex";
 import { buildUrl } from "@/lib/api";
+import { listUsers, type WorkspaceUser } from "../users/api";
 import { colors, radius } from "../../theme/tokens.stylex";
 import {
   addContact,
@@ -60,12 +61,22 @@ const styles = stylex.create({
     borderRadius: radius.sm,
     backgroundColor: colors.surface,
   },
-  layout: { display: "grid", gridTemplateColumns: "minmax(280px, 35%) 1fr", gap: "16px" },
+  layout: {
+    display: "grid",
+    gridTemplateColumns: "minmax(280px, 35%) 1fr",
+    gap: "16px",
+    alignItems: "stretch",
+  },
   card: {
     border: `1px solid ${colors.border}`,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     padding: "14px",
+  },
+  scrollCard: {
+    maxHeight: "calc(100vh - 190px)",
+    overflowY: "auto",
+    "@media (max-width: 760px)": { maxHeight: "none", overflowY: "visible" },
   },
   list: { listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "8px" },
   item: {
@@ -127,11 +138,12 @@ const styles = stylex.create({
   },
 });
 
-type CustomerTab = "summary" | "contacts" | "opportunities" | "activity" | "quickbooks";
+type CustomerTab = "summary" | "contacts" | "opportunities" | "tasks" | "activity" | "quickbooks";
 const CUSTOMER_TABS: Array<{ id: CustomerTab; label: string }> = [
   { id: "summary", label: "Summary" },
   { id: "contacts", label: "Contacts" },
   { id: "opportunities", label: "Opportunities" },
+  { id: "tasks", label: "Tasks" },
   { id: "activity", label: "Activity / Notes" },
   { id: "quickbooks", label: "QuickBooks" },
 ];
@@ -144,11 +156,13 @@ export function CustomersPanel({
   customerId?: string;
 }) {
   const navigate = useNavigate();
+  const detailCardRef = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState<CustomerSummary[]>([]);
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [search, setSearch] = useState("");
   const [statuses, setStatuses] = useState<string[]>(["lead", "active"]);
   const [sort, setSort] = useState("name_asc");
+  const [users, setUsers] = useState<WorkspaceUser[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [integrationId, setIntegrationId] = useState("");
   const [matches, setMatches] = useState<Array<{ id: string; displayName: string }>>([]);
@@ -170,7 +184,14 @@ export function CustomersPanel({
     void refresh();
   }, [refresh]);
   useEffect(() => {
+    if (!workspaceId) return setUsers([]);
+    void listUsers(workspaceId).then((result) => {
+      if (result.ok) setUsers(result.data ?? []);
+    });
+  }, [workspaceId]);
+  useEffect(() => {
     setActiveTab("summary");
+    detailCardRef.current?.scrollTo({ top: 0 });
     if (!customerId) {
       setDetail(null);
       return;
@@ -204,6 +225,7 @@ export function CustomersPanel({
     body: string;
     followUpAt?: string;
     followUpDescription?: string;
+    followUpAssignedTo?: string;
     files: File[];
   }) {
     if (!customerId) return;
@@ -382,7 +404,7 @@ export function CustomersPanel({
       </div>
       {error && <p className={stylex(styles.error)}>{error}</p>}
       <div className={stylex(styles.layout)}>
-        <div className={stylex(styles.card)}>
+        <div className={stylex(styles.card, styles.scrollCard)}>
           <ul className={stylex(styles.list)}>
             {rows.map((row) => (
               <li key={row.id}>
@@ -407,7 +429,7 @@ export function CustomersPanel({
             ))}
           </ul>
         </div>
-        <div className={stylex(styles.card)}>
+        <div ref={detailCardRef} className={stylex(styles.card, styles.scrollCard)}>
           {!detail ? (
             <p className={stylex(styles.muted)}>Select a customer.</p>
           ) : (
@@ -590,6 +612,29 @@ export function CustomersPanel({
                   )}
                 </div>
               )}
+              {activeTab === "tasks" && (
+                <div className={stylex(styles.section)} role="tabpanel">
+                  <h4>Tasks</h4>
+                  {detail.tasks.length === 0 && (
+                    <p className={stylex(styles.muted)}>No customer tasks.</p>
+                  )}
+                  {detail.tasks.map((task) => {
+                    const assignee = users.find((user) => user.user_id === task.assigned_to);
+                    return (
+                      <article key={task.id} className={stylex(styles.note)}>
+                        <b>{task.title}</b>
+                        <div className={stylex(styles.muted)}>
+                          {task.status} ·{" "}
+                          {task.due_at ? formatDateTime(task.due_at) : "No due date"}
+                          {` · ${assignee ? `${assignee.name} (${assignee.email})` : "Unassigned"}`}
+                          {task.project_id ? " · Linked to project" : " · Customer-only"}
+                        </div>
+                        {task.description && <div>{task.description}</div>}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
               {activeTab === "contacts" && (
                 <div className={stylex(styles.section)} role="tabpanel">
                   <h4>Addresses</h4>
@@ -665,6 +710,7 @@ export function CustomersPanel({
                       onSave={saveNote}
                       onCancel={() => setCreatingNote(false)}
                       saving={savingNote}
+                      users={users}
                     />
                   )}
                   {detail.activities.map((activity) => (
@@ -904,22 +950,26 @@ function NoteForm({
   onSave,
   onCancel,
   saving,
+  users,
 }: {
   onSave: (input: {
     subject: string;
     body: string;
     followUpAt?: string;
     followUpDescription?: string;
+    followUpAssignedTo?: string;
     files: File[];
   }) => Promise<void>;
   onCancel: () => void;
   saving: boolean;
+  users: WorkspaceUser[];
 }) {
   const [subject, setSubject] = useState("Note");
   const [body, setBody] = useState("");
   const [scheduleFollowUp, setScheduleFollowUp] = useState(false);
   const [followUpAt, setFollowUpAt] = useState("");
   const [followUpDescription, setFollowUpDescription] = useState("");
+  const [followUpAssignedTo, setFollowUpAssignedTo] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   return (
     <form
@@ -932,6 +982,7 @@ function NoteForm({
             body,
             followUpAt: scheduleFollowUp ? new Date(followUpAt).toISOString() : undefined,
             followUpDescription: scheduleFollowUp ? followUpDescription : undefined,
+            followUpAssignedTo: scheduleFollowUp ? followUpAssignedTo || undefined : undefined,
             files,
           });
       }}
@@ -983,6 +1034,21 @@ function NoteForm({
               value={followUpDescription}
               onChange={(e) => setFollowUpDescription(e.target.value)}
             />
+          </label>
+          <label>
+            Assign to
+            <select
+              aria-label="Follow-up assignee"
+              value={followUpAssignedTo}
+              onChange={(event) => setFollowUpAssignedTo(event.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {users.map((user) => (
+                <option key={user.user_id} value={user.user_id}>
+                  {user.name} ({user.email})
+                </option>
+              ))}
+            </select>
           </label>
         </>
       )}
