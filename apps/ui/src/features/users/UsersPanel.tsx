@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import stylex from "~/lib/stylex";
 import { colors, radius, spacing } from "../../theme/tokens.stylex";
-import { createUser, deleteUser, listUsers, updateUser, type WorkspaceUser } from "./api";
+import {
+  createUser,
+  deleteUser,
+  listUsers,
+  sendDailySummary,
+  updateUser,
+  type WorkspaceUser,
+} from "./api";
 
 const styles = stylex.create({
   panel: {
@@ -84,6 +91,10 @@ const styles = stylex.create({
     color: colors.errorText,
     fontSize: "14px",
   },
+  success: {
+    color: colors.successText,
+    fontSize: "14px",
+  },
 });
 
 type Props = {
@@ -95,6 +106,8 @@ export function UsersPanel({ workspaceId, canEditSystemAdmin = false }: Props): 
   const [users, setUsers] = useState<WorkspaceUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [sendingSummaryUserId, setSendingSummaryUserId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [workspaceAdmin, setWorkspaceAdmin] = useState(false);
@@ -184,6 +197,24 @@ export function UsersPanel({ workspaceId, canEditSystemAdmin = false }: Props): 
     await loadUsers();
   }
 
+  async function handleSendSummary(user: WorkspaceUser) {
+    if (!workspaceId) return;
+    setError(null);
+    setNotice(null);
+    setSendingSummaryUserId(user.user_id);
+    const result = await sendDailySummary(workspaceId, user.user_id);
+    setSendingSummaryUserId(null);
+    if (!result.ok) {
+      setError(result.text || `Failed to send today's summary to ${user.email}.`);
+      return;
+    }
+    setNotice(
+      `Today's summary was sent to ${user.email} (${result.data?.taskCount ?? 0} tasks, ${
+        result.data?.customerCount ?? 0
+      } customers).`
+    );
+  }
+
   return (
     <section className={stylex(styles.panel)}>
       <div className={stylex(styles.header)}>
@@ -199,6 +230,11 @@ export function UsersPanel({ workspaceId, canEditSystemAdmin = false }: Props): 
       </div>
 
       {error && <div className={stylex(styles.error)}>{error}</div>}
+      {notice && (
+        <div className={stylex(styles.success)} role="status">
+          {notice}
+        </div>
+      )}
 
       <div className={stylex(styles.form)}>
         <div className={stylex(styles.field)}>
@@ -323,6 +359,15 @@ export function UsersPanel({ workspaceId, canEditSystemAdmin = false }: Props): 
                 </td>
                 <td className={stylex(styles.td)}>
                   <div className={stylex(styles.rowActions)}>
+                    <button
+                      type="button"
+                      onClick={() => void handleSendSummary(user)}
+                      disabled={sendingSummaryUserId !== null}
+                    >
+                      {sendingSummaryUserId === user.user_id
+                        ? "Sending summary..."
+                        : "Send today's summary"}
+                    </button>
                     <button type="button" onClick={() => void handleDelete(user)}>
                       Delete
                     </button>

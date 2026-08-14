@@ -51,3 +51,15 @@ export async function deleteUser(workspaceId: string, userId: string) {
     method: "DELETE",
   });
 }
+
+export async function sendDailySummary(workspaceId: string, userId: string) {
+  return await fetchJson<{
+    ok: boolean;
+    date: string;
+    timezone: string;
+    taskCount: number;
+    customerCount: number;
+  }>(buildUrl(`/workspaces/${workspaceId}/users/${userId}/daily-summary`), {
+    method: "POST",
+  });
+}

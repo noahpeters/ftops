@@ -76,6 +76,10 @@ const ALLOWLIST: AllowlistEntry[] = [
   { methods: new Set(["GET"]), pattern: /^\/workspaces\/[^/]+\/users$/ },
   { methods: new Set(["POST"]), pattern: /^\/workspaces\/[^/]+\/users$/ },
   { methods: new Set(["PATCH", "DELETE"]), pattern: /^\/workspaces\/[^/]+\/users\/[^/]+$/ },
+  {
+    methods: new Set(["POST"]),
+    pattern: /^\/workspaces\/[^/]+\/users\/[^/]+\/daily-summary$/,
+  },
   { methods: new Set(["GET", "POST"]), pattern: /^\/integrations$/ },
   { methods: new Set(["GET"]), pattern: /^\/integrations\/qbo\/(?:connect|callback|status)$/ },
   { methods: new Set(["POST"]), pattern: /^\/integrations\/qbo\/(?:disconnect|bootstrap)$/ },

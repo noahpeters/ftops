@@ -14,6 +14,12 @@ export type Env = {
   QBO_CLIENT_SECRET?: string;
   QBO_OAUTH_STATE_SECRET?: string;
   QBO_REDIRECT_URI?: string;
+  RESEND_API_KEY?: string;
+  DAILY_SUMMARY_FROM_EMAIL?: string;
+  DAILY_SUMMARY_FROM_NAME?: string;
+  DAILY_SUMMARY_TIMEZONE?: string;
+  DAILY_SUMMARY_EMAIL_API_URL?: string;
+  APP_BASE_URL?: string;
 };
 
 export type EventQueuePayload = {

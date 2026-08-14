@@ -80,6 +80,22 @@ wrangler r2 bucket cors set ftops-task-files --file ./r2-cors.json
 
 If you need to add more origins (e.g., staging), edit the JSON and re-apply.
 
+## Daily summary email
+
+The Worker runs hourly and sends each workspace user a summary at 7:00 a.m. in
+`DAILY_SUMMARY_TIMEZONE` (America/Los_Angeles by default). Delivery uses Resend.
+
+Before enabling the cron in production:
+
+1. Verify `fromtrees.studio` in Resend. Production sends from
+   `notifications@fromtrees.studio`.
+2. Add the API key to the Worker: `wrangler secret put RESEND_API_KEY`.
+3. Apply pending D1 migrations before deploying the Worker.
+
+The hourly trigger is intentional: the Worker checks local time so the 7:00 a.m.
+delivery follows daylight-saving time. `daily_summary_deliveries` prevents a user
+from receiving the same workspace summary more than once per day.
+
 ## Local testing
 
 Health:

@@ -2,6 +2,7 @@ import { badRequest, forbidden, json, methodNotAllowed, notFound } from "../lib/
 import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { canAccessWorkspace, canAdminWorkspace, requireActor } from "../lib/access";
+import { sendDailySummaryForUser } from "../services/dailySummary";
 
 const SLUG_REGEX = /^[a-z0-9-]{3,40}$/;
 
@@ -298,6 +299,16 @@ export async function handleWorkspaces(
     }
 
     return methodNotAllowed(["PATCH", "DELETE"]);
+  }
+
+  if (segments.length === 4 && segments[1] === "users" && segments[3] === "daily-summary") {
+    const workspaceId = segments[0];
+    const userId = segments[2];
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    if (!canAdminWorkspace(actor, workspaceId)) return forbidden("forbidden");
+    const summary = await sendDailySummaryForUser(env, workspaceId, userId);
+    if (!summary) return notFound("User not found");
+    return json({ ok: true, ...summary });
   }
 
   if (segments.length === 1 && request.method === "PATCH") {

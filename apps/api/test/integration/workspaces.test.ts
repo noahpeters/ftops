@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createTestEnv } from "../helpers/miniflare";
 import { route } from "../../src/lib/router";
 import type { ExecutionContext } from "@cloudflare/workers-types";
@@ -7,6 +7,7 @@ const MASTER_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
 async function requestJson(env: unknown, method: string, path: string, body?: unknown) {
   const headers = new Headers(body ? { "content-type": "application/json" } : undefined);
+  headers.set("x-debug-user-email", "admin@example.com");
   if (["POST", "PATCH", "DELETE"].includes(method)) {
     headers.set("origin", "https://ops.from-trees.com");
   }
@@ -120,5 +121,43 @@ describe("workspaces integration", () => {
     expect(response.status).toBe(200);
 
     await mf.dispose();
+  });
+
+  it("lets workspace admins manually send a user's daily summary", async () => {
+    const context = await createTestEnv({
+      env: {
+        RESEND_API_KEY: "test-key",
+        DAILY_SUMMARY_FROM_EMAIL: "notifications@fromtrees.studio",
+      },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    await db
+      .prepare(
+        `INSERT INTO users (workspace_id,user_id,name,email,workspace_admin,system_admin)
+         VALUES ('default','admin','Admin','admin@example.com',1,0),
+                ('default','recipient','Recipient','recipient@example.com',0,0)`
+      )
+      .run();
+    const fetchMock = vi.fn(async () => Response.json({ id: "manual-email" }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await requestJson(
+        env,
+        "POST",
+        "/workspaces/default/users/recipient/daily-summary"
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        ok: true,
+        taskCount: 0,
+        customerCount: 0,
+        providerMessageId: "manual-email",
+      });
+      expect(fetchMock).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+      await mf.dispose();
+    }
   });
 });

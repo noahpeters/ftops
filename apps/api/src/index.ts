@@ -6,6 +6,7 @@ import { processWebhookEnvelope } from "./processors/webhookProcessor";
 import type { IngestQueueMessage, WebhookEnvelope } from "@ftops/webhooks";
 import { processIngestQueueMessage } from "./processors/ingestQueue";
 import { noStore, sanitizeExternalError } from "./lib/security";
+import { sendDailySummaries } from "./services/dailySummary";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -69,6 +70,10 @@ export default {
       await processEventMessage(msg.body as EventQueuePayload, env);
       msg.ack();
     }
+  },
+
+  async scheduled(controller: ScheduledController, env: Env, _ctx: ExecutionContext) {
+    await sendDailySummaries(env, new Date(controller.scheduledTime));
   },
 };
 
