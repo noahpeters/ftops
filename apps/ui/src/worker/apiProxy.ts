@@ -38,10 +38,18 @@ const ALLOWLIST: AllowlistEntry[] = [
   { methods: new Set(["GET"]), pattern: /^\/projects\/[^/]+\/tasks$/ },
   { methods: new Set(["GET", "POST"]), pattern: /^\/customers$/ },
   { methods: new Set(["GET", "PATCH", "DELETE"]), pattern: /^\/customers\/[^/]+$/ },
-  { methods: new Set(["POST"]), pattern: /^\/customers\/[^/]+\/(?:contacts|addresses)$/ },
   {
-    methods: new Set(["PATCH"]),
-    pattern: /^\/customers\/[^/]+\/(?:contacts|addresses)\/[^/]+$/,
+    methods: new Set(["POST"]),
+    pattern: /^\/customers\/[^/]+\/(?:contacts|addresses|opportunities)$/,
+  },
+  {
+    methods: new Set(["GET", "PATCH", "DELETE"]),
+    pattern: /^\/customers\/[^/]+\/contacts\/[^/]+$/,
+  },
+  { methods: new Set(["PATCH"]), pattern: /^\/customers\/[^/]+\/addresses\/[^/]+$/ },
+  {
+    methods: new Set(["GET", "PATCH"]),
+    pattern: /^\/customers\/[^/]+\/opportunities\/[^/]+$/,
   },
   { methods: new Set(["POST"]), pattern: /^\/customers\/[^/]+\/activities$/ },
   { methods: new Set(["GET"]), pattern: /^\/customers\/[^/]+\/(?:estimates|invoices)$/ },
