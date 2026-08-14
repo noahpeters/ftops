@@ -51,6 +51,7 @@ Set these API Worker secrets with `wrangler secret put`; do not commit them or a
 - `QBO_CLIENT_ID`
 - `QBO_CLIENT_SECRET`
 - `QBO_OAUTH_STATE_SECRET` (a long, random signing secret)
+
 - `INTEGRATIONS_MASTER_KEY` (32-byte key used for integration-secret encryption)
 
 `INTEGRATIONS_KEY_ID` and the production `QBO_REDIRECT_URI` are non-secret bindings. Sandbox and production use separate Intuit application credentials in their respective Worker environments. Ensure the encrypted integration also retains the Intuit webhook verifier token so the ingress worker can verify signatures.

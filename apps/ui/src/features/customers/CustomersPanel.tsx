@@ -4,12 +4,16 @@ import { useNavigate } from "react-router";
 import stylex from "~/lib/stylex";
 import { colors, radius } from "../../theme/tokens.stylex";
 import {
+  addContact,
   addNote,
+  archiveContact,
   createCustomer,
   getCustomer,
   listCustomers,
   qboAction,
   qboSearch,
+  updateContact,
+  type Contact,
   type CustomerDetail,
   type CustomerSummary,
 } from "./api";
@@ -50,6 +54,9 @@ const styles = stylex.create({
   table: { width: "100%", borderCollapse: "collapse" },
   cell: { padding: "7px", borderBottom: `1px solid ${colors.border}`, textAlign: "left" },
   actions: { display: "flex", gap: "8px", flexWrap: "wrap" },
+  form: { display: "grid", gap: "8px", padding: "12px 0" },
+  check: { display: "flex", gap: "6px", alignItems: "center" },
+  contact: { borderBottom: `1px solid ${colors.border}`, padding: "10px 0" },
 });
 
 export function CustomersPanel({
@@ -68,6 +75,8 @@ export function CustomersPanel({
   const [error, setError] = useState<string | null>(null);
   const [integrationId, setIntegrationId] = useState("");
   const [matches, setMatches] = useState<Array<{ id: string; displayName: string }>>([]);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [creatingContact, setCreatingContact] = useState(false);
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
     const result = await listCustomers(workspaceId, { search, status, sync });
@@ -106,6 +115,26 @@ export function CustomersPanel({
       const loaded = await getCustomer(customerId);
       if (loaded.ok) setDetail(loaded.data);
     } else setError(r.text);
+  }
+  async function saveContact(input: ContactInput, contactId?: string) {
+    if (!customerId) return;
+    const r = contactId
+      ? await updateContact(customerId, contactId, input)
+      : await addContact(customerId, input);
+    if (r.ok && r.data) {
+      setDetail(r.data);
+      setEditingContactId(null);
+      setCreatingContact(false);
+      await refresh();
+    } else setError((r.data as { error?: string } | null)?.error || r.text);
+  }
+  async function removeContact(contact: Contact) {
+    if (!customerId || !confirm(`Archive ${contact.display_name}?`)) return;
+    const r = await archiveContact(customerId, contact.id);
+    if (!r.ok) return setError(r.text);
+    const loaded = await getCustomer(customerId);
+    if (loaded.ok) setDetail(loaded.data);
+    await refresh();
   }
   async function action(name: string, extra: Record<string, unknown> = {}) {
     if (!customerId || !integrationId) return setError("Enter the QuickBooks integration ID.");
@@ -202,11 +231,42 @@ export function CustomersPanel({
               </div>
               <div className={stylex(styles.section)}>
                 <h4>Contacts</h4>
-                {detail.contacts.map((x) => (
-                  <p key={String(x.id)}>
-                    {String(x.display_name)} · {String(x.email || "")} · {String(x.phone || "")}
-                  </p>
-                ))}
+                {!creatingContact && (
+                  <button onClick={() => setCreatingContact(true)}>Add contact</button>
+                )}
+                {creatingContact && (
+                  <ContactForm
+                    onSave={(input) => saveContact(input)}
+                    onCancel={() => setCreatingContact(false)}
+                  />
+                )}
+                {detail.contacts.map((contact) =>
+                  editingContactId === contact.id ? (
+                    <ContactForm
+                      key={contact.id}
+                      contact={contact}
+                      onSave={(input) => saveContact(input, contact.id)}
+                      onCancel={() => setEditingContactId(null)}
+                    />
+                  ) : (
+                    <div key={contact.id} className={stylex(styles.contact)}>
+                      <b>{contact.display_name}</b>
+                      {contact.is_primary ? " · Primary" : ""}
+                      <div>
+                        {contact.role || "Contact"} · {contact.status}
+                      </div>
+                      <div>
+                        {contact.email || "No email"} · {contact.phone || "No phone"}
+                      </div>
+                      <div className={stylex(styles.actions)}>
+                        <button onClick={() => setEditingContactId(contact.id)}>Edit</button>
+                        {contact.status !== "archived" && (
+                          <button onClick={() => removeContact(contact)}>Archive</button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                )}
               </div>
               <div className={stylex(styles.section)}>
                 <h4>Addresses</h4>
@@ -260,6 +320,97 @@ export function CustomersPanel({
         </div>
       </div>
     </section>
+  );
+}
+type ContactInput = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  role: string;
+  status: string;
+  isPrimary: boolean;
+};
+function ContactForm({
+  contact,
+  onSave,
+  onCancel,
+}: {
+  contact?: Contact;
+  onSave: (input: ContactInput) => void;
+  onCancel: () => void;
+}) {
+  const [firstName, setFirstName] = useState(contact?.first_name || "");
+  const [lastName, setLastName] = useState(contact?.last_name || "");
+  const [email, setEmail] = useState(contact?.email || "");
+  const [phone, setPhone] = useState(contact?.phone || "");
+  const [role, setRole] = useState(contact?.role || "");
+  const [status, setStatus] = useState<string>(contact?.status || "active");
+  const [isPrimary, setIsPrimary] = useState(Boolean(contact?.is_primary));
+  return (
+    <form
+      className={stylex(styles.form)}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave({ firstName, lastName, email, phone, role, status, isPrimary });
+      }}
+    >
+      <input
+        aria-label="First name"
+        placeholder="First name"
+        value={firstName}
+        onChange={(e) => setFirstName(e.target.value)}
+      />
+      <input
+        aria-label="Last name"
+        placeholder="Last name"
+        value={lastName}
+        onChange={(e) => setLastName(e.target.value)}
+      />
+      <input
+        aria-label="Email"
+        placeholder="Email"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <input
+        aria-label="Phone"
+        placeholder="Phone"
+        type="tel"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+      />
+      <input
+        aria-label="Role"
+        placeholder="Role"
+        value={role}
+        onChange={(e) => setRole(e.target.value)}
+      />
+      <select
+        aria-label="Contact status"
+        value={status}
+        onChange={(e) => setStatus(e.target.value)}
+      >
+        <option value="active">active</option>
+        <option value="inactive">inactive</option>
+        {contact && <option value="archived">archived</option>}
+      </select>
+      <label className={stylex(styles.check)}>
+        <input
+          type="checkbox"
+          checked={isPrimary}
+          onChange={(e) => setIsPrimary(e.target.checked)}
+        />{" "}
+        Primary contact
+      </label>
+      <div className={stylex(styles.actions)}>
+        <button type="submit">Save contact</button>
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 function Financial({ title, rows }: { title: string; rows: Array<Record<string, unknown>> }) {

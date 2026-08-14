@@ -21,11 +21,23 @@ export type CustomerDetail = {
     integration_id?: string | null;
     quickbooks_customer_id?: string | null;
   };
-  contacts: Array<Record<string, unknown>>;
+  contacts: Contact[];
   addresses: Array<Record<string, unknown>>;
   activities: CustomerActivity[];
   estimates: Array<Record<string, unknown>>;
   invoices: Array<Record<string, unknown>>;
+};
+export type Contact = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+  status: "active" | "inactive" | "archived";
+  is_primary: number;
+  archived_at: string | null;
 };
 
 export type CustomerActivity = {
@@ -66,6 +78,23 @@ export function addContact(id: string, input: Record<string, unknown>) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
+}
+export function updateContact(
+  customerId: string,
+  contactId: string,
+  input: Record<string, unknown>
+) {
+  return fetchJson<CustomerDetail>(buildUrl(`/customers/${customerId}/contacts/${contactId}`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+export function archiveContact(customerId: string, contactId: string) {
+  return fetchJson<{ archived: boolean }>(
+    buildUrl(`/customers/${customerId}/contacts/${contactId}`),
+    { method: "DELETE" }
+  );
 }
 export function addAddress(id: string, input: Record<string, unknown>) {
   return fetchJson<CustomerDetail>(buildUrl(`/customers/${id}/addresses`), {

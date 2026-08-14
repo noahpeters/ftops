@@ -69,6 +69,84 @@ describe("customers API", () => {
     expect(unknown.status).toBe(403);
     await mf.dispose();
   });
+
+  it("creates, reads, edits, validates, and archives contacts", async () => {
+    const context = await createTestEnv();
+    if (!context) return;
+    const { env, mf } = context;
+    const createdCustomer = await request(env, "/customers", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: "default", displayName: "Smith Residence" }),
+    });
+    const customer = (await createdCustomer.json()) as { customer: { id: string } };
+
+    const invalid = await request(env, `/customers/${customer.customer.id}/contacts`, {
+      method: "POST",
+      body: JSON.stringify({ firstName: "Alex", email: "not-an-email" }),
+    });
+    expect(invalid.status).toBe(400);
+
+    const created = await request(env, `/customers/${customer.customer.id}/contacts`, {
+      method: "POST",
+      body: JSON.stringify({
+        firstName: "Alex",
+        lastName: "Smith",
+        email: "alex@example.com",
+        phone: "555-0100",
+        role: "Homeowner",
+        isPrimary: true,
+      }),
+    });
+    expect(created.status).toBe(201);
+    const detail = (await created.json()) as {
+      customer: { primary_contact_id: string };
+      contacts: Array<{ id: string; display_name: string; status: string; is_primary: number }>;
+    };
+    const contact = detail.contacts[0];
+    expect(contact).toMatchObject({ display_name: "Alex Smith", status: "active", is_primary: 1 });
+    expect(detail.customer.primary_contact_id).toBe(contact.id);
+
+    const loaded = await request(env, `/customers/${customer.customer.id}/contacts/${contact.id}`);
+    expect(loaded.status).toBe(200);
+
+    const updated = await request(
+      env,
+      `/customers/${customer.customer.id}/contacts/${contact.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ lastName: "Jones", status: "inactive", phone: "555-0199" }),
+      }
+    );
+    expect(updated.status).toBe(200);
+    const updatedDetail = (await updated.json()) as {
+      contacts: Array<{ display_name: string; email: string; phone: string; status: string }>;
+    };
+    expect(updatedDetail.contacts[0]).toMatchObject({
+      display_name: "Alex Jones",
+      email: "alex@example.com",
+      phone: "555-0199",
+      status: "inactive",
+    });
+
+    const archived = await request(
+      env,
+      `/customers/${customer.customer.id}/contacts/${contact.id}`,
+      {
+        method: "DELETE",
+      }
+    );
+    expect(archived.status).toBe(200);
+    const finalDetail = await request(env, `/customers/${customer.customer.id}`);
+    const finalBody = (await finalDetail.json()) as {
+      customer: { primary_contact_id: string | null };
+      contacts: Array<{ status: string; archived_at: string | null; is_primary: number }>;
+    };
+    expect(finalBody.contacts[0].status).toBe("archived");
+    expect(finalBody.contacts[0].archived_at).toBeTruthy();
+    expect(finalBody.contacts[0].is_primary).toBe(0);
+    expect(finalBody.customer.primary_contact_id).toBeNull();
+    await mf.dispose();
+  });
 });
 
 function request(env: Parameters<typeof route>[1], path: string, init: RequestInit = {}) {

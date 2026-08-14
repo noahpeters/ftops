@@ -13,6 +13,7 @@ import {
 import { sanitizeExternalError } from "../lib/security";
 
 const STATUSES = ["lead", "prospect", "active", "past", "archived"];
+const CONTACT_STATUSES = ["active", "inactive", "archived"];
 const ADDRESS_TYPES = ["billing", "shipping", "project_site", "other"];
 
 export async function handleCustomers(
@@ -188,66 +189,89 @@ export async function handleCustomers(
 
   const action = segments[1];
   if ((action === "contacts" || action === "addresses") && segments.length <= 3) {
-    if (request.method !== (segments.length === 2 ? "POST" : "PATCH"))
-      return methodNotAllowed([segments.length === 2 ? "POST" : "PATCH"]);
+    const allowedMethods = segments.length === 2 ? ["POST"] : ["GET", "PATCH", "DELETE"];
+    if (!allowedMethods.includes(request.method)) return methodNotAllowed(allowedMethods);
     const body = await readBody(request);
     const now = nowISO();
     const id = segments[2] || crypto.randomUUID();
     if (action === "contacts") {
-      const displayName =
-        string(body.displayName) ||
-        [string(body.firstName), string(body.lastName)].filter(Boolean).join(" ");
-      if (!displayName) return badRequest("display_name_required");
       if (segments.length === 3) {
         const row = await env.DB.prepare(
-          `SELECT id FROM contacts WHERE id=? AND customer_id=? AND workspace_id=?`
+          `SELECT * FROM contacts WHERE id=? AND customer_id=? AND workspace_id=?`
         )
           .bind(id, customerId, workspaceId)
-          .first();
+          .first<Record<string, unknown>>();
         if (!row) return notFound("Contact not found");
+        if (request.method === "GET") return json(row);
+        if (request.method === "DELETE") {
+          await archiveContact(env, workspaceId, customerId, id, now);
+          return json({ archived: true });
+        }
+        const firstName =
+          body.firstName === undefined ? string(row.first_name) : string(body.firstName);
+        const lastName =
+          body.lastName === undefined ? string(row.last_name) : string(body.lastName);
+        const displayName =
+          body.displayName === undefined
+            ? [firstName, lastName].filter(Boolean).join(" ") || string(row.display_name)
+            : string(body.displayName) || [firstName, lastName].filter(Boolean).join(" ");
+        if (!displayName) return badRequest("display_name_required");
+        const email = body.email === undefined ? nullable(row.email) : nullable(body.email);
+        if (email && !isValidEmail(email)) return badRequest("invalid_email");
+        const status = body.status === undefined ? string(row.status) : string(body.status);
+        if (!CONTACT_STATUSES.includes(status)) return badRequest("invalid_contact_status");
+        const isPrimary =
+          body.isPrimary === undefined ? bool(row.is_primary) : bool(body.isPrimary);
         await env.DB.prepare(
-          `UPDATE contacts SET first_name=?,last_name=?,display_name=?,email=?,phone=?,role=?,is_primary=?,updated_at=? WHERE id=?`
+          `UPDATE contacts SET first_name=?,last_name=?,display_name=?,email=?,phone=?,role=?,status=?,is_primary=?,archived_at=?,updated_at=? WHERE id=?`
         )
           .bind(
-            nullable(body.firstName),
-            nullable(body.lastName),
+            firstName || null,
+            lastName || null,
             displayName,
-            nullable(body.email),
-            nullable(body.phone),
-            nullable(body.role),
-            bool(body.isPrimary),
+            email,
+            body.phone === undefined ? nullable(row.phone) : nullable(body.phone),
+            body.role === undefined ? nullable(row.role) : nullable(body.role),
+            status,
+            isPrimary,
+            status === "archived" ? now : null,
             now,
             id
           )
           .run();
-      } else
+        if (status === "archived") await clearPrimaryContact(env, workspaceId, customerId, id, now);
+        else if (isPrimary) await setPrimaryContact(env, workspaceId, customerId, id, now);
+      } else {
+        const firstName = string(body.firstName);
+        const lastName = string(body.lastName);
+        const displayName =
+          string(body.displayName) || [firstName, lastName].filter(Boolean).join(" ");
+        if (!displayName) return badRequest("display_name_required");
+        const email = nullable(body.email);
+        if (email && !isValidEmail(email)) return badRequest("invalid_email");
+        const status = string(body.status) || "active";
+        if (!CONTACT_STATUSES.includes(status)) return badRequest("invalid_contact_status");
+        if (status === "archived") return badRequest("cannot_create_archived_contact");
         await env.DB.prepare(
-          `INSERT INTO contacts (id,workspace_id,customer_id,first_name,last_name,display_name,email,phone,role,is_primary,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+          `INSERT INTO contacts (id,workspace_id,customer_id,first_name,last_name,display_name,email,phone,role,status,is_primary,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
         )
           .bind(
             id,
             workspaceId,
             customerId,
-            nullable(body.firstName),
-            nullable(body.lastName),
+            firstName || null,
+            lastName || null,
             displayName,
-            nullable(body.email),
+            email,
             nullable(body.phone),
             nullable(body.role),
+            status,
             bool(body.isPrimary),
             now,
             now
           )
           .run();
-      if (bool(body.isPrimary)) {
-        await env.DB.prepare(
-          `UPDATE contacts SET is_primary=CASE WHEN id=? THEN 1 ELSE 0 END WHERE customer_id=? AND workspace_id=?`
-        )
-          .bind(id, customerId, workspaceId)
-          .run();
-        await env.DB.prepare(`UPDATE customers SET primary_contact_id=?,updated_at=? WHERE id=?`)
-          .bind(id, now, customerId)
-          .run();
+        if (bool(body.isPrimary)) await setPrimaryContact(env, workspaceId, customerId, id, now);
       }
     } else {
       const addressType = string(body.addressType);
@@ -477,7 +501,7 @@ async function loadDetail(env: Env, workspaceId: string, id: string) {
     customer,
     contacts: await listRows(
       env,
-      `SELECT * FROM contacts WHERE workspace_id=? AND customer_id=? ORDER BY is_primary DESC,display_name`,
+      `SELECT * FROM contacts WHERE workspace_id=? AND customer_id=? ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'inactive' THEN 1 ELSE 2 END,is_primary DESC,display_name`,
       workspaceId,
       id
     ),
@@ -556,5 +580,54 @@ function nullable(value: unknown) {
   return result || null;
 }
 function bool(value: unknown) {
-  return value ? 1 : 0;
+  return value === true || value === 1 ? 1 : 0;
+}
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+async function setPrimaryContact(
+  env: Env,
+  workspaceId: string,
+  customerId: string,
+  contactId: string,
+  now: string
+) {
+  await env.DB.prepare(
+    `UPDATE contacts SET is_primary=CASE WHEN id=? THEN 1 ELSE 0 END WHERE customer_id=? AND workspace_id=?`
+  )
+    .bind(contactId, customerId, workspaceId)
+    .run();
+  await env.DB.prepare(`UPDATE customers SET primary_contact_id=?,updated_at=? WHERE id=?`)
+    .bind(contactId, now, customerId)
+    .run();
+}
+async function clearPrimaryContact(
+  env: Env,
+  workspaceId: string,
+  customerId: string,
+  contactId: string,
+  now: string
+) {
+  await env.DB.prepare(`UPDATE contacts SET is_primary=0 WHERE id=? AND workspace_id=?`)
+    .bind(contactId, workspaceId)
+    .run();
+  await env.DB.prepare(
+    `UPDATE customers SET primary_contact_id=NULL,updated_at=? WHERE id=? AND workspace_id=? AND primary_contact_id=?`
+  )
+    .bind(now, customerId, workspaceId, contactId)
+    .run();
+}
+async function archiveContact(
+  env: Env,
+  workspaceId: string,
+  customerId: string,
+  contactId: string,
+  now: string
+) {
+  await env.DB.prepare(
+    `UPDATE contacts SET status='archived',is_primary=0,archived_at=?,updated_at=? WHERE id=? AND customer_id=? AND workspace_id=?`
+  )
+    .bind(now, now, contactId, customerId, workspaceId)
+    .run();
+  await clearPrimaryContact(env, workspaceId, customerId, contactId, now);
 }
