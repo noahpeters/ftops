@@ -7,6 +7,7 @@ import { colors, radius } from "../../theme/tokens.stylex";
 import {
   addContact,
   addNote,
+  addOpportunity,
   archiveContact,
   createCustomer,
   getCustomer,
@@ -15,9 +16,11 @@ import {
   qboSearch,
   updateContact,
   updateCustomer,
+  updateOpportunity,
   type Contact,
   type CustomerDetail,
   type CustomerSummary,
+  type Opportunity,
 } from "./api";
 
 const styles = stylex.create({
@@ -84,6 +87,8 @@ export function CustomersPanel({
   const [creatingContact, setCreatingContact] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(false);
   const [creatingNote, setCreatingNote] = useState(false);
+  const [creatingOpportunity, setCreatingOpportunity] = useState(false);
+  const [editingOpportunityId, setEditingOpportunityId] = useState<string | null>(null);
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
     const result = await listCustomers(workspaceId, { search, status, sync });
@@ -132,6 +137,18 @@ export function CustomersPanel({
         setCreatingNote(false);
       }
     } else setError(r.text);
+  }
+  async function saveOpportunity(input: OpportunityInput, opportunityId?: string) {
+    if (!customerId) return;
+    const payload = { ...input, budgetCents: Math.round(input.budget * 100) };
+    const r = opportunityId
+      ? await updateOpportunity(customerId, opportunityId, payload)
+      : await addOpportunity(customerId, payload);
+    if (r.ok && r.data) {
+      setDetail(r.data);
+      setCreatingOpportunity(false);
+      setEditingOpportunityId(null);
+    } else setError((r.data as { error?: string } | null)?.error || r.text);
   }
   async function saveContact(input: ContactInput, contactId?: string) {
     if (!customerId) return;
@@ -299,6 +316,37 @@ export function CustomersPanel({
                 )}
               </div>
               <div className={stylex(styles.section)}>
+                <h4>Opportunities</h4>
+                {!creatingOpportunity && (
+                  <button onClick={() => setCreatingOpportunity(true)}>Add opportunity</button>
+                )}
+                {creatingOpportunity && (
+                  <OpportunityForm
+                    onSave={(input) => saveOpportunity(input)}
+                    onCancel={() => setCreatingOpportunity(false)}
+                  />
+                )}
+                {detail.opportunities.map((opportunity) =>
+                  editingOpportunityId === opportunity.id ? (
+                    <OpportunityForm
+                      key={opportunity.id}
+                      opportunity={opportunity}
+                      onSave={(input) => saveOpportunity(input, opportunity.id)}
+                      onCancel={() => setEditingOpportunityId(null)}
+                    />
+                  ) : (
+                    <article key={opportunity.id} className={stylex(styles.contact)}>
+                      <b>{opportunity.description}</b>
+                      <div>
+                        {opportunity.opportunity_type} · {opportunity.status} ·{" "}
+                        {formatBudget(opportunity.budget_cents)}
+                      </div>
+                      <button onClick={() => setEditingOpportunityId(opportunity.id)}>Edit</button>
+                    </article>
+                  )
+                )}
+              </div>
+              <div className={stylex(styles.section)}>
                 <h4>Addresses</h4>
                 {detail.addresses.map((x) => (
                   <p key={String(x.id)}>
@@ -357,6 +405,78 @@ export function CustomersPanel({
       </div>
     </section>
   );
+}
+type OpportunityInput = {
+  description: string;
+  type: string;
+  budget: number;
+  status: string;
+};
+function OpportunityForm({
+  opportunity,
+  onSave,
+  onCancel,
+}: {
+  opportunity?: Opportunity;
+  onSave: (input: OpportunityInput) => void;
+  onCancel: () => void;
+}) {
+  const [description, setDescription] = useState(opportunity?.description || "");
+  const [type, setType] = useState<string>(opportunity?.opportunity_type || "furniture");
+  const [budget, setBudget] = useState(opportunity ? String(opportunity.budget_cents / 100) : "");
+  const [status, setStatus] = useState<string>(opportunity?.status || "scoping");
+  return (
+    <form
+      className={stylex(styles.form)}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave({ description, type, budget: Number(budget), status });
+      }}
+    >
+      <textarea
+        aria-label="Opportunity description"
+        className={stylex(styles.textarea)}
+        placeholder="Describe the opportunity"
+        required
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+      />
+      <select aria-label="Opportunity type" value={type} onChange={(e) => setType(e.target.value)}>
+        <option value="furniture">furniture</option>
+        <option value="cabinets">cabinets</option>
+        <option value="other">other</option>
+      </select>
+      <input
+        aria-label="Opportunity budget"
+        type="number"
+        min="0"
+        step="0.01"
+        placeholder="Budget"
+        required
+        value={budget}
+        onChange={(e) => setBudget(e.target.value)}
+      />
+      <select
+        aria-label="Opportunity status"
+        value={status}
+        onChange={(e) => setStatus(e.target.value)}
+      >
+        <option value="scoping">scoping</option>
+        <option value="quoted">quoted</option>
+        <option value="accepted">accepted</option>
+        <option value="lost">lost</option>
+      </select>
+      <div className={stylex(styles.actions)}>
+        <button type="submit">Save opportunity</button>
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+function formatBudget(cents: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 type CustomerInput = { displayName: string; status: string; leadSource: string };
 function CustomerForm({

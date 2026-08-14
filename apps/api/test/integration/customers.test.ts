@@ -168,6 +168,66 @@ describe("customers API", () => {
     expect(finalBody.customer.primary_contact_id).toBeNull();
     await mf.dispose();
   });
+
+  it("creates, reads, validates, and edits customer opportunities", async () => {
+    const context = await createTestEnv();
+    if (!context) return;
+    const { env, mf } = context;
+    const createdCustomer = await request(env, "/customers", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: "default", displayName: "River House" }),
+    });
+    const customer = (await createdCustomer.json()) as { customer: { id: string } };
+    const path = `/customers/${customer.customer.id}/opportunities`;
+
+    const invalid = await request(env, path, {
+      method: "POST",
+      body: JSON.stringify({ description: "Library", type: "millwork", budgetCents: -1 }),
+    });
+    expect(invalid.status).toBe(400);
+
+    const created = await request(env, path, {
+      method: "POST",
+      body: JSON.stringify({
+        description: "Built-in library wall",
+        type: "cabinets",
+        budgetCents: 1850000,
+        status: "scoping",
+      }),
+    });
+    expect(created.status).toBe(201);
+    const detail = (await created.json()) as {
+      opportunities: Array<{
+        id: string;
+        opportunity_type: string;
+        budget_cents: number;
+        status: string;
+      }>;
+    };
+    expect(detail.opportunities[0]).toMatchObject({
+      opportunity_type: "cabinets",
+      budget_cents: 1850000,
+      status: "scoping",
+    });
+
+    const opportunityId = detail.opportunities[0].id;
+    const loaded = await request(env, `${path}/${opportunityId}`);
+    expect(loaded.status).toBe(200);
+    const updated = await request(env, `${path}/${opportunityId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "quoted", budgetCents: 1925000 }),
+    });
+    expect(updated.status).toBe(200);
+    const updatedDetail = (await updated.json()) as {
+      opportunities: Array<{ description: string; budget_cents: number; status: string }>;
+    };
+    expect(updatedDetail.opportunities[0]).toMatchObject({
+      description: "Built-in library wall",
+      budget_cents: 1925000,
+      status: "quoted",
+    });
+    await mf.dispose();
+  });
 });
 
 function request(env: Parameters<typeof route>[1], path: string, init: RequestInit = {}) {

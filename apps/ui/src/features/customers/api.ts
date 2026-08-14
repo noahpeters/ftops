@@ -22,10 +22,20 @@ export type CustomerDetail = {
     quickbooks_customer_id?: string | null;
   };
   contacts: Contact[];
+  opportunities: Opportunity[];
   addresses: Array<Record<string, unknown>>;
   activities: CustomerActivity[];
   estimates: Array<Record<string, unknown>>;
   invoices: Array<Record<string, unknown>>;
+};
+export type Opportunity = {
+  id: string;
+  description: string;
+  opportunity_type: "furniture" | "cabinets" | "other";
+  budget_cents: number;
+  status: "scoping" | "quoted" | "accepted" | "lost";
+  created_at: string;
+  updated_at: string;
 };
 export type Contact = {
   id: string;
@@ -94,6 +104,27 @@ export function archiveContact(customerId: string, contactId: string) {
   return fetchJson<{ archived: boolean }>(
     buildUrl(`/customers/${customerId}/contacts/${contactId}`),
     { method: "DELETE" }
+  );
+}
+export function addOpportunity(id: string, input: Record<string, unknown>) {
+  return fetchJson<CustomerDetail>(buildUrl(`/customers/${id}/opportunities`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+export function updateOpportunity(
+  customerId: string,
+  opportunityId: string,
+  input: Record<string, unknown>
+) {
+  return fetchJson<CustomerDetail>(
+    buildUrl(`/customers/${customerId}/opportunities/${opportunityId}`),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }
   );
 }
 export function addAddress(id: string, input: Record<string, unknown>) {

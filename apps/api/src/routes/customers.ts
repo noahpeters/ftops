@@ -14,6 +14,8 @@ import { sanitizeExternalError } from "../lib/security";
 
 const STATUSES = ["lead", "prospect", "active", "past", "archived"];
 const CONTACT_STATUSES = ["active", "inactive", "archived"];
+const OPPORTUNITY_TYPES = ["furniture", "cabinets", "other"];
+const OPPORTUNITY_STATUSES = ["scoping", "quoted", "accepted", "lost"];
 const ADDRESS_TYPES = ["billing", "shipping", "project_site", "other"];
 
 export async function handleCustomers(
@@ -307,6 +309,57 @@ export async function handleCustomers(
     }
     return json(await loadDetail(env, workspaceId, customerId), segments.length === 2 ? 201 : 200);
   }
+  if (action === "opportunities" && segments.length <= 3) {
+    const allowedMethods = segments.length === 2 ? ["POST"] : ["GET", "PATCH"];
+    if (!allowedMethods.includes(request.method)) return methodNotAllowed(allowedMethods);
+    const body = await readBody(request);
+    const now = nowISO();
+    const opportunityId = segments[2] || crypto.randomUUID();
+    if (segments.length === 3) {
+      const opportunity = await env.DB.prepare(
+        `SELECT * FROM customer_opportunities WHERE id=? AND customer_id=? AND workspace_id=?`
+      )
+        .bind(opportunityId, customerId, workspaceId)
+        .first<Record<string, unknown>>();
+      if (!opportunity) return notFound("Opportunity not found");
+      if (request.method === "GET") return json(opportunity);
+      const input = parseOpportunity(body, opportunity);
+      if (!input.ok) return badRequest(input.error);
+      await env.DB.prepare(
+        `UPDATE customer_opportunities SET description=?,opportunity_type=?,budget_cents=?,status=?,updated_at=? WHERE id=? AND customer_id=? AND workspace_id=?`
+      )
+        .bind(
+          input.description,
+          input.opportunityType,
+          input.budgetCents,
+          input.status,
+          now,
+          opportunityId,
+          customerId,
+          workspaceId
+        )
+        .run();
+    } else {
+      const input = parseOpportunity(body);
+      if (!input.ok) return badRequest(input.error);
+      await env.DB.prepare(
+        `INSERT INTO customer_opportunities (id,workspace_id,customer_id,description,opportunity_type,budget_cents,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)`
+      )
+        .bind(
+          opportunityId,
+          workspaceId,
+          customerId,
+          input.description,
+          input.opportunityType,
+          input.budgetCents,
+          input.status,
+          now,
+          now
+        )
+        .run();
+    }
+    return json(await loadDetail(env, workspaceId, customerId), segments.length === 2 ? 201 : 200);
+  }
   if (action === "activities" && request.method === "POST") {
     const body = await readBody(request);
     const subject = string(body.subject);
@@ -505,6 +558,12 @@ async function loadDetail(env: Env, workspaceId: string, id: string) {
       workspaceId,
       id
     ),
+    opportunities: await listRows(
+      env,
+      `SELECT * FROM customer_opportunities WHERE workspace_id=? AND customer_id=? ORDER BY CASE status WHEN 'accepted' THEN 0 WHEN 'quoted' THEN 1 WHEN 'scoping' THEN 2 ELSE 3 END,updated_at DESC`,
+      workspaceId,
+      id
+    ),
     addresses: await listRows(
       env,
       `SELECT * FROM customer_addresses WHERE workspace_id=? AND customer_id=? ORDER BY is_primary DESC,address_type`,
@@ -584,6 +643,35 @@ function bool(value: unknown) {
 }
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+function parseOpportunity(
+  body: Record<string, unknown>,
+  current?: Record<string, unknown>
+):
+  | {
+      ok: true;
+      description: string;
+      opportunityType: string;
+      budgetCents: number;
+      status: string;
+    }
+  | { ok: false; error: string } {
+  const description =
+    body.description === undefined ? string(current?.description) : string(body.description);
+  if (!description) return { ok: false, error: "description_required" };
+  const opportunityType =
+    body.type === undefined ? string(current?.opportunity_type) : string(body.type);
+  if (!OPPORTUNITY_TYPES.includes(opportunityType))
+    return { ok: false, error: "invalid_opportunity_type" };
+  const status =
+    body.status === undefined ? string(current?.status) || "scoping" : string(body.status);
+  if (!OPPORTUNITY_STATUSES.includes(status))
+    return { ok: false, error: "invalid_opportunity_status" };
+  const rawBudget = body.budgetCents === undefined ? current?.budget_cents : body.budgetCents;
+  const budgetCents = typeof rawBudget === "number" ? rawBudget : Number.NaN;
+  if (!Number.isSafeInteger(budgetCents) || budgetCents < 0)
+    return { ok: false, error: "invalid_budget" };
+  return { ok: true, description, opportunityType, budgetCents, status };
 }
 async function setPrimaryContact(
   env: Env,
