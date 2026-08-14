@@ -37,7 +37,7 @@ describe("customers API", () => {
       method: "PATCH",
       body: JSON.stringify({
         displayName: "Acme Workshop",
-        status: "prospect",
+        status: "active",
         leadSource: "Architect referral",
       }),
     });
@@ -45,10 +45,16 @@ describe("customers API", () => {
     expect((await updated.json()) as unknown).toMatchObject({
       customer: {
         display_name: "Acme Workshop",
-        status: "prospect",
+        status: "active",
         lead_source: "Architect referral",
       },
     });
+
+    const multiStatusList = await request(env, "/customers?workspaceId=default&status=lead,active");
+    expect(multiStatusList.status).toBe(200);
+    expect((await multiStatusList.json()) as Array<{ status: string }>).toEqual([
+      expect.objectContaining({ status: "active" }),
+    ]);
 
     const note = await request(env, `/customers/${detail.customer.id}/activities`, {
       method: "POST",

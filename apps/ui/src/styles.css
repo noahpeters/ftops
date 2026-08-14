@@ -9,3 +9,8 @@ input[type="reset"] {
   color: inherit;
   font: inherit;
 }
+
+button {
+  border: 1px solid grey;
+  box-shadow: 1px 1px 1px brown;
+}

@@ -87,9 +87,16 @@ export type CustomerActivity = {
 
 export function listCustomers(
   workspaceId: string,
-  filters: { search?: string; status?: string; sync?: string }
+  filters: { search?: string; status?: string[]; sync?: string }
 ) {
-  return fetchJson<CustomerSummary[]>(buildUrl("/customers", { workspaceId, ...filters }));
+  return fetchJson<CustomerSummary[]>(
+    buildUrl("/customers", {
+      workspaceId,
+      search: filters.search,
+      status: filters.status?.join(","),
+      sync: filters.sync,
+    })
+  );
 }
 export function getCustomer(id: string) {
   return fetchJson<CustomerDetail>(buildUrl(`/customers/${id}`));
@@ -161,7 +168,7 @@ export function addAddress(id: string, input: Record<string, unknown>) {
   });
 }
 export function addNote(id: string, input: Record<string, unknown>) {
-  return fetchJson(buildUrl(`/customers/${id}/activities`), {
+  return fetchJson<CustomerActivity[]>(buildUrl(`/customers/${id}/activities`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),

@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { ReactNode } from "react";
 import { NavLink, Outlet, useNavigate, useParams } from "react-router";
 import stylex from "~/lib/stylex";
 import { colors, spacing, radius } from "./theme/tokens.stylex";
@@ -38,20 +39,45 @@ const styles = stylex.create({
     color: colors.text,
     fontFamily: '"IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif',
   },
+  appShell: {
+    display: "grid",
+    gridTemplateColumns: "240px minmax(0, 1fr)",
+    minHeight: "100vh",
+    "@media (max-width: 760px)": {
+      gridTemplateColumns: "1fr",
+    },
+  },
+  sidebar: {
+    position: "sticky",
+    top: 0,
+    height: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    borderRight: `1px solid ${colors.border}`,
+    backgroundColor: colors.surface,
+    overflowY: "auto",
+    "@media (max-width: 760px)": {
+      position: "relative",
+      height: "auto",
+      borderRight: "none",
+      borderBottom: `1px solid ${colors.border}`,
+    },
+  },
+  mainContent: {
+    minWidth: 0,
+  },
   appHeader: {
     display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: spacing.xl,
-    padding: "24px 32px 16px",
+    flexDirection: "column",
+    gap: spacing.lg,
+    padding: "24px 20px 18px",
     borderBottom: `1px solid ${colors.border}`,
-    backgroundColor: colors.surface,
   },
   headerControls: {
     display: "flex",
     gap: "16px",
-    alignItems: "flex-end",
-    flexWrap: "wrap",
+    flexDirection: "column",
+    alignItems: "stretch",
   },
   workspaceSelect: {
     display: "flex",
@@ -65,9 +91,9 @@ const styles = stylex.create({
   },
   tabs: {
     display: "flex",
+    flexDirection: "column",
     gap: spacing.sm,
-    padding: "16px 32px 0",
-    flexWrap: "wrap",
+    padding: "16px 12px",
   },
   tabButton: {
     border: `1px solid ${colors.border}`,
@@ -77,6 +103,9 @@ const styles = stylex.create({
     borderRadius: "8px",
     cursor: "pointer",
     fontSize: "13px",
+    textDecoration: "none",
+    width: "100%",
+    boxSizing: "border-box",
   },
   tabButtonActive: {
     backgroundColor: colors.accent,
@@ -631,159 +660,76 @@ export default function App(): JSX.Element {
   return (
     <AppContext.Provider value={appContextValue}>
       <div className={stylex(styles.app)}>
-        <header className={stylex(styles.appHeader)}>
-          <div>
-            <h1>ftops internal UI</h1>
-            <p>Plan preview + events viewer for ftops endpoints.</p>
-          </div>
-          <div className={stylex(styles.headerControls)}>
-            <div className={stylex(styles.workspaceSelect)}>
-              <label htmlFor="workspace-select">Workspace</label>
-              <select
-                id="workspace-select"
-                value={selectedWorkspaceId ?? ""}
-                onChange={(event) => setSelectedWorkspaceId(event.target.value)}
-                disabled={workspaceLoading}
-              >
-                {workspaces.map((workspace) => (
-                  <option key={workspace.id} value={workspace.id}>
-                    {workspace.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {import.meta.env.DEV && (
-              <div className={stylex(styles.devIdentity)}>
-                <label htmlFor="debug-email">Dev identity</label>
-                <input
-                  id="debug-email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={debugEmail}
-                  onChange={(event) => setDebugEmail(event.target.value)}
-                />
+        <div className={stylex(styles.appShell)}>
+          <aside className={stylex(styles.sidebar)}>
+            <header className={stylex(styles.appHeader)}>
+              <div>
+                <h1>ftops</h1>
+                <p>Operations</p>
               </div>
-            )}
-          </div>
-        </header>
-        <DevMigrationBanner />
+              <div className={stylex(styles.headerControls)}>
+                <div className={stylex(styles.workspaceSelect)}>
+                  <label htmlFor="workspace-select">Workspace</label>
+                  <select
+                    id="workspace-select"
+                    value={selectedWorkspaceId ?? ""}
+                    onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+                    disabled={workspaceLoading}
+                  >
+                    {workspaces.map((workspace) => (
+                      <option key={workspace.id} value={workspace.id}>
+                        {workspace.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {import.meta.env.DEV && (
+                  <div className={stylex(styles.devIdentity)}>
+                    <label htmlFor="debug-email">Dev identity</label>
+                    <input
+                      id="debug-email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={debugEmail}
+                      onChange={(event) => setDebugEmail(event.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            </header>
 
-        <nav className={stylex(styles.tabs)}>
-          {isSystemAdmin && (
-            <NavLink
-              className={({ isActive }) =>
-                stylex(styles.tabButton, isActive && styles.tabButtonActive)
-              }
-              to="/plan-preview"
-            >
-              Plan Preview
-            </NavLink>
-          )}
-          {isSystemAdmin && (
-            <NavLink
-              className={({ isActive }) =>
-                stylex(styles.tabButton, isActive && styles.tabButtonActive)
-              }
-              to="/events"
-            >
-              Events Viewer
-            </NavLink>
-          )}
-          {isSystemAdmin && (
-            <NavLink
-              className={({ isActive }) =>
-                stylex(styles.tabButton, isActive && styles.tabButtonActive)
-              }
-              to="/demo"
-            >
-              Demo
-            </NavLink>
-          )}
-          {isWorkspaceAdmin && (
-            <NavLink
-              className={({ isActive }) =>
-                stylex(styles.tabButton, isActive && styles.tabButtonActive)
-              }
-              to="/templates"
-            >
-              Templates
-            </NavLink>
-          )}
-          {isWorkspaceMember && (
-            <NavLink
-              className={({ isActive }) =>
-                stylex(styles.tabButton, isActive && styles.tabButtonActive)
-              }
-              to="/customers"
-            >
-              Customers
-            </NavLink>
-          )}
-          {isWorkspaceMember && (
-            <NavLink
-              className={({ isActive }) =>
-                stylex(styles.tabButton, isActive && styles.tabButtonActive)
-              }
-              to="/projects"
-            >
-              Projects
-            </NavLink>
-          )}
-          {isWorkspaceMember && (
-            <NavLink
-              className={({ isActive }) =>
-                stylex(styles.tabButton, isActive && styles.tabButtonActive)
-              }
-              to="/tasks"
-            >
-              Tasks
-            </NavLink>
-          )}
-          {isWorkspaceAdmin && (
-            <NavLink
-              className={({ isActive }) =>
-                stylex(styles.tabButton, isActive && styles.tabButtonActive)
-              }
-              to="/integrations"
-            >
-              Integrations
-            </NavLink>
-          )}
-          {isWorkspaceAdmin && (
-            <NavLink
-              className={({ isActive }) =>
-                stylex(styles.tabButton, isActive && styles.tabButtonActive)
-              }
-              to="/ingest"
-            >
-              Ingest
-            </NavLink>
-          )}
-          {isSystemAdmin && (
-            <NavLink
-              className={({ isActive }) =>
-                stylex(styles.tabButton, isActive && styles.tabButtonActive)
-              }
-              to="/workspaces"
-            >
-              Workspaces
-            </NavLink>
-          )}
-          {isWorkspaceAdmin && (
-            <NavLink
-              className={({ isActive }) =>
-                stylex(styles.tabButton, isActive && styles.tabButtonActive)
-              }
-              to="/users"
-            >
-              Users
-            </NavLink>
-          )}
-        </nav>
-
-        <Outlet />
+            <nav className={stylex(styles.tabs)}>
+              {isSystemAdmin && <AppNavLink to="/plan-preview">Plan Preview</AppNavLink>}
+              {isSystemAdmin && <AppNavLink to="/events">Events Viewer</AppNavLink>}
+              {isSystemAdmin && <AppNavLink to="/demo">Demo</AppNavLink>}
+              {isWorkspaceAdmin && <AppNavLink to="/templates">Templates</AppNavLink>}
+              {isWorkspaceMember && <AppNavLink to="/customers">Customers</AppNavLink>}
+              {isWorkspaceMember && <AppNavLink to="/projects">Projects</AppNavLink>}
+              {isWorkspaceMember && <AppNavLink to="/tasks">Tasks</AppNavLink>}
+              {isWorkspaceAdmin && <AppNavLink to="/integrations">Integrations</AppNavLink>}
+              {isWorkspaceAdmin && <AppNavLink to="/ingest">Ingest</AppNavLink>}
+              {isSystemAdmin && <AppNavLink to="/workspaces">Workspaces</AppNavLink>}
+              {isWorkspaceAdmin && <AppNavLink to="/users">Users</AppNavLink>}
+            </nav>
+          </aside>
+          <main className={stylex(styles.mainContent)}>
+            <DevMigrationBanner />
+            <Outlet />
+          </main>
+        </div>
       </div>
     </AppContext.Provider>
+  );
+}
+
+function AppNavLink({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <NavLink
+      className={({ isActive }) => stylex(styles.tabButton, isActive && styles.tabButtonActive)}
+      to={to}
+    >
+      {children}
+    </NavLink>
   );
 }
 

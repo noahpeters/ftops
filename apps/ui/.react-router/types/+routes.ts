@@ -14,6 +14,15 @@ type Pages = {
   "/": {
     params: {};
   };
+  "/legal": {
+    params: {};
+  };
+  "/legal/privacy": {
+    params: {};
+  };
+  "/legal/eula": {
+    params: {};
+  };
   "/plan-preview": {
     params: {};
   };
@@ -44,6 +53,14 @@ type Pages = {
       "projectId": string;
     };
   };
+  "/customers": {
+    params: {};
+  };
+  "/customers/:customerId": {
+    params: {
+      "customerId": string;
+    };
+  };
   "/tasks": {
     params: {};
   };
@@ -72,11 +89,23 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/tasks" | "/tasks/kanban" | "/integrations" | "/ingest" | "/workspaces" | "/users" | "/*";
+    page: "/" | "/legal" | "/legal/privacy" | "/legal/eula" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/customers" | "/customers/:customerId" | "/tasks" | "/tasks/kanban" | "/integrations" | "/ingest" | "/workspaces" | "/users" | "/*";
+  };
+  "routes/legal-layout.tsx": {
+    id: "routes/legal-layout";
+    page: "/legal" | "/legal/privacy" | "/legal/eula";
+  };
+  "routes/legal-privacy.tsx": {
+    id: "routes/legal-privacy";
+    page: "/legal/privacy";
+  };
+  "routes/legal-eula.tsx": {
+    id: "routes/legal-eula";
+    page: "/legal/eula";
   };
   "routes/root.tsx": {
     id: "routes/root";
-    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/tasks" | "/tasks/kanban" | "/integrations" | "/ingest" | "/workspaces" | "/users" | "/*";
+    page: "/" | "/plan-preview" | "/plan-preview/:recordUri" | "/events" | "/demo" | "/templates" | "/templates/:templateKey" | "/projects" | "/projects/:projectId" | "/customers" | "/customers/:customerId" | "/tasks" | "/tasks/kanban" | "/integrations" | "/ingest" | "/workspaces" | "/users" | "/*";
   };
   "routes/index.tsx": {
     id: "routes/index";
@@ -114,6 +143,14 @@ type RouteFiles = {
     id: "routes/projects-project";
     page: "/projects/:projectId";
   };
+  "routes/customers.tsx": {
+    id: "routes/customers";
+    page: "/customers";
+  };
+  "routes/customers-customer.tsx": {
+    id: "routes/customers-customer";
+    page: "/customers/:customerId";
+  };
   "routes/tasks.tsx": {
     id: "routes/tasks";
     page: "/tasks";
@@ -146,6 +183,9 @@ type RouteFiles = {
 
 type RouteModules = {
   "root": typeof import("./src/root.tsx");
+  "routes/legal-layout": typeof import("./src/routes/legal-layout.tsx");
+  "routes/legal-privacy": typeof import("./src/routes/legal-privacy.tsx");
+  "routes/legal-eula": typeof import("./src/routes/legal-eula.tsx");
   "routes/root": typeof import("./src/routes/root.tsx");
   "routes/index": typeof import("./src/routes/index.tsx");
   "routes/plan-preview": typeof import("./src/routes/plan-preview.tsx");
@@ -156,6 +196,8 @@ type RouteModules = {
   "routes/templates-template": typeof import("./src/routes/templates-template.tsx");
   "routes/projects": typeof import("./src/routes/projects.tsx");
   "routes/projects-project": typeof import("./src/routes/projects-project.tsx");
+  "routes/customers": typeof import("./src/routes/customers.tsx");
+  "routes/customers-customer": typeof import("./src/routes/customers-customer.tsx");
   "routes/tasks": typeof import("./src/routes/tasks.tsx");
   "routes/tasks-kanban": typeof import("./src/routes/tasks-kanban.tsx");
   "routes/integrations": typeof import("./src/routes/integrations.tsx");

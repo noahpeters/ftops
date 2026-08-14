@@ -70,7 +70,43 @@ const styles = stylex.create({
   textarea: { minHeight: "120px", resize: "vertical", font: "inherit" },
   note: { borderBottom: `1px solid ${colors.border}`, padding: "10px 0" },
   markdown: { lineHeight: 1.5 },
+  detailTabs: {
+    display: "flex",
+    gap: "6px",
+    flexWrap: "wrap",
+    padding: "10px 0 4px",
+    borderBottom: `1px solid ${colors.border}`,
+  },
+  detailTab: {
+    border: "none",
+    borderBottom: "3px solid transparent",
+    borderRadius: 0,
+    padding: "8px 10px",
+    color: colors.textMuted,
+    cursor: "pointer",
+  },
+  detailTabActive: {
+    color: colors.text,
+    borderBottomColor: colors.accent,
+    fontWeight: 600,
+  },
+  summaryCard: {
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceAlt,
+    padding: "12px",
+  },
+  multiSelect: { minHeight: "72px", minWidth: "150px" },
 });
+
+type CustomerTab = "summary" | "contacts" | "opportunities" | "activity" | "quickbooks";
+const CUSTOMER_TABS: Array<{ id: CustomerTab; label: string }> = [
+  { id: "summary", label: "Summary" },
+  { id: "contacts", label: "Contacts" },
+  { id: "opportunities", label: "Opportunities" },
+  { id: "activity", label: "Activity / Notes" },
+  { id: "quickbooks", label: "QuickBooks" },
+];
 
 export function CustomersPanel({
   workspaceId,
@@ -83,7 +119,7 @@ export function CustomersPanel({
   const [rows, setRows] = useState<CustomerSummary[]>([]);
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [statuses, setStatuses] = useState<string[]>(["lead", "active"]);
   const [sync, setSync] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [integrationId, setIntegrationId] = useState("");
@@ -94,17 +130,19 @@ export function CustomersPanel({
   const [creatingNote, setCreatingNote] = useState(false);
   const [creatingOpportunity, setCreatingOpportunity] = useState(false);
   const [editingOpportunityId, setEditingOpportunityId] = useState<string | null>(null);
-  const [uploadingActivityId, setUploadingActivityId] = useState<string | null>(null);
+  const [savingNote, setSavingNote] = useState(false);
+  const [activeTab, setActiveTab] = useState<CustomerTab>("summary");
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
-    const result = await listCustomers(workspaceId, { search, status, sync });
+    const result = await listCustomers(workspaceId, { search, status: statuses, sync });
     if (result.ok) setRows(result.data ?? []);
     else setError(result.text);
-  }, [workspaceId, search, status, sync]);
+  }, [workspaceId, search, statuses, sync]);
   useEffect(() => {
     void refresh();
   }, [refresh]);
   useEffect(() => {
+    setActiveTab("summary");
     if (!customerId) {
       setDetail(null);
       return;
@@ -138,21 +176,36 @@ export function CustomersPanel({
     body: string;
     followUpAt?: string;
     followUpDescription?: string;
+    files: File[];
   }) {
     if (!customerId) return;
-    const r = await addNote(customerId, input);
+    setSavingNote(true);
+    setError(null);
+    const { files, ...noteInput } = input;
+    const r = await addNote(customerId, noteInput);
     if (r.ok) {
-      const loaded = await getCustomer(customerId);
-      if (loaded.ok) {
-        setDetail(loaded.data);
-        setCreatingNote(false);
+      const note = r.data?.find((activity) => activity.activity_type === "note");
+      if (!note && files.length) {
+        setError("The note was saved, but its attachments could not be linked.");
+      } else if (note) {
+        for (const file of files) {
+          const uploaded = await uploadNoteFile(note.id, file, false);
+          if (!uploaded) break;
+        }
       }
-    } else setError(r.text);
+      await reloadDetail();
+      setCreatingNote(false);
+    } else {
+      setError(r.text);
+    }
+    setSavingNote(false);
   }
-  async function uploadNoteFile(activityId: string, file: File) {
-    if (!customerId) return;
-    if (file.size > 100 * 1024 * 1024) return setError("Files must be 100 MB or smaller.");
-    setUploadingActivityId(activityId);
+  async function uploadNoteFile(activityId: string, file: File, reload = true) {
+    if (!customerId) return false;
+    if (file.size > 100 * 1024 * 1024) {
+      setError("Files must be 100 MB or smaller.");
+      return false;
+    }
     setError(null);
     const contentType = file.type || "application/octet-stream";
     const initialized = await initCustomerFileUpload(customerId, {
@@ -162,8 +215,8 @@ export function CustomersPanel({
       sizeBytes: file.size,
     });
     if (!initialized.ok || !initialized.data) {
-      setUploadingActivityId(null);
-      return setError(initialized.text || "Could not start file upload.");
+      setError(initialized.text || "Could not start file upload.");
+      return false;
     }
     const uploadUrl = initialized.data.uploadUrl.startsWith("/")
       ? buildUrl(initialized.data.uploadUrl)
@@ -174,8 +227,8 @@ export function CustomersPanel({
       body: file,
     });
     if (!uploaded.ok) {
-      setUploadingActivityId(null);
-      return setError("File upload failed.");
+      setError("File upload failed.");
+      return false;
     }
     const completed = await completeCustomerFileUpload(customerId, {
       activityId,
@@ -184,9 +237,12 @@ export function CustomersPanel({
       contentType,
       sizeBytes: file.size,
     });
-    setUploadingActivityId(null);
-    if (!completed.ok) return setError(completed.text || "Could not finalize file upload.");
-    await reloadDetail();
+    if (!completed.ok) {
+      setError(completed.text || "Could not finalize file upload.");
+      return false;
+    }
+    if (reload) await reloadDetail();
+    return true;
   }
   async function downloadCustomerFile(fileId: string) {
     const result = await getCustomerFileDownload(fileId);
@@ -263,16 +319,22 @@ export function CustomersPanel({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select
-          aria-label="Customer status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="">All statuses</option>
-          {["lead", "prospect", "active", "past", "archived"].map((x) => (
-            <option key={x}>{x}</option>
-          ))}
-        </select>
+        <label>
+          <span className={stylex(styles.muted)}>Status</span>
+          <select
+            aria-label="Customer status"
+            className={stylex(styles.multiSelect)}
+            multiple
+            value={statuses}
+            onChange={(event) =>
+              setStatuses(Array.from(event.target.selectedOptions, (option) => option.value))
+            }
+          >
+            {["lead", "active", "completed", "archived"].map((x) => (
+              <option key={x}>{x}</option>
+            ))}
+          </select>
+        </label>
         <select
           aria-label="QuickBooks sync state"
           value={sync}
@@ -319,232 +381,332 @@ export function CustomersPanel({
             <>
               <div className={stylex(styles.actions)}>
                 <h3>{detail.customer.display_name}</h3>
-                {!editingCustomer && (
+                {activeTab === "summary" && !editingCustomer && (
                   <button onClick={() => setEditingCustomer(true)}>Edit customer</button>
                 )}
               </div>
-              <div className={stylex(styles.grid)}>
-                <div>
-                  <b>ftops-owned</b>
-                  {editingCustomer ? (
-                    <CustomerForm
-                      customer={detail.customer}
-                      onSave={saveCustomer}
-                      onCancel={() => setEditingCustomer(false)}
-                    />
-                  ) : (
-                    <>
-                      <p>Status: {detail.customer.status}</p>
-                      <p>Lead source: {detail.customer.lead_source || "—"}</p>
-                      <p>{followUpLabel(detail.customer.next_follow_up_at)}</p>
-                    </>
-                  )}
-                </div>
-                <div>
-                  <b>QuickBooks-sourced</b>
-                  <p>State: {detail.customer.quickbooks_sync_status}</p>
-                  <p>Last sync: {detail.customer.last_synced_at || "Never"}</p>
-                  {detail.customer.last_error && (
-                    <p className={stylex(styles.error)}>{detail.customer.last_error}</p>
-                  )}
-                </div>
-              </div>
-              <div className={stylex(styles.section)}>
-                <h4>Contacts</h4>
-                {!creatingContact && (
-                  <button onClick={() => setCreatingContact(true)}>Add contact</button>
-                )}
-                {creatingContact && (
-                  <ContactForm
-                    onSave={(input) => saveContact(input)}
-                    onCancel={() => setCreatingContact(false)}
-                  />
-                )}
-                {detail.contacts.map((contact) =>
-                  editingContactId === contact.id ? (
-                    <ContactForm
-                      key={contact.id}
-                      contact={contact}
-                      onSave={(input) => saveContact(input, contact.id)}
-                      onCancel={() => setEditingContactId(null)}
-                    />
-                  ) : (
-                    <div key={contact.id} className={stylex(styles.contact)}>
-                      <b>{contact.display_name}</b>
-                      {contact.is_primary ? " · Primary" : ""}
-                      <div>
-                        {contact.role || "Contact"} · {contact.status}
-                      </div>
-                      <div>
-                        {contact.email || "No email"} · {contact.phone || "No phone"}
-                      </div>
-                      <div className={stylex(styles.actions)}>
-                        <button onClick={() => setEditingContactId(contact.id)}>Edit</button>
-                        {contact.status !== "archived" && (
-                          <button onClick={() => removeContact(contact)}>Archive</button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                )}
-              </div>
-              <div className={stylex(styles.section)}>
-                <h4>Opportunities</h4>
-                {!creatingOpportunity && (
-                  <button onClick={() => setCreatingOpportunity(true)}>Add opportunity</button>
-                )}
-                {creatingOpportunity && (
-                  <OpportunityForm
-                    onSave={(input) => saveOpportunity(input)}
-                    onCancel={() => setCreatingOpportunity(false)}
-                  />
-                )}
-                {detail.opportunities.map((opportunity) =>
-                  editingOpportunityId === opportunity.id ? (
-                    <OpportunityForm
-                      key={opportunity.id}
-                      opportunity={opportunity}
-                      onSave={(input) => saveOpportunity(input, opportunity.id)}
-                      onCancel={() => setEditingOpportunityId(null)}
-                    />
-                  ) : (
-                    <article key={opportunity.id} className={stylex(styles.contact)}>
-                      <b>{opportunity.description}</b>
-                      <div>
-                        {opportunity.opportunity_type} · {opportunity.status} ·{" "}
-                        {formatBudget(opportunity.budget_cents)}
-                      </div>
-                      <button onClick={() => setEditingOpportunityId(opportunity.id)}>Edit</button>
-                    </article>
-                  )
-                )}
-              </div>
-              <div className={stylex(styles.section)}>
-                <h4>Addresses</h4>
-                {detail.addresses.map((x) => (
-                  <p key={String(x.id)}>
-                    {String(x.address_type)}: {String(x.line1 || "")}, {String(x.city || "")}
-                  </p>
+              <div
+                className={stylex(styles.detailTabs)}
+                role="tablist"
+                aria-label="Customer details"
+              >
+                {CUSTOMER_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === tab.id}
+                    className={stylex(
+                      styles.detailTab,
+                      activeTab === tab.id && styles.detailTabActive
+                    )}
+                    onClick={() => setActiveTab(tab.id)}
+                  >
+                    {tab.label}
+                  </button>
                 ))}
               </div>
-              <div className={stylex(styles.section)}>
-                <h4>Follow-up tasks</h4>
-                {detail.tasks.length === 0 && (
-                  <p className={stylex(styles.muted)}>No customer tasks.</p>
-                )}
-                {detail.tasks.map((task) => (
-                  <article key={task.id} className={stylex(styles.note)}>
-                    <b>{task.title}</b>
-                    <div className={stylex(styles.muted)}>
-                      {task.status} · {task.due_at ? formatDateTime(task.due_at) : "No due date"}
-                      {task.project_id ? " · Linked to project" : " · Customer-only"}
-                    </div>
-                    {task.description && <div>{task.description}</div>}
-                  </article>
-                ))}
-              </div>
-              <div className={stylex(styles.section)}>
-                <h4>Files</h4>
-                {detail.files.filter((file) => !file.deprecated_at).length === 0 && (
-                  <p className={stylex(styles.muted)}>No current files.</p>
-                )}
-                {detail.files
-                  .filter((file) => !file.deprecated_at)
-                  .map((file) => (
-                    <CustomerFileRow
-                      key={file.id}
-                      file={file}
-                      onDownload={() => downloadCustomerFile(file.id)}
-                      onDeprecated={() => toggleFileDeprecated(file.id, true)}
-                    />
-                  ))}
-                {detail.files.some((file) => file.deprecated_at) && (
-                  <details>
-                    <summary>Deprecated files</summary>
-                    {detail.files
-                      .filter((file) => file.deprecated_at)
-                      .map((file) => (
-                        <CustomerFileRow
-                          key={file.id}
-                          file={file}
-                          onDownload={() => downloadCustomerFile(file.id)}
-                          onDeprecated={() => toggleFileDeprecated(file.id, false)}
-                          deprecated
-                        />
+              {activeTab === "summary" && (
+                <div className={stylex(styles.grid)} role="tabpanel">
+                  <div>
+                    <b>Customer</b>
+                    {editingCustomer ? (
+                      <CustomerForm
+                        customer={detail.customer}
+                        onSave={saveCustomer}
+                        onCancel={() => setEditingCustomer(false)}
+                      />
+                    ) : (
+                      <>
+                        <p>Name: {detail.customer.display_name}</p>
+                        <p>Status: {detail.customer.status}</p>
+                        <p>Lead source: {detail.customer.lead_source || "—"}</p>
+                        <p>{followUpLabel(detail.customer.next_follow_up_at)}</p>
+                      </>
+                    )}
+                  </div>
+                  <div className={stylex(styles.summaryCard)}>
+                    <b>Primary contact</b>
+                    {detail.contacts.find((contact) => contact.is_primary) ? (
+                      <>
+                        <p>{detail.contacts.find((contact) => contact.is_primary)?.display_name}</p>
+                        <p className={stylex(styles.muted)}>
+                          {detail.contacts.find((contact) => contact.is_primary)?.email ||
+                            "No email"}{" "}
+                          ·{" "}
+                          {detail.contacts.find((contact) => contact.is_primary)?.phone ||
+                            "No phone"}
+                        </p>
+                      </>
+                    ) : (
+                      <p className={stylex(styles.muted)}>No primary contact.</p>
+                    )}
+                  </div>
+                  <div className={stylex(styles.summaryCard)}>
+                    <b>Recent notes</b>
+                    {detail.activities
+                      .filter((x) => x.activity_type === "note")
+                      .slice(0, 3)
+                      .map((x) => (
+                        <div key={x.id}>{x.subject}</div>
                       ))}
-                  </details>
-                )}
-              </div>
-              <div className={stylex(styles.section)}>
-                <h4>Activity</h4>
-                {!creatingNote && <button onClick={() => setCreatingNote(true)}>Add note</button>}
-                {creatingNote && (
-                  <NoteForm onSave={saveNote} onCancel={() => setCreatingNote(false)} />
-                )}
-                {detail.activities.map((activity) => (
-                  <article key={activity.id} className={stylex(styles.note)}>
-                    <b>{activity.subject}</b>{" "}
-                    <span className={stylex(styles.muted)}>
-                      {activity.created_by ? `by ${activity.created_by} · ` : ""}
-                      {activity.occurred_at}
-                    </span>
-                    {activity.body && (
-                      <div className={stylex(styles.markdown)}>
-                        <Markdown>{activity.body}</Markdown>
-                      </div>
+                    {!detail.activities.some((x) => x.activity_type === "note") && (
+                      <p className={stylex(styles.muted)}>No notes yet.</p>
                     )}
-                    {activity.activity_type === "note" && (
-                      <div className={stylex(styles.actions)}>
-                        <label>
-                          <span className={stylex(styles.muted)}>
-                            {uploadingActivityId === activity.id ? "Uploading…" : "Attach file"}
-                          </span>
-                          <input
-                            type="file"
-                            disabled={uploadingActivityId !== null}
-                            onChange={(event) => {
-                              const file = event.target.files?.[0];
-                              if (file) void uploadNoteFile(activity.id, file);
-                              event.target.value = "";
-                            }}
-                          />
-                        </label>
-                        {detail.files
-                          .filter((file) => file.activity_id === activity.id && !file.deprecated_at)
-                          .map((file) => (
-                            <button key={file.id} onClick={() => downloadCustomerFile(file.id)}>
-                              {file.original_filename}
-                            </button>
-                          ))}
+                  </div>
+                  <div className={stylex(styles.summaryCard)}>
+                    <b>Attachments</b>
+                    <p>{detail.files.filter((file) => !file.deprecated_at).length} current</p>
+                    {detail.files
+                      .filter((file) => !file.deprecated_at)
+                      .slice(0, 3)
+                      .map((file) => (
+                        <button key={file.id} onClick={() => downloadCustomerFile(file.id)}>
+                          {file.original_filename}
+                        </button>
+                      ))}
+                  </div>
+                  <div className={stylex(styles.summaryCard)}>
+                    <b>Tasks</b>
+                    <p>
+                      {
+                        detail.tasks.filter(
+                          (task) => task.status !== "done" && task.status !== "canceled"
+                        ).length
+                      }{" "}
+                      open
+                    </p>
+                    {detail.tasks.slice(0, 3).map((task) => (
+                      <div key={task.id} className={stylex(styles.muted)}>
+                        {task.title} · {task.due_at ? formatDateTime(task.due_at) : "No due date"}
                       </div>
-                    )}
-                  </article>
-                ))}
-              </div>
-              <Financial title="Estimates" rows={detail.estimates} />
-              <Financial title="Invoices" rows={detail.invoices} />
-              <div className={stylex(styles.section)}>
-                <h4>QuickBooks synchronization</h4>
-                <input
-                  placeholder="Integration ID"
-                  value={integrationId}
-                  onChange={(e) => setIntegrationId(e.target.value)}
-                />
-                <div className={stylex(styles.actions)}>
-                  <button onClick={findMatches}>Find matches</button>
-                  <button onClick={() => action("create")}>Create in QuickBooks</button>
-                  <button onClick={() => action("refresh")}>Refresh</button>
-                  <button onClick={() => action("retry")}>Retry failed sync</button>
+                    ))}
+                  </div>
+                  <div className={stylex(styles.summaryCard)}>
+                    <b>Opportunities</b>
+                    <p>{detail.opportunities.length} total</p>
+                    {detail.opportunities.slice(0, 3).map((opportunity) => (
+                      <div key={opportunity.id} className={stylex(styles.muted)}>
+                        {opportunity.description} · {opportunity.status}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                {matches.map((m) => (
-                  <p key={m.id}>
-                    {m.displayName}{" "}
-                    <button onClick={() => action("link", { externalId: m.id })}>
-                      Confirm link
-                    </button>
-                  </p>
-                ))}
-              </div>
+              )}
+              {activeTab === "contacts" && (
+                <div className={stylex(styles.section)} role="tabpanel">
+                  <h4>Contacts</h4>
+                  {!creatingContact && (
+                    <button onClick={() => setCreatingContact(true)}>Add contact</button>
+                  )}
+                  {creatingContact && (
+                    <ContactForm
+                      onSave={(input) => saveContact(input)}
+                      onCancel={() => setCreatingContact(false)}
+                    />
+                  )}
+                  {detail.contacts.map((contact) =>
+                    editingContactId === contact.id ? (
+                      <ContactForm
+                        key={contact.id}
+                        contact={contact}
+                        onSave={(input) => saveContact(input, contact.id)}
+                        onCancel={() => setEditingContactId(null)}
+                      />
+                    ) : (
+                      <div key={contact.id} className={stylex(styles.contact)}>
+                        <b>{contact.display_name}</b>
+                        {contact.is_primary ? " · Primary" : ""}
+                        <div>
+                          {contact.role || "Contact"} · {contact.status}
+                        </div>
+                        <div>
+                          {contact.email || "No email"} · {contact.phone || "No phone"}
+                        </div>
+                        <div className={stylex(styles.actions)}>
+                          <button onClick={() => setEditingContactId(contact.id)}>Edit</button>
+                          {contact.status !== "archived" && (
+                            <button onClick={() => removeContact(contact)}>Archive</button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+              {activeTab === "opportunities" && (
+                <div className={stylex(styles.section)} role="tabpanel">
+                  <h4>Opportunities</h4>
+                  {!creatingOpportunity && (
+                    <button onClick={() => setCreatingOpportunity(true)}>Add opportunity</button>
+                  )}
+                  {creatingOpportunity && (
+                    <OpportunityForm
+                      onSave={(input) => saveOpportunity(input)}
+                      onCancel={() => setCreatingOpportunity(false)}
+                    />
+                  )}
+                  {detail.opportunities.map((opportunity) =>
+                    editingOpportunityId === opportunity.id ? (
+                      <OpportunityForm
+                        key={opportunity.id}
+                        opportunity={opportunity}
+                        onSave={(input) => saveOpportunity(input, opportunity.id)}
+                        onCancel={() => setEditingOpportunityId(null)}
+                      />
+                    ) : (
+                      <article key={opportunity.id} className={stylex(styles.contact)}>
+                        <b>{opportunity.description}</b>
+                        <div>
+                          {opportunity.opportunity_type} · {opportunity.status} ·{" "}
+                          {formatBudget(opportunity.budget_cents)}
+                        </div>
+                        <button onClick={() => setEditingOpportunityId(opportunity.id)}>
+                          Edit
+                        </button>
+                      </article>
+                    )
+                  )}
+                </div>
+              )}
+              {activeTab === "contacts" && (
+                <div className={stylex(styles.section)} role="tabpanel">
+                  <h4>Addresses</h4>
+                  {detail.addresses.map((x) => (
+                    <p key={String(x.id)}>
+                      {String(x.address_type)}: {String(x.line1 || "")}, {String(x.city || "")}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {activeTab === "summary" && (
+                <div className={stylex(styles.section)}>
+                  <h4>Follow-up tasks</h4>
+                  {detail.tasks.length === 0 && (
+                    <p className={stylex(styles.muted)}>No customer tasks.</p>
+                  )}
+                  {detail.tasks.map((task) => (
+                    <article key={task.id} className={stylex(styles.note)}>
+                      <b>{task.title}</b>
+                      <div className={stylex(styles.muted)}>
+                        {task.status} · {task.due_at ? formatDateTime(task.due_at) : "No due date"}
+                        {task.project_id ? " · Linked to project" : " · Customer-only"}
+                      </div>
+                      {task.description && <div>{task.description}</div>}
+                    </article>
+                  ))}
+                </div>
+              )}
+              {activeTab === "activity" && (
+                <div className={stylex(styles.section)} role="tabpanel">
+                  <h4>Files</h4>
+                  {detail.files.filter((file) => !file.deprecated_at).length === 0 && (
+                    <p className={stylex(styles.muted)}>No current files.</p>
+                  )}
+                  {detail.files
+                    .filter((file) => !file.deprecated_at)
+                    .map((file) => (
+                      <CustomerFileRow
+                        key={file.id}
+                        file={file}
+                        onDownload={() => downloadCustomerFile(file.id)}
+                        onDeprecated={() => toggleFileDeprecated(file.id, true)}
+                      />
+                    ))}
+                  {detail.files.some((file) => file.deprecated_at) && (
+                    <details>
+                      <summary>Deprecated files</summary>
+                      {detail.files
+                        .filter((file) => file.deprecated_at)
+                        .map((file) => (
+                          <CustomerFileRow
+                            key={file.id}
+                            file={file}
+                            onDownload={() => downloadCustomerFile(file.id)}
+                            onDeprecated={() => toggleFileDeprecated(file.id, false)}
+                            deprecated
+                          />
+                        ))}
+                    </details>
+                  )}
+                </div>
+              )}
+              {activeTab === "activity" && (
+                <div className={stylex(styles.section)} role="tabpanel">
+                  <h4>Activity</h4>
+                  {!creatingNote && <button onClick={() => setCreatingNote(true)}>Add note</button>}
+                  {creatingNote && (
+                    <NoteForm
+                      onSave={saveNote}
+                      onCancel={() => setCreatingNote(false)}
+                      saving={savingNote}
+                    />
+                  )}
+                  {detail.activities.map((activity) => (
+                    <article key={activity.id} className={stylex(styles.note)}>
+                      <b>{activity.subject}</b>{" "}
+                      <span className={stylex(styles.muted)}>
+                        {activity.created_by ? `by ${activity.created_by} · ` : ""}
+                        {activity.occurred_at}
+                      </span>
+                      {activity.body && (
+                        <div className={stylex(styles.markdown)}>
+                          <Markdown>{activity.body}</Markdown>
+                        </div>
+                      )}
+                      {activity.activity_type === "note" && (
+                        <div className={stylex(styles.actions)}>
+                          {detail.files
+                            .filter(
+                              (file) => file.activity_id === activity.id && !file.deprecated_at
+                            )
+                            .map((file) => (
+                              <button key={file.id} onClick={() => downloadCustomerFile(file.id)}>
+                                {file.original_filename}
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              )}
+              {activeTab === "quickbooks" && (
+                <>
+                  <div className={stylex(styles.section)} role="tabpanel">
+                    <h4>QuickBooks fields</h4>
+                    <p>State: {detail.customer.quickbooks_sync_status}</p>
+                    <p>Last sync: {detail.customer.last_synced_at || "Never"}</p>
+                    {detail.customer.last_error && (
+                      <p className={stylex(styles.error)}>{detail.customer.last_error}</p>
+                    )}
+                  </div>
+                  <Financial title="Estimates" rows={detail.estimates} />
+                  <Financial title="Invoices" rows={detail.invoices} />
+                  <div className={stylex(styles.section)}>
+                    <h4>QuickBooks synchronization</h4>
+                    <input
+                      placeholder="Integration ID"
+                      value={integrationId}
+                      onChange={(e) => setIntegrationId(e.target.value)}
+                    />
+                    <div className={stylex(styles.actions)}>
+                      <button onClick={findMatches}>Find matches</button>
+                      <button onClick={() => action("create")}>Create in QuickBooks</button>
+                      <button onClick={() => action("refresh")}>Refresh</button>
+                      <button onClick={() => action("retry")}>Retry failed sync</button>
+                    </div>
+                    {matches.map((m) => (
+                      <p key={m.id}>
+                        {m.displayName}{" "}
+                        <button onClick={() => action("link", { externalId: m.id })}>
+                          Confirm link
+                        </button>
+                      </p>
+                    ))}
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
@@ -689,7 +851,7 @@ function CustomerForm({
           value={status}
           onChange={(e) => setStatus(e.target.value)}
         >
-          {["lead", "prospect", "active", "past", "archived"].map((value) => (
+          {["lead", "active", "completed", "archived"].map((value) => (
             <option key={value} value={value}>
               {value}
             </option>
@@ -716,20 +878,24 @@ function CustomerForm({
 function NoteForm({
   onSave,
   onCancel,
+  saving,
 }: {
   onSave: (input: {
     subject: string;
     body: string;
     followUpAt?: string;
     followUpDescription?: string;
-  }) => void;
+    files: File[];
+  }) => Promise<void>;
   onCancel: () => void;
+  saving: boolean;
 }) {
   const [subject, setSubject] = useState("Note");
   const [body, setBody] = useState("");
   const [scheduleFollowUp, setScheduleFollowUp] = useState(false);
   const [followUpAt, setFollowUpAt] = useState("");
   const [followUpDescription, setFollowUpDescription] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   return (
     <form
       className={stylex(styles.form)}
@@ -741,6 +907,7 @@ function NoteForm({
             body,
             followUpAt: scheduleFollowUp ? new Date(followUpAt).toISOString() : undefined,
             followUpDescription: scheduleFollowUp ? followUpDescription : undefined,
+            files,
           });
       }}
     >
@@ -794,9 +961,42 @@ function NoteForm({
           </label>
         </>
       )}
+      <label>
+        Attach files
+        <input
+          aria-label="Attach files"
+          type="file"
+          multiple
+          disabled={saving}
+          onChange={(event) => {
+            const selected = Array.from(event.target.files || []);
+            setFiles((current) => [...current, ...selected]);
+            event.target.value = "";
+          }}
+        />
+      </label>
+      {files.map((file, index) => (
+        <div key={`${file.name}-${file.size}-${index}`} className={stylex(styles.actions)}>
+          <span>
+            {file.name} · {formatFileSize(file.size)}
+          </span>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => setFiles((current) => current.filter((_, item) => item !== index))}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <span className={stylex(styles.muted)}>
+        Files are uploaded when the note is saved. Maximum 100 MB per file.
+      </span>
       <div className={stylex(styles.actions)}>
-        <button type="submit">Save note</button>
-        <button type="button" onClick={onCancel}>
+        <button type="submit" disabled={saving}>
+          {saving ? "Saving note and files…" : "Save note"}
+        </button>
+        <button type="button" disabled={saving} onClick={onCancel}>
           Cancel
         </button>
       </div>

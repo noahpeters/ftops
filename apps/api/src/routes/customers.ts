@@ -13,7 +13,7 @@ import {
 import { sanitizeExternalError } from "../lib/security";
 import { signedUrl } from "./customerFiles";
 
-const STATUSES = ["lead", "prospect", "active", "past", "archived"];
+const STATUSES = ["lead", "active", "completed", "archived"];
 const CONTACT_STATUSES = ["active", "inactive", "archived"];
 const OPPORTUNITY_TYPES = ["furniture", "cabinets", "other"];
 const OPPORTUNITY_STATUSES = ["scoping", "quoted", "accepted", "lost"];
@@ -45,11 +45,15 @@ export async function handleCustomers(
         const term = `%${search}%`;
         values.push(term, term, term, term);
       }
-      const status = url.searchParams.get("status")?.trim();
-      if (status) {
-        if (!STATUSES.includes(status)) return badRequest("invalid_status");
-        filters.push("c.status = ?");
-        values.push(status);
+      const statuses = (url.searchParams.get("status") || "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+      if (statuses.length) {
+        if (statuses.some((status) => !STATUSES.includes(status)))
+          return badRequest("invalid_status");
+        filters.push(`c.status IN (${statuses.map(() => "?").join(",")})`);
+        values.push(...statuses);
       }
       const sync = url.searchParams.get("sync")?.trim();
       if (sync === "not_linked") filters.push("ee.id IS NULL");

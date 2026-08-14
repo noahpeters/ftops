@@ -8,7 +8,7 @@ ftops owns customer status, lead source, multiple contacts, internal notes, oper
 
 Mirrored QuickBooks fields are stored so ftops can show accounting context beside operational work, associate estimates and invoices with customers and projects, remain useful during short QuickBooks outages, process webhook changes idempotently, and audit the last successfully fetched canonical state. Document numbers, dates, status, currency, subtotal, tax, discount, total, invoice balance, `SyncToken`, external update time, and the raw canonical payload are retained for those purposes. They are never treated as ftops-owned editable values; QuickBooks remains authoritative and a refresh replaces the mirror.
 
-Customer records do not require a QuickBooks link. Their lifecycle is `lead`, `prospect`, `active`, `past`, then `archived`; archiving preserves history.
+Customer records do not require a QuickBooks link. Their lifecycle is `lead`, `active`, `completed`, then `archived`; archiving preserves history.
 
 ## Linking and synchronization
 
