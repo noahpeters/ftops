@@ -25,7 +25,8 @@ export const MIGRATIONS = [
   "0021_qbo_oauth_bootstrap.sql",
   "0022_qbo_realm_security.sql",
   "0023_contact_management.sql",
-  "0024_customer_opportunities.sql"
+  "0024_customer_opportunities.sql",
+  "0025_customer_followups.sql"
 ] as const;
-export const LATEST_MIGRATION = "0024_customer_opportunities.sql";
-export const MIGRATIONS_COUNT = 26;
+export const LATEST_MIGRATION = "0025_customer_followups.sql";
+export const MIGRATIONS_COUNT = 27;

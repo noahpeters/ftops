@@ -3,7 +3,7 @@ import { buildUrl, fetchJson } from "@/lib/api";
 export type TaskRow = {
   id: string;
   workspace_id: string;
-  project_id: string;
+  project_id: string | null;
   scope: string;
   group_key: string | null;
   line_item_uri: string | null;
@@ -24,6 +24,8 @@ export type TaskRow = {
   priority: number;
   attachments_count?: number;
   notes_count?: number;
+  customer_display_name?: string | null;
+  project_title?: string | null;
 };
 
 export type KanbanResponse = {

@@ -18,10 +18,7 @@ import {
   type WorkspaceUser,
 } from "./api";
 import { buildUrl } from "@/lib/api";
-import {
-  listCommercialRecords,
-  type CommercialRecordListItem,
-} from "@/features/api/commercialRecords";
+import { listCustomers, type CustomerSummary } from "@/features/customers/api";
 
 const STATUS_OPTIONS = ["scheduled", "blocked", "in progress", "done", "canceled"];
 
@@ -164,14 +161,14 @@ export function TaskDetailDrawer({
   const [status, setStatus] = useState(task.status);
   const [assignedTo, setAssignedTo] = useState(task.assigned_to ?? "");
   const [customerId, setCustomerId] = useState(task.customer_id ?? "");
-  const [dueDate, setDueDate] = useState(() => toDateInput(task.due_at));
+  const [dueDate, setDueDate] = useState(() => toDateTimeInput(task.due_at));
   const [notes, setNotes] = useState<TaskNote[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [files, setFiles] = useState<TaskFile[]>([]);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [customers, setCustomers] = useState<CommercialRecordListItem[]>([]);
+  const [customers, setCustomers] = useState<CustomerSummary[]>([]);
 
   useEffect(() => {
     setTitle(task.title);
@@ -179,7 +176,7 @@ export function TaskDetailDrawer({
     setStatus(task.status);
     setAssignedTo(task.assigned_to ?? "");
     setCustomerId(task.customer_id ?? "");
-    setDueDate(toDateInput(task.due_at));
+    setDueDate(toDateTimeInput(task.due_at));
   }, [task]);
 
   useEffect(() => {
@@ -203,9 +200,9 @@ export function TaskDetailDrawer({
         setCustomers([]);
         return;
       }
-      const result = await listCommercialRecords({ limit: 200, offset: 0 });
+      const result = await listCustomers(workspaceId, {});
       if (result.ok) {
-        setCustomers(result.data?.records ?? []);
+        setCustomers(result.data ?? []);
       }
     })();
   }, [workspaceId]);
@@ -219,7 +216,7 @@ export function TaskDetailDrawer({
       description: description.trim() || null,
       status,
       assigned_to: assignedTo.trim() || null,
-      due_at: dueDate ? new Date(`${dueDate}T00:00:00`).toISOString() : null,
+      due_at: dueDate ? new Date(dueDate).toISOString() : null,
       customer_id: customerId.trim() || null,
     };
     const result = await updateTask(task.id, payload);
@@ -394,10 +391,10 @@ export function TaskDetailDrawer({
           </div>
           <div className={stylex(styles.row)}>
             <div className={stylex(styles.field)}>
-              <label className={stylex(styles.label)}>Due date</label>
+              <label className={stylex(styles.label)}>Due date and time</label>
               <input
                 className={stylex(styles.input)}
-                type="date"
+                type="datetime-local"
                 value={dueDate}
                 onChange={(event) => setDueDate(event.target.value)}
               />
@@ -415,7 +412,7 @@ export function TaskDetailDrawer({
               </span>
             </div>
             <div className={stylex(styles.field)}>
-              <label className={stylex(styles.label)}>Customer ID</label>
+              <label className={stylex(styles.label)}>Customer</label>
               <select
                 className={stylex(styles.input)}
                 value={customerId}
@@ -489,11 +486,12 @@ export function TaskDetailDrawer({
   );
 }
 
-function toDateInput(value: string | null | undefined) {
+function toDateTimeInput(value: string | null | undefined) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
 }
 
 function formatDateTime(value?: string | null) {
@@ -514,15 +512,6 @@ function formatFileMeta(file: TaskFile) {
   return `${sizeKb} KB · ${file.content_type}`;
 }
 
-function buildCustomerOptions(records: CommercialRecordListItem[]) {
-  const seen = new Set<string>();
-  const options: Array<{ id: string; label: string }> = [];
-  for (const record of records) {
-    const customerUri = record.customer_uri?.trim();
-    if (!customerUri || seen.has(customerUri)) continue;
-    seen.add(customerUri);
-    const label = record.customer_display?.trim() || customerUri;
-    options.push({ id: customerUri, label });
-  }
-  return options;
+function buildCustomerOptions(records: CustomerSummary[]) {
+  return records.map((customer) => ({ id: customer.id, label: customer.display_name }));
 }

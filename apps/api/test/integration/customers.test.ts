@@ -91,6 +91,59 @@ describe("customers API", () => {
     await mf.dispose();
   });
 
+  it("creates customer-only follow-up tasks from notes and derives the next follow-up", async () => {
+    const context = await createTestEnv();
+    if (!context) return;
+    const { env, mf } = context;
+    const created = await request(env, "/customers", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: "default", displayName: "Follow-up Customer" }),
+    });
+    const customer = (await created.json()) as { customer: { id: string } };
+    const dueAt = "2030-04-10T17:30:00.000Z";
+
+    const note = await request(env, `/customers/${customer.customer.id}/activities`, {
+      method: "POST",
+      body: JSON.stringify({
+        subject: "Proposal call",
+        body: "They will review this week.",
+        followUpAt: dueAt,
+        followUpDescription: "Call about the proposal",
+      }),
+    });
+    expect(note.status).toBe(201);
+
+    const loaded = await request(env, `/customers/${customer.customer.id}`);
+    const detail = (await loaded.json()) as {
+      customer: { next_follow_up_at: string | null };
+      tasks: Array<{
+        id: string;
+        project_id: string | null;
+        customer_id: string;
+        status: string;
+        due_at: string;
+      }>;
+    };
+    expect(detail.customer.next_follow_up_at).toBe(dueAt);
+    expect(detail.tasks[0]).toMatchObject({
+      project_id: null,
+      customer_id: customer.customer.id,
+      status: "scheduled",
+      due_at: dueAt,
+    });
+
+    const completed = await request(env, `/tasks/${detail.tasks[0].id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "done" }),
+    });
+    expect(completed.status).toBe(200);
+    const after = (await (await request(env, `/customers/${customer.customer.id}`)).json()) as {
+      customer: { next_follow_up_at: string | null };
+    };
+    expect(after.customer.next_follow_up_at).toBeNull();
+    await mf.dispose();
+  });
+
   it("creates, reads, edits, validates, and archives contacts", async () => {
     const context = await createTestEnv();
     if (!context) return;

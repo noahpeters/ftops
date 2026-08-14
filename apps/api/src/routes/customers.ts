@@ -61,6 +61,10 @@ export async function handleCustomers(
                 pc.display_name AS primary_contact, pc.email, pc.phone,
                 COALESCE(ee.sync_status, 'not_linked') AS quickbooks_sync_status,
                 ee.last_synced_at, ee.last_error,
+                (SELECT MIN(t.due_at) FROM tasks t
+                 WHERE t.workspace_id=c.workspace_id AND t.customer_id=c.id
+                   AND t.due_at IS NOT NULL
+                   AND t.status IN ('scheduled','blocked','in progress')) AS next_follow_up_at,
                 (SELECT COUNT(*) FROM estimates e WHERE e.customer_id=c.id AND COALESCE(e.status,'open') NOT IN ('closed','deleted','rejected')) AS open_estimate_count,
                 (SELECT COALESCE(SUM(i.balance),0) FROM invoices i WHERE i.customer_id=c.id AND COALESCE(i.balance,0)>0) AS open_invoice_balance
          FROM customers c LEFT JOIN contacts pc ON pc.id=c.primary_contact_id
@@ -364,16 +368,48 @@ export async function handleCustomers(
     const body = await readBody(request);
     const subject = string(body.subject);
     if (!subject) return badRequest("subject_required");
-    await addActivity(
-      env,
-      workspaceId,
-      customerId,
-      "note",
-      subject,
-      nullable(body.body),
-      "ftops",
-      actor.email
-    );
+    const followUpAt = nullable(body.followUpAt);
+    const followUpDescription = nullable(body.followUpDescription);
+    if (followUpAt && Number.isNaN(Date.parse(followUpAt)))
+      return badRequest("invalid_follow_up_at");
+    if (followUpAt && !followUpDescription) return badRequest("follow_up_description_required");
+    const now = nowISO();
+    const statements = [
+      env.DB.prepare(
+        `INSERT INTO customer_activities (id,workspace_id,customer_id,activity_type,subject,body,source,occurred_at,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        crypto.randomUUID(),
+        workspaceId,
+        customerId,
+        "note",
+        subject,
+        nullable(body.body),
+        "ftops",
+        now,
+        actor.email,
+        now
+      ),
+    ];
+    if (followUpAt && followUpDescription) {
+      const taskId = crypto.randomUUID();
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO tasks
+           (id,workspace_id,project_id,scope,group_key,line_item_uri,template_key,title,kind,position,status,state_json,due_at,assigned_to,description,template_id,customer_id,completed_at,priority,created_at,updated_at)
+           VALUES (?,?,NULL,'customer',NULL,NULL,'customer-follow-up',?,'customer_follow_up',0,'scheduled',NULL,?,NULL,?,NULL,?,NULL,0,?,?)`
+        ).bind(
+          taskId,
+          workspaceId,
+          followUpDescription,
+          followUpAt,
+          followUpDescription,
+          customerId,
+          now,
+          now
+        )
+      );
+    }
+    await env.DB.batch(statements);
     return json(
       await listRows(
         env,
@@ -546,7 +582,9 @@ async function handleQuickbooks(
 
 async function loadDetail(env: Env, workspaceId: string, id: string) {
   const customer = await env.DB.prepare(
-    `SELECT c.*,COALESCE(ee.sync_status,'not_linked') quickbooks_sync_status,ee.integration_id,ee.external_id quickbooks_customer_id,ee.last_synced_at,ee.last_error FROM customers c LEFT JOIN external_entities ee ON ee.workspace_id=c.workspace_id AND ee.local_entity_type='customer' AND ee.local_entity_id=c.id WHERE c.workspace_id=? AND c.id=?`
+    `SELECT c.*,COALESCE(ee.sync_status,'not_linked') quickbooks_sync_status,ee.integration_id,ee.external_id quickbooks_customer_id,ee.last_synced_at,ee.last_error,
+            (SELECT MIN(t.due_at) FROM tasks t WHERE t.workspace_id=c.workspace_id AND t.customer_id=c.id AND t.due_at IS NOT NULL AND t.status IN ('scheduled','blocked','in progress')) AS next_follow_up_at
+     FROM customers c LEFT JOIN external_entities ee ON ee.workspace_id=c.workspace_id AND ee.local_entity_type='customer' AND ee.local_entity_id=c.id WHERE c.workspace_id=? AND c.id=?`
   )
     .bind(workspaceId, id)
     .first();
@@ -573,6 +611,12 @@ async function loadDetail(env: Env, workspaceId: string, id: string) {
     activities: await listRows(
       env,
       `SELECT * FROM customer_activities WHERE workspace_id=? AND customer_id=? ORDER BY occurred_at DESC LIMIT 100`,
+      workspaceId,
+      id
+    ),
+    tasks: await listRows(
+      env,
+      `SELECT * FROM tasks WHERE workspace_id=? AND customer_id=? ORDER BY CASE WHEN status IN ('scheduled','blocked','in progress') THEN 0 ELSE 1 END,due_at IS NULL,due_at,updated_at DESC`,
       workspaceId,
       id
     ),

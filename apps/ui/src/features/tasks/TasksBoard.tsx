@@ -144,6 +144,7 @@ export function TasksBoard({ workspaceId }: { workspaceId: string | null }): JSX
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [users, setUsers] = useState<WorkspaceUser[]>([]);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [taskType, setTaskType] = useState<"all" | "customer" | "project">("all");
 
   const loadKanban = useCallback(async () => {
     if (!workspaceId) {
@@ -211,6 +212,15 @@ export function TasksBoard({ workspaceId }: { workspaceId: string | null }): JSX
     return null;
   }, [activeTaskId, kanban]);
 
+  const matchesTaskType = useCallback(
+    (task: TaskRow) => {
+      if (taskType === "customer") return Boolean(task.customer_id);
+      if (taskType === "project") return Boolean(task.project_id);
+      return true;
+    },
+    [taskType]
+  );
+
   const scheduledGroups = useMemo(() => {
     if (!kanban) {
       return { overdue: [], due: [], rest: [] } as {
@@ -221,13 +231,12 @@ export function TasksBoard({ workspaceId }: { workspaceId: string | null }): JSX
     }
     const overdueIds = new Set(kanban.overdue.map((task) => task.id));
     const dueIds = new Set(kanban.due_this_week.map((task) => task.id));
-    const overdue = kanban.scheduled.filter((task) => overdueIds.has(task.id));
-    const due = kanban.scheduled.filter((task) => dueIds.has(task.id));
-    const rest = kanban.scheduled.filter(
-      (task) => !overdueIds.has(task.id) && !dueIds.has(task.id)
-    );
+    const visible = kanban.scheduled.filter(matchesTaskType);
+    const overdue = visible.filter((task) => overdueIds.has(task.id));
+    const due = visible.filter((task) => dueIds.has(task.id));
+    const rest = visible.filter((task) => !overdueIds.has(task.id) && !dueIds.has(task.id));
     return { overdue, due, rest };
-  }, [kanban]);
+  }, [kanban, matchesTaskType]);
 
   const scheduledIndex = useMemo(() => {
     const map = new Map<string, number>();
@@ -241,11 +250,11 @@ export function TasksBoard({ workspaceId }: { workspaceId: string | null }): JSX
 
   function laneTasks(lane: LaneKey) {
     if (!kanban) return [];
-    if (lane === "scheduled") return kanban.scheduled;
-    if (lane === "in progress") return kanban.in_progress;
-    if (lane === "blocked") return kanban.blocked;
-    if (lane === "done") return kanban.done;
-    return kanban.canceled;
+    if (lane === "scheduled") return kanban.scheduled.filter(matchesTaskType);
+    if (lane === "in progress") return kanban.in_progress.filter(matchesTaskType);
+    if (lane === "blocked") return kanban.blocked.filter(matchesTaskType);
+    if (lane === "done") return kanban.done.filter(matchesTaskType);
+    return kanban.canceled.filter(matchesTaskType);
   }
 
   async function updateLanePriorities(lane: LaneKey, tasks: TaskRow[], statusOverride?: string) {
@@ -286,7 +295,7 @@ export function TasksBoard({ workspaceId }: { workspaceId: string | null }): JSX
   }
 
   async function handleDrop(lane: LaneKey, targetIndex: number) {
-    if (!dragState || !kanban) return;
+    if (!dragState || !kanban || taskType !== "all") return;
     const { taskId, fromLane } = dragState;
     const fromTasks = [...laneTasks(fromLane)];
     const taskIndex = fromTasks.findIndex((task) => task.id === taskId);
@@ -350,6 +359,21 @@ export function TasksBoard({ workspaceId }: { workspaceId: string | null }): JSX
         <button type="button" onClick={loadKanban} disabled={loading}>
           {loading ? "Refreshing..." : "Refresh"}
         </button>
+        <label>
+          Task type{" "}
+          <select
+            aria-label="Task type filter"
+            value={taskType}
+            onChange={(event) => setTaskType(event.target.value as "all" | "customer" | "project")}
+          >
+            <option value="all">All tasks</option>
+            <option value="customer">Customer outreach</option>
+            <option value="project">Project tasks</option>
+          </select>
+        </label>
+        {taskType !== "all" && (
+          <span className={stylex(styles.metaText)}>Show all tasks to reorder them.</span>
+        )}
       </div>
 
       {error && <div className={stylex(styles.error)}>{error}</div>}
@@ -496,8 +520,8 @@ function TaskCard({
 }) {
   const assignedUser = task.assigned_to ? users.get(task.assigned_to) : null;
   const assignedLabel = assignedUser ? `${assignedUser.name} (${assignedUser.email})` : "—";
-  const project = projects.get(task.project_id);
-  const projectLabel = project?.title ?? task.project_id;
+  const project = task.project_id ? projects.get(task.project_id) : null;
+  const projectLabel = task.project_title ?? project?.title ?? task.project_id;
   return (
     <div
       className={stylex(styles.card, dragging && styles.cardDragging)}
@@ -518,7 +542,10 @@ function TaskCard({
         {badge === "overdue" && <span className={stylex(styles.badgeOverdue)}>Overdue</span>}
         {badge === "due" && <span className={stylex(styles.badgeDue)}>Due this week</span>}
         <span>Assigned: {assignedLabel}</span>
-        <span>Project: {projectLabel}</span>
+        {task.customer_id && (
+          <span>Customer: {task.customer_display_name ?? task.customer_id}</span>
+        )}
+        <span>Project: {projectLabel ?? "None"}</span>
         <span>Template: {task.template_id ?? task.template_key}</span>
         <span>Notes: {task.notes_count ?? 0}</span>
         <span>Files: {task.attachments_count ?? 0}</span>

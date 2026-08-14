@@ -127,7 +127,12 @@ export function CustomersPanel({
       await refresh();
     } else setError((r.data as { error?: string } | null)?.error || r.text);
   }
-  async function saveNote(input: { subject: string; body: string }) {
+  async function saveNote(input: {
+    subject: string;
+    body: string;
+    followUpAt?: string;
+    followUpDescription?: string;
+  }) {
     if (!customerId) return;
     const r = await addNote(customerId, input);
     if (r.ok) {
@@ -231,6 +236,7 @@ export function CustomersPanel({
                   </div>
                   <span className={stylex(styles.badge)}>{row.status}</span>
                   <span className={stylex(styles.badge)}>QBO: {row.quickbooks_sync_status}</span>
+                  <div className={stylex(styles.muted)}>{followUpLabel(row.next_follow_up_at)}</div>
                   <div className={stylex(styles.muted)}>
                     {row.open_estimate_count} open estimates · $
                     {Number(row.open_invoice_balance || 0).toFixed(2)} due
@@ -264,6 +270,7 @@ export function CustomersPanel({
                     <>
                       <p>Status: {detail.customer.status}</p>
                       <p>Lead source: {detail.customer.lead_source || "—"}</p>
+                      <p>{followUpLabel(detail.customer.next_follow_up_at)}</p>
                     </>
                   )}
                 </div>
@@ -352,6 +359,22 @@ export function CustomersPanel({
                   <p key={String(x.id)}>
                     {String(x.address_type)}: {String(x.line1 || "")}, {String(x.city || "")}
                   </p>
+                ))}
+              </div>
+              <div className={stylex(styles.section)}>
+                <h4>Follow-up tasks</h4>
+                {detail.tasks.length === 0 && (
+                  <p className={stylex(styles.muted)}>No customer tasks.</p>
+                )}
+                {detail.tasks.map((task) => (
+                  <article key={task.id} className={stylex(styles.note)}>
+                    <b>{task.title}</b>
+                    <div className={stylex(styles.muted)}>
+                      {task.status} · {task.due_at ? formatDateTime(task.due_at) : "No due date"}
+                      {task.project_id ? " · Linked to project" : " · Customer-only"}
+                    </div>
+                    {task.description && <div>{task.description}</div>}
+                  </article>
                 ))}
               </div>
               <div className={stylex(styles.section)}>
@@ -543,17 +566,31 @@ function NoteForm({
   onSave,
   onCancel,
 }: {
-  onSave: (input: { subject: string; body: string }) => void;
+  onSave: (input: {
+    subject: string;
+    body: string;
+    followUpAt?: string;
+    followUpDescription?: string;
+  }) => void;
   onCancel: () => void;
 }) {
   const [subject, setSubject] = useState("Note");
   const [body, setBody] = useState("");
+  const [scheduleFollowUp, setScheduleFollowUp] = useState(false);
+  const [followUpAt, setFollowUpAt] = useState("");
+  const [followUpDescription, setFollowUpDescription] = useState("");
   return (
     <form
       className={stylex(styles.form)}
       onSubmit={(event) => {
         event.preventDefault();
-        if (body.trim()) onSave({ subject, body });
+        if (body.trim())
+          onSave({
+            subject,
+            body,
+            followUpAt: scheduleFollowUp ? new Date(followUpAt).toISOString() : undefined,
+            followUpDescription: scheduleFollowUp ? followUpDescription : undefined,
+          });
       }}
     >
       <input
@@ -574,6 +611,38 @@ function NoteForm({
       <span className={stylex(styles.muted)}>
         Markdown supported: headings, lists, links, bold, italic, and code.
       </span>
+      <label className={stylex(styles.check)}>
+        <input
+          type="checkbox"
+          checked={scheduleFollowUp}
+          onChange={(e) => setScheduleFollowUp(e.target.checked)}
+        />
+        Schedule follow-up
+      </label>
+      {scheduleFollowUp && (
+        <>
+          <label>
+            Follow-up date and time
+            <input
+              aria-label="Follow-up date and time"
+              type="datetime-local"
+              required
+              value={followUpAt}
+              onChange={(e) => setFollowUpAt(e.target.value)}
+            />
+          </label>
+          <label>
+            Follow-up description
+            <input
+              aria-label="Follow-up description"
+              required
+              placeholder="Call about the proposal"
+              value={followUpDescription}
+              onChange={(e) => setFollowUpDescription(e.target.value)}
+            />
+          </label>
+        </>
+      )}
       <div className={stylex(styles.actions)}>
         <button type="submit">Save note</button>
         <button type="button" onClick={onCancel}>
@@ -582,6 +651,20 @@ function NoteForm({
       </div>
     </form>
   );
+}
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+function followUpLabel(value: string | null) {
+  if (!value) return "No follow-up scheduled";
+  const overdue = new Date(value).getTime() < Date.now();
+  return `${overdue ? "Follow-up overdue" : "Next follow-up"}: ${formatDateTime(value)}`;
 }
 type ContactInput = {
   firstName: string;

@@ -3,7 +3,7 @@ import { buildUrl, fetchJson } from "@/lib/api";
 export type KanbanTask = {
   id: string;
   workspace_id: string;
-  project_id: string;
+  project_id: string | null;
   scope: string;
   group_key: string | null;
   line_item_uri: string | null;

@@ -101,9 +101,9 @@ export async function handleTasks(
       return badRequest("missing_fields");
     }
 
-    const existing = await env.DB.prepare("SELECT id, workspace_id FROM tasks WHERE id = ?")
+    const existing = await env.DB.prepare("SELECT id, workspace_id, status FROM tasks WHERE id = ?")
       .bind(taskId)
-      .first<{ id: string; workspace_id: string }>();
+      .first<{ id: string; workspace_id: string; status: string }>();
     if (!existing) {
       return notFound("Task not found");
     }
@@ -111,43 +111,37 @@ export async function handleTasks(
       return forbidden("forbidden");
     }
 
-    const nextStatus = body.status ?? null;
-    const nextPriority = hasPriority ? body.priority : null;
-    const nextDueAt = hasDueAt ? (body.due_at ?? null) : null;
-    const nextAssignedTo = hasAssignedTo ? (body.assigned_to ?? null) : null;
-    const nextDescription = hasDescription ? (body.description ?? null) : null;
-    const nextTemplateId = hasTemplateId ? (body.template_id ?? null) : null;
-    const nextCustomerId = hasCustomerId ? (body.customer_id ?? null) : null;
-    const nextTitle = hasTitle ? (body.title ?? null) : null;
-    const completedAt = nextStatus === "done" ? nowISO() : null;
-
-    const result = await env.DB.prepare(
-      `UPDATE tasks
-       SET status = COALESCE(?, status),
-           priority = COALESCE(?, priority),
-           due_at = COALESCE(?, due_at),
-           assigned_to = COALESCE(?, assigned_to),
-           description = COALESCE(?, description),
-           template_id = COALESCE(?, template_id),
-           customer_id = COALESCE(?, customer_id),
-           title = COALESCE(?, title),
-           completed_at = COALESCE(?, completed_at),
-           updated_at = ?
-       WHERE id = ?`
-    )
-      .bind(
-        nextStatus,
-        nextPriority,
-        nextDueAt,
-        nextAssignedTo,
-        nextDescription,
-        nextTemplateId,
-        nextCustomerId,
-        nextTitle,
-        completedAt,
-        nowISO(),
-        taskId
+    if (hasDueAt && body.due_at && Number.isNaN(Date.parse(body.due_at))) {
+      return badRequest("invalid_due_at");
+    }
+    if (hasTitle && !body.title?.trim()) return badRequest("title_required");
+    if (hasCustomerId && body.customer_id) {
+      const customer = await env.DB.prepare(
+        "SELECT id FROM customers WHERE id=? AND workspace_id=?"
       )
+        .bind(body.customer_id, existing.workspace_id)
+        .first();
+      if (!customer) return badRequest("invalid_customer_id");
+    }
+    const updates: string[] = [];
+    const values: unknown[] = [];
+    const add = (column: string, value: unknown) => {
+      updates.push(`${column}=?`);
+      values.push(value);
+    };
+    if (hasStatus) add("status", body.status);
+    if (hasPriority) add("priority", body.priority);
+    if (hasDueAt) add("due_at", body.due_at ?? null);
+    if (hasAssignedTo) add("assigned_to", body.assigned_to ?? null);
+    if (hasDescription) add("description", body.description ?? null);
+    if (hasTemplateId) add("template_id", body.template_id ?? null);
+    if (hasCustomerId) add("customer_id", body.customer_id ?? null);
+    if (hasTitle) add("title", body.title ?? null);
+    if (hasStatus) add("completed_at", body.status === "done" ? nowISO() : null);
+    add("updated_at", nowISO());
+    values.push(taskId);
+    const result = await env.DB.prepare(`UPDATE tasks SET ${updates.join(", ")} WHERE id=?`)
+      .bind(...values)
       .run();
 
     if (!result.success) {

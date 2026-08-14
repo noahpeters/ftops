@@ -13,6 +13,7 @@ export type CustomerSummary = {
   last_error: string | null;
   open_estimate_count: number;
   open_invoice_balance: number;
+  next_follow_up_at: string | null;
 };
 export type CustomerDetail = {
   customer: CustomerSummary & {
@@ -25,8 +26,18 @@ export type CustomerDetail = {
   opportunities: Opportunity[];
   addresses: Array<Record<string, unknown>>;
   activities: CustomerActivity[];
+  tasks: CustomerTask[];
   estimates: Array<Record<string, unknown>>;
   invoices: Array<Record<string, unknown>>;
+};
+export type CustomerTask = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  due_at: string | null;
+  assigned_to: string | null;
+  project_id: string | null;
 };
 export type Opportunity = {
   id: string;

@@ -16,7 +16,7 @@ type LaneKey = (typeof LANE_KEYS)[number];
 type TaskRow = {
   id: string;
   workspace_id: string;
-  project_id: string;
+  project_id: string | null;
   scope: string;
   group_key: string | null;
   line_item_uri: string | null;
@@ -37,6 +37,8 @@ type TaskRow = {
   priority: number;
   attachments_count?: number;
   notes_count?: number;
+  customer_display_name?: string | null;
+  project_title?: string | null;
 };
 
 type KanbanResponse = {
@@ -78,13 +80,15 @@ export async function handleTasksKanban(
     weekEnd.toISO({ suppressMilliseconds: true }) ?? weekEnd.toISO() ?? fallbackIso;
 
   const result = await env.DB.prepare(
-    `SELECT tasks.*,
+    `SELECT tasks.*, customers.display_name AS customer_display_name, projects.title AS project_title,
             (SELECT COUNT(1) FROM task_files WHERE task_files.task_id = tasks.id) as attachments_count,
             (SELECT COUNT(1) FROM task_notes WHERE task_notes.task_id = tasks.id) as notes_count
      FROM tasks
-     WHERE workspace_id = ?
-       AND status IN ('scheduled', 'blocked', 'in progress', 'done', 'canceled')
-       AND (due_at IS NULL OR due_at <= ?)`
+     LEFT JOIN customers ON customers.id=tasks.customer_id AND customers.workspace_id=tasks.workspace_id
+     LEFT JOIN projects ON projects.id=tasks.project_id
+     WHERE tasks.workspace_id = ?
+       AND tasks.status IN ('scheduled', 'blocked', 'in progress', 'done', 'canceled')
+       AND (tasks.due_at IS NULL OR tasks.due_at <= ?)`
   )
     .bind(workspaceId, weekEndIso)
     .all<TaskRow>();
