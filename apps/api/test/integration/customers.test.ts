@@ -222,6 +222,75 @@ describe("customers API", () => {
     await mf.dispose();
   });
 
+  it("stores protected note attachments and supports deprecation", async () => {
+    const context = await createTestEnv({
+      env: { ALLOW_R2_FALLBACK_UPLOADS: "true" },
+    });
+    if (!context) return;
+    const { env, mf } = context;
+    const created = await request(env, "/customers", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: "default", displayName: "Files Customer" }),
+    });
+    const customer = (await created.json()) as { customer: { id: string } };
+    await request(env, `/customers/${customer.customer.id}/activities`, {
+      method: "POST",
+      body: JSON.stringify({ subject: "Selections", body: "Current selections attached." }),
+    });
+    const detail = (await (await request(env, `/customers/${customer.customer.id}`)).json()) as {
+      activities: Array<{ id: string }>;
+    };
+    const activityId = detail.activities[0].id;
+
+    const initialized = await request(env, `/customers/${customer.customer.id}/files/init`, {
+      method: "POST",
+      body: JSON.stringify({
+        activityId,
+        filename: "selections.pdf",
+        contentType: "application/pdf",
+        sizeBytes: 7,
+      }),
+    });
+    expect(initialized.status).toBe(200);
+    const upload = (await initialized.json()) as { uploadUrl: string; storageKey: string };
+    expect(upload.storageKey).toContain(`/customers/`.slice(1));
+    const uploaded = await request(env, upload.uploadUrl, {
+      method: "PUT",
+      headers: { "content-type": "application/pdf" },
+      body: "pdfdata",
+    });
+    expect(uploaded.status).toBe(200);
+    const completed = await request(env, `/customers/${customer.customer.id}/files/complete`, {
+      method: "POST",
+      body: JSON.stringify({
+        activityId,
+        storageKey: upload.storageKey,
+        filename: "selections.pdf",
+        contentType: "application/pdf",
+        sizeBytes: 7,
+      }),
+    });
+    expect(completed.status).toBe(201);
+    const file = (await completed.json()) as { id: string; deprecated_at: string | null };
+    expect(file.deprecated_at).toBeNull();
+
+    const deprecated = await request(env, `/customer-files/${file.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ deprecated: true }),
+    });
+    expect(deprecated.status).toBe(200);
+    expect((await deprecated.json()) as unknown).toMatchObject({
+      id: file.id,
+      deprecated_at: expect.any(String),
+    });
+    const download = await request(env, `/customer-files/${file.id}/download`);
+    expect(download.status).toBe(200);
+    expect((await download.json()) as unknown).toMatchObject({
+      downloadUrl: `/customer-files/${file.id}/blob`,
+    });
+    await mf.dispose();
+  });
+
   it("creates, reads, validates, and edits customer opportunities", async () => {
     const context = await createTestEnv();
     if (!context) return;

@@ -11,6 +11,7 @@ import {
   upsertQboEntity,
 } from "../services/quickbooks";
 import { sanitizeExternalError } from "../lib/security";
+import { signedUrl } from "./customerFiles";
 
 const STATUSES = ["lead", "prospect", "active", "past", "archived"];
 const CONTACT_STATUSES = ["active", "inactive", "archived"];
@@ -420,6 +421,96 @@ export async function handleCustomers(
       201
     );
   }
+  if (action === "files" && segments.length === 3) {
+    const fileAction = segments[2];
+    if (fileAction === "init" && request.method === "POST") {
+      const body = await readBody(request);
+      const activityId = string(body.activityId);
+      const filename = string(body.filename);
+      const sizeBytes = typeof body.sizeBytes === "number" ? body.sizeBytes : Number.NaN;
+      if (!activityId || !filename || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1)
+        return badRequest("missing_fields");
+      if (sizeBytes > 100 * 1024 * 1024) return badRequest("file_too_large");
+      const activity = await env.DB.prepare(
+        `SELECT id FROM customer_activities WHERE id=? AND workspace_id=? AND customer_id=? AND activity_type='note'`
+      )
+        .bind(activityId, workspaceId, customerId)
+        .first();
+      if (!activity) return badRequest("invalid_note_activity");
+      const storageKey = `customers/${workspaceId}/${customerId}/${activityId}/${crypto.randomUUID()}-${safeStorageName(filename)}`;
+      const uploadUrl = await signedUrl(env, storageKey, "PUT");
+      if (uploadUrl) return json({ uploadUrl, storageKey });
+      if (env.ALLOW_R2_FALLBACK_UPLOADS === "true") {
+        const fallback = new URL(`/customers/${customerId}/files/upload`, "http://local");
+        fallback.searchParams.set("storageKey", storageKey);
+        return json({ uploadUrl: `${fallback.pathname}${fallback.search}`, storageKey });
+      }
+      return json({ error: "presigned_url_unsupported" }, 500);
+    }
+    if (fileAction === "upload" && request.method === "PUT") {
+      const storageKey = url.searchParams.get("storageKey") || "";
+      const prefix = `customers/${workspaceId}/${customerId}/`;
+      if (!storageKey.startsWith(prefix)) return badRequest("invalid_storage_key");
+      await env.R2_TASK_FILES_BUCKET.put(storageKey, await request.arrayBuffer(), {
+        httpMetadata: {
+          contentType: request.headers.get("content-type") || "application/octet-stream",
+        },
+      });
+      return json({ ok: true });
+    }
+    if (fileAction === "complete" && request.method === "POST") {
+      const body = await readBody(request);
+      const activityId = string(body.activityId);
+      const storageKey = string(body.storageKey);
+      const filename = string(body.filename);
+      const contentType = string(body.contentType) || "application/octet-stream";
+      const sizeBytes = typeof body.sizeBytes === "number" ? body.sizeBytes : Number.NaN;
+      const prefix = `customers/${workspaceId}/${customerId}/${activityId}/`;
+      if (
+        !activityId ||
+        !storageKey.startsWith(prefix) ||
+        !filename ||
+        !Number.isSafeInteger(sizeBytes) ||
+        sizeBytes < 1 ||
+        sizeBytes > 100 * 1024 * 1024
+      )
+        return badRequest("invalid_file_metadata");
+      const activity = await env.DB.prepare(
+        `SELECT id FROM customer_activities WHERE id=? AND workspace_id=? AND customer_id=? AND activity_type='note'`
+      )
+        .bind(activityId, workspaceId, customerId)
+        .first();
+      if (!activity) return badRequest("invalid_note_activity");
+      const object = await env.R2_TASK_FILES_BUCKET.head(storageKey);
+      if (!object) return badRequest("uploaded_file_not_found");
+      const fileId = crypto.randomUUID();
+      const now = nowISO();
+      await env.DB.prepare(
+        `INSERT INTO customer_note_files
+         (id,workspace_id,customer_id,activity_id,uploaded_by_email,original_filename,content_type,size_bytes,storage_key,sha256,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+      )
+        .bind(
+          fileId,
+          workspaceId,
+          customerId,
+          activityId,
+          actor.email,
+          filename,
+          contentType,
+          sizeBytes,
+          storageKey,
+          nullable(body.sha256),
+          now
+        )
+        .run();
+      return json(
+        await env.DB.prepare(`SELECT * FROM customer_note_files WHERE id=?`).bind(fileId).first(),
+        201
+      );
+    }
+    return methodNotAllowed(["POST", "PUT"]);
+  }
   if ((action === "estimates" || action === "invoices") && request.method === "GET")
     return json(
       await listRows(
@@ -620,6 +711,15 @@ async function loadDetail(env: Env, workspaceId: string, id: string) {
       workspaceId,
       id
     ),
+    files: await listRows(
+      env,
+      `SELECT f.*,a.subject AS note_subject,a.occurred_at AS note_occurred_at
+       FROM customer_note_files f JOIN customer_activities a ON a.id=f.activity_id
+       WHERE f.workspace_id=? AND f.customer_id=?
+       ORDER BY f.deprecated_at IS NOT NULL,f.created_at DESC`,
+      workspaceId,
+      id
+    ),
     estimates: await listRows(
       env,
       `SELECT * FROM estimates WHERE workspace_id=? AND customer_id=? ORDER BY transaction_date DESC`,
@@ -687,6 +787,9 @@ function bool(value: unknown) {
 }
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+function safeStorageName(value: string) {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-160) || "file";
 }
 function parseOpportunity(
   body: Record<string, unknown>,

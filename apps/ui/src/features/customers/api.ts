@@ -27,8 +27,23 @@ export type CustomerDetail = {
   addresses: Array<Record<string, unknown>>;
   activities: CustomerActivity[];
   tasks: CustomerTask[];
+  files: CustomerFile[];
   estimates: Array<Record<string, unknown>>;
   invoices: Array<Record<string, unknown>>;
+};
+export type CustomerFile = {
+  id: string;
+  customer_id: string;
+  activity_id: string;
+  original_filename: string;
+  content_type: string;
+  size_bytes: number;
+  uploaded_by_email: string | null;
+  created_at: string;
+  deprecated_at: string | null;
+  deprecated_by_email: string | null;
+  note_subject: string;
+  note_occurred_at: string;
 };
 export type CustomerTask = {
   id: string;
@@ -150,6 +165,45 @@ export function addNote(id: string, input: Record<string, unknown>) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
+  });
+}
+export function initCustomerFileUpload(
+  customerId: string,
+  input: { activityId: string; filename: string; contentType: string; sizeBytes: number }
+) {
+  return fetchJson<{ uploadUrl: string; storageKey: string }>(
+    buildUrl(`/customers/${customerId}/files/init`),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }
+  );
+}
+export function completeCustomerFileUpload(
+  customerId: string,
+  input: {
+    activityId: string;
+    storageKey: string;
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+  }
+) {
+  return fetchJson<CustomerFile>(buildUrl(`/customers/${customerId}/files/complete`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+export function getCustomerFileDownload(fileId: string) {
+  return fetchJson<{ downloadUrl: string }>(buildUrl(`/customer-files/${fileId}/download`));
+}
+export function setCustomerFileDeprecated(fileId: string, deprecated: boolean) {
+  return fetchJson<CustomerFile>(buildUrl(`/customer-files/${fileId}`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deprecated }),
   });
 }
 export function qboSearch(id: string, integrationId: string, q: string) {

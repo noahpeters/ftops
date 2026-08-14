@@ -18,13 +18,19 @@ export async function createTestEnv(options?: { env?: Record<string, unknown> })
       script: "export default { fetch() { return new Response('ok'); } }",
       modules: true,
       d1Databases: { DB: "test-db" },
+      r2Buckets: { R2_TASK_FILES_BUCKET: "test-task-files" },
       compatibilityDate: "2026-01-01",
     });
 
     const db = await mf.getD1Database("DB");
+    const taskFilesBucket = await mf.getR2Bucket("R2_TASK_FILES_BUCKET");
     await runMigrations(db);
 
-    const env = { DB: db, ...(options?.env ?? {}) } as unknown as Env;
+    const env = {
+      DB: db,
+      R2_TASK_FILES_BUCKET: taskFilesBucket,
+      ...(options?.env ?? {}),
+    } as unknown as Env;
 
     return { mf, db, env };
   } catch (error) {

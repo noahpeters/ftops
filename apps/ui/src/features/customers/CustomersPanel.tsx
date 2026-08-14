@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import Markdown from "react-markdown";
 import stylex from "~/lib/stylex";
+import { buildUrl } from "@/lib/api";
 import { colors, radius } from "../../theme/tokens.stylex";
 import {
   addContact,
@@ -11,12 +12,16 @@ import {
   archiveContact,
   createCustomer,
   getCustomer,
+  getCustomerFileDownload,
+  initCustomerFileUpload,
   listCustomers,
+  completeCustomerFileUpload,
   qboAction,
   qboSearch,
   updateContact,
   updateCustomer,
   updateOpportunity,
+  setCustomerFileDeprecated,
   type Contact,
   type CustomerDetail,
   type CustomerSummary,
@@ -89,6 +94,7 @@ export function CustomersPanel({
   const [creatingNote, setCreatingNote] = useState(false);
   const [creatingOpportunity, setCreatingOpportunity] = useState(false);
   const [editingOpportunityId, setEditingOpportunityId] = useState<string | null>(null);
+  const [uploadingActivityId, setUploadingActivityId] = useState<string | null>(null);
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
     const result = await listCustomers(workspaceId, { search, status, sync });
@@ -142,6 +148,66 @@ export function CustomersPanel({
         setCreatingNote(false);
       }
     } else setError(r.text);
+  }
+  async function uploadNoteFile(activityId: string, file: File) {
+    if (!customerId) return;
+    if (file.size > 100 * 1024 * 1024) return setError("Files must be 100 MB or smaller.");
+    setUploadingActivityId(activityId);
+    setError(null);
+    const contentType = file.type || "application/octet-stream";
+    const initialized = await initCustomerFileUpload(customerId, {
+      activityId,
+      filename: file.name,
+      contentType,
+      sizeBytes: file.size,
+    });
+    if (!initialized.ok || !initialized.data) {
+      setUploadingActivityId(null);
+      return setError(initialized.text || "Could not start file upload.");
+    }
+    const uploadUrl = initialized.data.uploadUrl.startsWith("/")
+      ? buildUrl(initialized.data.uploadUrl)
+      : initialized.data.uploadUrl;
+    const uploaded = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: file,
+    });
+    if (!uploaded.ok) {
+      setUploadingActivityId(null);
+      return setError("File upload failed.");
+    }
+    const completed = await completeCustomerFileUpload(customerId, {
+      activityId,
+      storageKey: initialized.data.storageKey,
+      filename: file.name,
+      contentType,
+      sizeBytes: file.size,
+    });
+    setUploadingActivityId(null);
+    if (!completed.ok) return setError(completed.text || "Could not finalize file upload.");
+    await reloadDetail();
+  }
+  async function downloadCustomerFile(fileId: string) {
+    const result = await getCustomerFileDownload(fileId);
+    if (!result.ok || !result.data?.downloadUrl)
+      return setError(result.text || "Could not prepare download.");
+    window.location.assign(
+      result.data.downloadUrl.startsWith("/")
+        ? buildUrl(result.data.downloadUrl)
+        : result.data.downloadUrl
+    );
+  }
+  async function toggleFileDeprecated(fileId: string, deprecated: boolean) {
+    const result = await setCustomerFileDeprecated(fileId, deprecated);
+    if (!result.ok) return setError(result.text || "Could not update file.");
+    await reloadDetail();
+  }
+  async function reloadDetail() {
+    if (!customerId) return;
+    const loaded = await getCustomer(customerId);
+    if (loaded.ok) setDetail(loaded.data);
+    else setError(loaded.text);
   }
   async function saveOpportunity(input: OpportunityInput, opportunityId?: string) {
     if (!customerId) return;
@@ -378,6 +444,38 @@ export function CustomersPanel({
                 ))}
               </div>
               <div className={stylex(styles.section)}>
+                <h4>Files</h4>
+                {detail.files.filter((file) => !file.deprecated_at).length === 0 && (
+                  <p className={stylex(styles.muted)}>No current files.</p>
+                )}
+                {detail.files
+                  .filter((file) => !file.deprecated_at)
+                  .map((file) => (
+                    <CustomerFileRow
+                      key={file.id}
+                      file={file}
+                      onDownload={() => downloadCustomerFile(file.id)}
+                      onDeprecated={() => toggleFileDeprecated(file.id, true)}
+                    />
+                  ))}
+                {detail.files.some((file) => file.deprecated_at) && (
+                  <details>
+                    <summary>Deprecated files</summary>
+                    {detail.files
+                      .filter((file) => file.deprecated_at)
+                      .map((file) => (
+                        <CustomerFileRow
+                          key={file.id}
+                          file={file}
+                          onDownload={() => downloadCustomerFile(file.id)}
+                          onDeprecated={() => toggleFileDeprecated(file.id, false)}
+                          deprecated
+                        />
+                      ))}
+                  </details>
+                )}
+              </div>
+              <div className={stylex(styles.section)}>
                 <h4>Activity</h4>
                 {!creatingNote && <button onClick={() => setCreatingNote(true)}>Add note</button>}
                 {creatingNote && (
@@ -393,6 +491,31 @@ export function CustomersPanel({
                     {activity.body && (
                       <div className={stylex(styles.markdown)}>
                         <Markdown>{activity.body}</Markdown>
+                      </div>
+                    )}
+                    {activity.activity_type === "note" && (
+                      <div className={stylex(styles.actions)}>
+                        <label>
+                          <span className={stylex(styles.muted)}>
+                            {uploadingActivityId === activity.id ? "Uploading…" : "Attach file"}
+                          </span>
+                          <input
+                            type="file"
+                            disabled={uploadingActivityId !== null}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              if (file) void uploadNoteFile(activity.id, file);
+                              event.target.value = "";
+                            }}
+                          />
+                        </label>
+                        {detail.files
+                          .filter((file) => file.activity_id === activity.id && !file.deprecated_at)
+                          .map((file) => (
+                            <button key={file.id} onClick={() => downloadCustomerFile(file.id)}>
+                              {file.original_filename}
+                            </button>
+                          ))}
                       </div>
                     )}
                   </article>
@@ -428,6 +551,34 @@ export function CustomersPanel({
       </div>
     </section>
   );
+}
+function CustomerFileRow({
+  file,
+  onDownload,
+  onDeprecated,
+  deprecated = false,
+}: {
+  file: CustomerDetail["files"][number];
+  onDownload: () => void;
+  onDeprecated: () => void;
+  deprecated?: boolean;
+}) {
+  return (
+    <article className={stylex(styles.note)}>
+      <b>{file.original_filename}</b>
+      <div className={stylex(styles.muted)}>
+        {formatFileSize(file.size_bytes)} · attached to “{file.note_subject}” · {file.created_at}
+      </div>
+      <div className={stylex(styles.actions)}>
+        <button onClick={onDownload}>Download</button>
+        <button onClick={onDeprecated}>{deprecated ? "Restore" : "Mark deprecated"}</button>
+      </div>
+    </article>
+  );
+}
+function formatFileSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 type OpportunityInput = {
   description: string;
