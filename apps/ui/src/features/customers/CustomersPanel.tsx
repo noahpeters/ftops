@@ -379,12 +379,7 @@ export function CustomersPanel({
             <p className={stylex(styles.muted)}>Select a customer.</p>
           ) : (
             <>
-              <div className={stylex(styles.actions)}>
-                <h3>{detail.customer.display_name}</h3>
-                {activeTab === "summary" && !editingCustomer && (
-                  <button onClick={() => setEditingCustomer(true)}>Edit customer</button>
-                )}
-              </div>
+              <h3>{detail.customer.display_name}</h3>
               <div
                 className={stylex(styles.detailTabs)}
                 role="tablist"
@@ -409,7 +404,12 @@ export function CustomersPanel({
               {activeTab === "summary" && (
                 <div className={stylex(styles.grid)} role="tabpanel">
                   <div>
-                    <b>Customer</b>
+                    <div className={stylex(styles.actions)}>
+                      <b>Customer</b>
+                      {!editingCustomer && (
+                        <button onClick={() => setEditingCustomer(true)}>Edit customer</button>
+                      )}
+                    </div>
                     {editingCustomer ? (
                       <CustomerForm
                         customer={detail.customer}
@@ -440,18 +440,6 @@ export function CustomersPanel({
                       </>
                     ) : (
                       <p className={stylex(styles.muted)}>No primary contact.</p>
-                    )}
-                  </div>
-                  <div className={stylex(styles.summaryCard)}>
-                    <b>Recent notes</b>
-                    {detail.activities
-                      .filter((x) => x.activity_type === "note")
-                      .slice(0, 3)
-                      .map((x) => (
-                        <div key={x.id}>{x.subject}</div>
-                      ))}
-                    {!detail.activities.some((x) => x.activity_type === "note") && (
-                      <p className={stylex(styles.muted)}>No notes yet.</p>
                     )}
                   </div>
                   <div className={stylex(styles.summaryCard)}>
@@ -581,18 +569,22 @@ export function CustomersPanel({
               )}
               {activeTab === "summary" && (
                 <div className={stylex(styles.section)}>
-                  <h4>Follow-up tasks</h4>
-                  {detail.tasks.length === 0 && (
-                    <p className={stylex(styles.muted)}>No customer tasks.</p>
+                  <h4>Recent notes</h4>
+                  {!detail.activities.some((activity) => activity.activity_type === "note") && (
+                    <p className={stylex(styles.muted)}>No notes yet.</p>
                   )}
-                  {detail.tasks.map((task) => (
-                    <article key={task.id} className={stylex(styles.note)}>
-                      <b>{task.title}</b>
+                  {recentCustomerNotes(detail.activities).map((activity) => (
+                    <article key={activity.id} className={stylex(styles.note)}>
+                      <b>{activity.subject}</b>
                       <div className={stylex(styles.muted)}>
-                        {task.status} · {task.due_at ? formatDateTime(task.due_at) : "No due date"}
-                        {task.project_id ? " · Linked to project" : " · Customer-only"}
+                        {activity.created_by ? `by ${activity.created_by} · ` : ""}
+                        {formatDateTime(activity.occurred_at)}
                       </div>
-                      {task.description && <div>{task.description}</div>}
+                      {activity.body && (
+                        <div className={stylex(styles.markdown)}>
+                          <Markdown>{activity.body}</Markdown>
+                        </div>
+                      )}
                     </article>
                   ))}
                 </div>
@@ -1011,6 +1003,14 @@ function formatDateTime(value: string) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+function recentCustomerNotes(activities: CustomerDetail["activities"]) {
+  const notes = activities.filter((activity) => activity.activity_type === "note");
+  const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const recentCount = notes.filter(
+    (activity) => new Date(activity.occurred_at).getTime() >= oneWeekAgo
+  ).length;
+  return notes.slice(0, Math.max(3, recentCount));
 }
 function followUpLabel(value: string | null) {
   if (!value) return "No follow-up scheduled";
