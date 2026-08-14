@@ -138,13 +138,21 @@ const styles = stylex.create({
   },
 });
 
-type CustomerTab = "summary" | "contacts" | "opportunities" | "tasks" | "activity" | "quickbooks";
+type CustomerTab =
+  | "summary"
+  | "contacts"
+  | "opportunities"
+  | "tasks"
+  | "activity"
+  | "files"
+  | "quickbooks";
 const CUSTOMER_TABS: Array<{ id: CustomerTab; label: string }> = [
   { id: "summary", label: "Summary" },
   { id: "contacts", label: "Contacts" },
   { id: "opportunities", label: "Opportunities" },
   { id: "tasks", label: "Tasks" },
   { id: "activity", label: "Activity / Notes" },
+  { id: "files", label: "Files" },
   { id: "quickbooks", label: "QuickBooks" },
 ];
 
@@ -646,8 +654,21 @@ export function CustomersPanel({
                 </div>
               )}
               {activeTab === "summary" && (
-                <div className={stylex(styles.section)}>
-                  <h4>Recent notes</h4>
+                <div className={stylex(styles.section)} role="tabpanel">
+                  <div className={stylex(styles.actions)}>
+                    <h4>Recent notes</h4>
+                    {!creatingNote && (
+                      <button onClick={() => setCreatingNote(true)}>Add note</button>
+                    )}
+                  </div>
+                  {creatingNote && (
+                    <NoteForm
+                      onSave={saveNote}
+                      onCancel={() => setCreatingNote(false)}
+                      saving={savingNote}
+                      users={users}
+                    />
+                  )}
                   {!detail.activities.some((activity) => activity.activity_type === "note") && (
                     <p className={stylex(styles.muted)}>No notes yet.</p>
                   )}
@@ -667,7 +688,7 @@ export function CustomersPanel({
                   ))}
                 </div>
               )}
-              {activeTab === "activity" && (
+              {activeTab === "files" && (
                 <div className={stylex(styles.section)} role="tabpanel">
                   <h4>Files</h4>
                   {detail.files.filter((file) => !file.deprecated_at).length === 0 && (
