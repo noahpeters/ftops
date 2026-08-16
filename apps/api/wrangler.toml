@@ -3,6 +3,9 @@ compatibility_date = "2026-01-01"
 main = "src/index.ts"
 workers_dev = false
 
+[ai]
+binding = "AI"
+
 [triggers]
 crons = ["0 * * * *"]
 

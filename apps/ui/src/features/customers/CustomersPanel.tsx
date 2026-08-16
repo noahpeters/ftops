@@ -459,7 +459,9 @@ export function CustomersPanel({
                   </div>
                   <span className={stylex(styles.badge)}>{row.status}</span>
                   <span className={stylex(styles.badge)}>QBO: {row.quickbooks_sync_status}</span>
-                  <div className={stylex(styles.muted)}>{followUpLabel(row.next_follow_up_at)}</div>
+                  <div className={stylex(styles.muted)}>
+                    {followUpLabel(row.next_follow_up_at, row.follow_up_urgency)}
+                  </div>
                   <div className={stylex(styles.muted)}>
                     {row.open_estimate_count} open estimates · $
                     {Number(row.open_invoice_balance || 0).toFixed(2)} due
@@ -516,7 +518,15 @@ export function CustomersPanel({
                         <p>Name: {detail.customer.display_name}</p>
                         <p>Status: {detail.customer.status}</p>
                         <p>Lead source: {detail.customer.lead_source || "—"}</p>
-                        <p>{followUpLabel(detail.customer.next_follow_up_at)}</p>
+                        <p>
+                          {followUpLabel(
+                            detail.customer.next_follow_up_at,
+                            detail.customer.follow_up_urgency
+                          )}
+                        </p>
+                        {detail.customer.follow_up_reason && (
+                          <p className={stylex(styles.muted)}>{detail.customer.follow_up_reason}</p>
+                        )}
                       </>
                     )}
                   </div>
@@ -1220,10 +1230,18 @@ function recentCustomerNotes(activities: CustomerDetail["activities"]) {
   ).length;
   return notes.slice(0, Math.max(3, recentCount));
 }
-function followUpLabel(value: string | null) {
-  if (!value) return "No follow-up scheduled";
-  const overdue = new Date(value).getTime() < Date.now();
-  return `${overdue ? "Follow-up overdue" : "Next follow-up"}: ${formatDateTime(value)}`;
+function followUpLabel(
+  value: string | null,
+  urgency: "overdue" | "due_today" | "upcoming" | "none"
+) {
+  if (!value) return "No follow-up required";
+  const prefix =
+    urgency === "overdue"
+      ? "Follow-up overdue"
+      : urgency === "due_today"
+        ? "Follow-up due today"
+        : "Next follow-up";
+  return `${prefix}: ${formatDateTime(value)}`;
 }
 type ContactInput = {
   firstName: string;

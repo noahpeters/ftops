@@ -14,6 +14,8 @@ export type CustomerSummary = {
   open_estimate_count: number;
   open_invoice_balance: number;
   next_follow_up_at: string | null;
+  follow_up_urgency: "overdue" | "due_today" | "upcoming" | "none";
+  follow_up_reason: string | null;
   last_note_at: string | null;
 };
 export type CustomerDetail = {
@@ -22,6 +24,12 @@ export type CustomerDetail = {
     lead_source?: string | null;
     integration_id?: string | null;
     quickbooks_customer_id?: string | null;
+    source_note_id?: string | null;
+    guidance_type?: "date" | "cadence" | "none" | null;
+    interpreted_date?: string | null;
+    cadence_json?: string | null;
+    guidance_confidence?: number | null;
+    guidance_explanation?: string | null;
   };
   contacts: Contact[];
   opportunities: Opportunity[];

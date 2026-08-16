@@ -3,7 +3,7 @@ import { createTestEnv } from "../helpers/miniflare";
 import { sendDailySummaries } from "../../src/services/dailySummary";
 
 describe("daily summary emails", () => {
-  it("sends due tasks and customer follow-ups once at 7am local time", async () => {
+  it("sends due tasks and computed customer follow-ups once at 7am local time", async () => {
     const context = await createTestEnv({
       env: {
         RESEND_API_KEY: "test-key",
@@ -32,7 +32,7 @@ describe("daily summary emails", () => {
       .prepare(
         `INSERT INTO tasks
           (id,workspace_id,project_id,scope,template_key,title,kind,position,status,due_at,assigned_to,customer_id,priority,created_at,updated_at)
-         VALUES ('task-1','default',NULL,'customer','customer-follow-up','Call Acme','customer_follow_up',0,'scheduled','2026-08-14T17:00:00.000Z','user-1','customer-1',0,?,?)`
+         VALUES ('task-1','default',NULL,'workspace','daily-check','Finish checklist','task',0,'scheduled','2026-08-14T17:00:00.000Z','user-1',NULL,0,?,?)`
       )
       .bind("2026-08-14T00:00:00.000Z", "2026-08-14T00:00:00.000Z")
       .run();
@@ -50,7 +50,7 @@ describe("daily summary emails", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     const body = JSON.parse(String(request.body)) as { text: string; html: string };
-    expect(body.text).toContain("Call Acme — Acme Cabinets");
+    expect(body.text).toContain("Finish checklist");
     expect(body.text).toContain("Customer follow-ups due today");
     expect(body.text).toContain("Acme Cabinets");
     expect(body.html).toContain("https://ops.example.com/tasks");

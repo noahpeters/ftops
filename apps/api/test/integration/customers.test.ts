@@ -107,7 +107,7 @@ describe("customers API", () => {
     await mf.dispose();
   });
 
-  it("creates customer-only follow-up tasks from notes and derives the next follow-up", async () => {
+  it("keeps optional customer tasks separate from recurring computed follow-up", async () => {
     const context = await createTestEnv();
     if (!context) return;
     const { env, mf } = context;
@@ -141,7 +141,8 @@ describe("customers API", () => {
         assigned_to: string | null;
       }>;
     };
-    expect(detail.customer.next_follow_up_at).toBe(dueAt);
+    expect(detail.customer.next_follow_up_at).not.toBe(dueAt);
+    expect(detail.customer.next_follow_up_at).toEqual(expect.any(String));
     expect(detail.tasks[0]).toMatchObject({
       project_id: null,
       customer_id: customer.customer.id,
@@ -163,7 +164,100 @@ describe("customers API", () => {
     const after = (await (await request(env, `/customers/${customer.customer.id}`)).json()) as {
       customer: { next_follow_up_at: string | null };
     };
-    expect(after.customer.next_follow_up_at).toBeNull();
+    expect(after.customer.next_follow_up_at).toEqual(expect.any(String));
+    await mf.dispose();
+  });
+
+  it("stores AI note guidance and lets the newest human note supersede it", async () => {
+    const run = vi
+      .fn()
+      .mockResolvedValueOnce({
+        response: JSON.stringify({
+          type: "date",
+          interpretedDate: "2030-09-15T09:00:00-07:00",
+          cadence: null,
+          confidence: 0.93,
+          explanation: "Customer asked to reconnect next month.",
+        }),
+      })
+      .mockResolvedValueOnce({
+        response: JSON.stringify({
+          type: "none",
+          interpretedDate: null,
+          cadence: null,
+          confidence: 0.98,
+          explanation: "No explicit future-contact guidance.",
+        }),
+      });
+    const context = await createTestEnv({ env: { AI: { run } } });
+    if (!context) return;
+    const { env, db, mf } = context;
+    const created = await request(env, "/customers", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: "default", displayName: "Guided Customer" }),
+    });
+    const customer = (await created.json()) as { customer: { id: string } };
+
+    await request(env, `/customers/${customer.customer.id}/activities`, {
+      method: "POST",
+      body: JSON.stringify({ subject: "Call", body: "Please follow up next month." }),
+    });
+    const guided = (await (await request(env, `/customers/${customer.customer.id}`)).json()) as {
+      customer: {
+        next_follow_up_at: string;
+        guidance_type: string;
+        guidance_confidence: number;
+        source_note_id: string;
+      };
+    };
+    expect(guided.customer).toMatchObject({
+      next_follow_up_at: "2030-09-15T16:00:00.000Z",
+      guidance_type: "date",
+      guidance_confidence: 0.93,
+    });
+    const firstSourceNoteId = guided.customer.source_note_id;
+
+    await request(env, `/customers/${customer.customer.id}/activities`, {
+      method: "POST",
+      body: JSON.stringify({ subject: "Update", body: "Measurements confirmed." }),
+    });
+    const superseded = (await (
+      await request(env, `/customers/${customer.customer.id}`)
+    ).json()) as { customer: { guidance_type: string; source_note_id: string } };
+    expect(superseded.customer.guidance_type).toBe("none");
+    expect(superseded.customer.source_note_id).not.toBe(firstSourceNoteId);
+    expect(run).toHaveBeenCalledTimes(2);
+
+    const beforeSystemNote = await db
+      .prepare(
+        `SELECT last_human_note_at FROM (SELECT (SELECT MAX(a.occurred_at) FROM customer_activities a WHERE a.customer_id=c.id AND a.activity_type='note' AND a.is_human_authored=1) AS last_human_note_at FROM customers c WHERE c.id=?)`
+      )
+      .bind(customer.customer.id)
+      .first<{ last_human_note_at: string }>();
+    await db
+      .prepare(
+        `INSERT INTO customer_activities (id,workspace_id,customer_id,activity_type,subject,body,source,occurred_at,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`
+      )
+      .bind(
+        crypto.randomUUID(),
+        "default",
+        customer.customer.id,
+        "note",
+        "Automated sync",
+        "system note",
+        "system",
+        "2040-01-01T00:00:00.000Z",
+        null,
+        "2040-01-01T00:00:00.000Z"
+      )
+      .run();
+    const afterSystemNote = await db
+      .prepare(
+        `SELECT MAX(a.occurred_at) AS last_human_note_at FROM customer_activities a WHERE a.customer_id=? AND a.activity_type='note' AND a.is_human_authored=1`
+      )
+      .bind(customer.customer.id)
+      .first<{ last_human_note_at: string }>();
+    expect(afterSystemNote?.last_human_note_at).toBe(beforeSystemNote?.last_human_note_at);
     await mf.dispose();
   });
 
