@@ -84,6 +84,7 @@ describe("ops api proxy allowlist", () => {
     ["PUT", "/api/customers/customer_1/files/upload?storageKey=customers%2Ffile"],
     ["POST", "/api/customers/customer_1/files/complete"],
     ["GET", "/api/customer-files/file_1/download"],
+    ["GET", "/api/customer-files/file_1/open"],
     ["GET", "/api/customer-files/file_1/blob"],
     ["PATCH", "/api/customer-files/file_1"],
     ["GET", "/api/customers/customer_1/estimates"],
