@@ -1,6 +1,7 @@
 import type { Env, EventQueuePayload } from "../lib/types";
 import { sanitizeExternalError } from "../lib/security";
 import { nowISO } from "../lib/utils";
+import { decryptSecrets } from "../lib/crypto/secrets";
 
 const SOURCE = "ftops";
 const DEFAULT_BASE_URL = "https://api.quo.com/v1";
@@ -32,6 +33,7 @@ type ContactRow = {
 };
 
 type QuoContact = { id: string; externalId?: string | null };
+type QuoConfig = { apiKey: string; apiBaseUrl?: string };
 
 export async function enqueueQuoContactSync(
   env: Env,
@@ -73,6 +75,15 @@ export async function enqueueCustomerQuoSync(env: Env, workspaceId: string, cust
   );
 }
 
+export async function enqueueWorkspaceQuoSync(env: Env, workspaceId: string) {
+  const contacts = await env.DB.prepare(`SELECT id,customer_id FROM contacts WHERE workspace_id=?`)
+    .bind(workspaceId)
+    .all<{ id: string; customer_id: string }>();
+  for (const contact of contacts.results ?? []) {
+    await enqueueQuoContactSync(env, workspaceId, contact.customer_id, contact.id);
+  }
+}
+
 export async function processQuoContactSync(
   env: Env,
   payload: { contactId?: string; version?: number }
@@ -92,8 +103,8 @@ export async function processQuoContactSync(
     .run();
 
   try {
-    if (!env.QUO_API_KEY) throw new QuoError("quo_api_key_not_configured", 0, false);
-    await upsertContact(env, row);
+    const config = await getQuoConfig(env, row.workspace_id);
+    await upsertContact(env, config, row);
     const completedAt = nowISO();
     await env.DB.prepare(
       `UPDATE quo_contact_sync SET status='synced',attempts=0,next_attempt_at=NULL,
@@ -128,7 +139,6 @@ export async function processQuoContactSync(
 }
 
 export async function enqueueDueQuoSyncs(env: Env) {
-  if (!env.QUO_API_KEY) return;
   const now = nowISO();
   const rows = await env.DB.prepare(
     `SELECT contact_id,version FROM quo_contact_sync
@@ -148,15 +158,15 @@ async function desiredActionForContact(env: Env, contactId: string) {
   return "upsert";
 }
 
-async function upsertContact(env: Env, row: SyncRow) {
+async function upsertContact(env: Env, config: QuoConfig, row: SyncRow) {
   const contact = await loadContact(env, row.contact_id);
   if (!contact) throw new QuoError("ftops_contact_not_found", 0, false);
   const body = contactBody(contact);
   let quoId = row.quo_contact_id;
-  if (!quoId) quoId = (await findByExternalId(env, row.contact_id))?.id ?? null;
+  if (!quoId) quoId = (await findByExternalId(config, row.contact_id))?.id ?? null;
   if (quoId) {
     const response = await quoRequest(
-      env,
+      config,
       `/contacts/${encodeURIComponent(quoId)}`,
       {
         method: "PATCH",
@@ -165,14 +175,14 @@ async function upsertContact(env: Env, row: SyncRow) {
       [404]
     );
     if (response.status === 404) {
-      quoId = (await findByExternalId(env, row.contact_id))?.id ?? null;
-      if (!quoId) quoId = await createContact(env, row.contact_id, body);
+      quoId = (await findByExternalId(config, row.contact_id))?.id ?? null;
+      if (!quoId) quoId = await createContact(config, row.contact_id, body);
     } else {
       const result = (await response.json()) as { data: QuoContact };
       quoId = result.data.id;
     }
   } else {
-    quoId = await createContact(env, row.contact_id, body);
+    quoId = await createContact(config, row.contact_id, body);
   }
   await env.DB.prepare(
     `UPDATE quo_contact_sync SET quo_contact_id=? WHERE contact_id=? AND version=?`
@@ -181,27 +191,27 @@ async function upsertContact(env: Env, row: SyncRow) {
     .run();
 }
 
-async function createContact(env: Env, externalId: string, defaultFields: object) {
+async function createContact(config: QuoConfig, externalId: string, defaultFields: object) {
   try {
-    const response = await quoRequest(env, "/contacts", {
+    const response = await quoRequest(config, "/contacts", {
       method: "POST",
       body: JSON.stringify({ externalId, source: SOURCE, defaultFields }),
     });
     return ((await response.json()) as { data: QuoContact }).data.id;
   } catch (error) {
     if (error instanceof QuoError && error.status === 409) {
-      const existing = await findByExternalId(env, externalId);
+      const existing = await findByExternalId(config, externalId);
       if (existing) return existing.id;
     }
     throw error;
   }
 }
 
-async function findByExternalId(env: Env, externalId: string) {
+async function findByExternalId(config: QuoConfig, externalId: string) {
   const query = new URLSearchParams({ maxResults: "50" });
   query.append("externalIds", externalId);
   query.append("sources", SOURCE);
-  const response = await quoRequest(env, `/contacts?${query.toString()}`, { method: "GET" });
+  const response = await quoRequest(config, `/contacts?${query.toString()}`, { method: "GET" });
   const result = (await response.json()) as { data?: QuoContact[] };
   return result.data?.find((contact) => contact.externalId === externalId) ?? null;
 }
@@ -248,17 +258,17 @@ function splitDisplayName(value: string) {
 }
 
 async function quoRequest(
-  env: Env,
+  config: QuoConfig,
   path: string,
   init: RequestInit,
   allowedStatuses: number[] = []
 ) {
   const response = await fetch(
-    `${(env.QUO_API_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, "")}${path}`,
+    `${(config.apiBaseUrl || DEFAULT_BASE_URL).replace(/\/$/, "")}${path}`,
     {
       ...init,
       headers: {
-        Authorization: env.QUO_API_KEY || "",
+        Authorization: config.apiKey,
         ...(init.body ? { "Content-Type": "application/json" } : {}),
       },
     }
@@ -270,6 +280,31 @@ async function quoRequest(
     response.status,
     response.status === 408 || response.status === 429 || response.status >= 500
   );
+}
+
+async function getQuoConfig(env: Env, workspaceId: string): Promise<QuoConfig> {
+  const integration = await env.DB.prepare(
+    `SELECT secrets_key_id,secrets_ciphertext FROM integrations
+     WHERE workspace_id=? AND provider='quo' AND environment='production' AND is_active=1
+     ORDER BY updated_at DESC LIMIT 1`
+  )
+    .bind(workspaceId)
+    .first<{ secrets_key_id: string; secrets_ciphertext: string }>();
+  if (!integration) throw new QuoError("quo_integration_not_configured", 0, false);
+  let secrets: Record<string, unknown>;
+  try {
+    secrets = JSON.parse(
+      await decryptSecrets(env, integration.secrets_key_id, integration.secrets_ciphertext)
+    ) as Record<string, unknown>;
+  } catch {
+    throw new QuoError("quo_integration_secrets_unreadable", 0, false);
+  }
+  const apiKey = typeof secrets.apiKey === "string" ? secrets.apiKey.trim() : "";
+  if (!apiKey) throw new QuoError("quo_api_key_not_configured", 0, false);
+  return {
+    apiKey,
+    apiBaseUrl: env.QUO_API_BASE_URL,
+  };
 }
 
 async function sendSyncMessage(

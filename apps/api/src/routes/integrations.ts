@@ -5,8 +5,9 @@ import { nowISO } from "../lib/utils";
 import { canAdminWorkspace, requireActor } from "../lib/access";
 import { handleQboIntegration } from "./qboIntegration";
 import { isTrustedMutationOrigin } from "../lib/security";
+import { enqueueWorkspaceQuoSync } from "../services/quo";
 
-const PROVIDERS = ["shopify", "qbo"] as const;
+const PROVIDERS = ["shopify", "qbo", "quo"] as const;
 const ENVIRONMENTS = ["sandbox", "production"] as const;
 
 export async function handleIntegrations(
@@ -75,8 +76,8 @@ export async function handleIntegrations(
 
       const workspaceId = body.workspaceId?.trim();
       const provider = body.provider?.trim();
-      const environment = body.environment?.trim();
-      const externalAccountId = body.externalAccountId?.trim();
+      const environment = provider === "quo" ? "production" : body.environment?.trim();
+      const externalAccountId = provider === "quo" ? workspaceId : body.externalAccountId?.trim();
       if (!workspaceId || !provider || !environment || !externalAccountId) {
         return badRequest("missing_required_fields");
       }
@@ -133,6 +134,8 @@ export async function handleIntegrations(
       )
         .bind(id)
         .first();
+
+      if (provider === "quo") await enqueueWorkspaceQuoSync(env, workspaceId);
 
       return json(integration, 201);
     }
@@ -231,6 +234,10 @@ export async function handleIntegrations(
         .bind(integrationId)
         .first();
 
+      if ((existing as { provider: string }).provider === "quo") {
+        await enqueueWorkspaceQuoSync(env, (existing as { workspace_id: string }).workspace_id);
+      }
+
       return json(integration);
     }
 
@@ -286,6 +293,11 @@ function validateSecrets(provider: string, secrets: Record<string, unknown>) {
     }
     if (secrets.accessToken !== undefined && typeof secrets.accessToken !== "string") {
       return { ok: false, error: "invalid_access_token" };
+    }
+  }
+  if (provider === "quo") {
+    if (typeof secrets.apiKey !== "string" || !secrets.apiKey.trim()) {
+      return { ok: false, error: "missing_quo_api_key" };
     }
   }
   return { ok: true as const };

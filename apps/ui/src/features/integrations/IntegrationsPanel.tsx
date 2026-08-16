@@ -25,6 +25,7 @@ type IntegrationsPanelProps = {
 const PROVIDERS = [
   { value: "shopify", label: "Shopify" },
   { value: "qbo", label: "QuickBooks" },
+  { value: "quo", label: "Quo" },
 ];
 const ENVIRONMENTS = ["sandbox", "production"];
 
@@ -86,7 +87,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [provider, setProvider] = useState<"shopify" | "qbo">("shopify");
+  const [provider, setProvider] = useState<"shopify" | "qbo" | "quo">("shopify");
   const [environment, setEnvironment] = useState<"sandbox" | "production">("production");
   const [externalAccountId, setExternalAccountId] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -122,12 +123,14 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
     const secrets =
       provider === "shopify"
         ? { webhookSecret: secretValue }
-        : { webhookVerifierToken: secretValue };
+        : provider === "qbo"
+          ? { webhookVerifierToken: secretValue }
+          : { apiKey: secretValue };
     const result = await createIntegration({
       workspaceId,
       provider,
-      environment,
-      externalAccountId,
+      environment: provider === "quo" ? "production" : environment,
+      externalAccountId: provider === "quo" ? workspaceId : externalAccountId,
       displayName,
       secrets,
     });
@@ -142,7 +145,10 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
   }
 
   async function toggleActive(integration: IntegrationRow) {
-    await updateIntegration(integration.id, { is_active: integration.is_active ? 0 : 1 });
+    const result = await updateIntegration(integration.id, {
+      is_active: integration.is_active ? 0 : 1,
+    });
+    if (!result.ok) setError(result.text || "Failed to update integration.");
     await refresh();
   }
 
@@ -150,14 +156,23 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
     const next = secretUpdate[integration.id]?.trim();
     if (!next) return;
     const secrets =
-      integration.provider === "shopify" ? { webhookSecret: next } : { webhookVerifierToken: next };
-    await updateIntegration(integration.id, { secrets });
+      integration.provider === "shopify"
+        ? { webhookSecret: next }
+        : integration.provider === "qbo"
+          ? { webhookVerifierToken: next }
+          : { apiKey: next };
+    const result = await updateIntegration(integration.id, { secrets });
+    if (!result.ok) {
+      setError(result.text || "Failed to replace integration secret.");
+      return;
+    }
     setSecretUpdate((prev) => ({ ...prev, [integration.id]: "" }));
     await refresh();
   }
 
   async function removeIntegration(id: string) {
-    await deleteIntegration(id);
+    const result = await deleteIntegration(id);
+    if (!result.ok) setError(result.text || "Failed to delete integration.");
     await refresh();
   }
 
@@ -264,7 +279,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
             <label>Provider</label>
             <select
               value={provider}
-              onChange={(event) => setProvider(event.target.value as "shopify" | "qbo")}
+              onChange={(event) => setProvider(event.target.value as "shopify" | "qbo" | "quo")}
             >
               {PROVIDERS.map((item) => (
                 <option key={item.value} value={item.value}>
@@ -273,27 +288,33 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
               ))}
             </select>
           </div>
-          <div className={stylex(styles.formRow)}>
-            <label>Environment</label>
-            <select
-              value={environment}
-              onChange={(event) => setEnvironment(event.target.value as "sandbox" | "production")}
-            >
-              {ENVIRONMENTS.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className={stylex(styles.formRow)}>
-            <label>External account ID</label>
-            <input
-              value={externalAccountId}
-              onChange={(event) => setExternalAccountId(event.target.value)}
-              placeholder={provider === "shopify" ? "shop.myshopify.com" : "realmId"}
-            />
-          </div>
+          {provider !== "quo" && (
+            <>
+              <div className={stylex(styles.formRow)}>
+                <label>Environment</label>
+                <select
+                  value={environment}
+                  onChange={(event) =>
+                    setEnvironment(event.target.value as "sandbox" | "production")
+                  }
+                >
+                  {ENVIRONMENTS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className={stylex(styles.formRow)}>
+                <label>External account ID</label>
+                <input
+                  value={externalAccountId}
+                  onChange={(event) => setExternalAccountId(event.target.value)}
+                  placeholder={provider === "shopify" ? "shop.myshopify.com" : "realmId"}
+                />
+              </div>
+            </>
+          )}
           <div className={stylex(styles.formRow)}>
             <label>Display name</label>
             <input
@@ -303,11 +324,17 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
             />
           </div>
           <div className={stylex(styles.formRow)}>
-            <label>{provider === "shopify" ? "Webhook secret" : "Webhook verifier token"}</label>
+            <label>
+              {provider === "shopify"
+                ? "Webhook secret"
+                : provider === "qbo"
+                  ? "Webhook verifier token"
+                  : "Quo API key"}
+            </label>
             <input
               value={secretValue}
               onChange={(event) => setSecretValue(event.target.value)}
-              placeholder="Secret"
+              placeholder={provider === "quo" ? "Quo API key" : "Secret"}
             />
           </div>
         </div>
@@ -353,7 +380,9 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                           [integration.id]: event.target.value,
                         }))
                       }
-                      placeholder="Replace secret"
+                      placeholder={
+                        integration.provider === "quo" ? "Replace API key" : "Replace secret"
+                      }
                     />
                   </td>
                   <td>
