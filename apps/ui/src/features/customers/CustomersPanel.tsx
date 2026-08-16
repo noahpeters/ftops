@@ -525,7 +525,9 @@ export function CustomersPanel({
                     {detail.files
                       .filter((file) => !file.deprecated_at)
                       .slice(0, 3)
-                      .map((file) => <CustomerFileLink key={file.id} file={file} compact />)}
+                      .map((file) => (
+                        <CustomerFileLink key={file.id} file={file} compact />
+                      ))}
                   </div>
                   <div className={stylex(styles.summaryCard)}>
                     <b>Tasks</b>
@@ -760,7 +762,9 @@ export function CustomersPanel({
                             .filter(
                               (file) => file.activity_id === activity.id && !file.deprecated_at
                             )
-                            .map((file) => <CustomerFileLink key={file.id} file={file} compact />)}
+                            .map((file) => (
+                              <CustomerFileLink key={file.id} file={file} compact />
+                            ))}
                         </div>
                       )}
                     </article>
@@ -851,10 +855,7 @@ function CustomerFileLink({
     >
       {previewKind === "image" && (
         <img
-          className={stylex(
-            styles.attachmentPreview,
-            compact && styles.attachmentPreviewCompact
-          )}
+          className={stylex(styles.attachmentPreview, compact && styles.attachmentPreviewCompact)}
           src={previewUrl}
           alt={`Preview of ${file.original_filename}`}
           loading="lazy"
@@ -877,9 +878,7 @@ function CustomerFileLink({
     </a>
   );
 }
-function customerFilePreviewKind(
-  file: CustomerDetail["files"][number]
-): "image" | "pdf" | null {
+function customerFilePreviewKind(file: CustomerDetail["files"][number]): "image" | "pdf" | null {
   const contentType = file.content_type.toLowerCase();
   const filename = file.original_filename.toLowerCase();
   if (
