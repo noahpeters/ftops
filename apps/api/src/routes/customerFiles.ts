@@ -45,13 +45,13 @@ export async function handleCustomerFiles(
     const signed = await signedUrl(env, file.storage_key, "GET");
     if (signed) return Response.redirect(signed, 302);
     if (env.ALLOW_R2_FALLBACK_UPLOADS === "true") {
-      return streamFile(env, file, canPreviewInline(file) ? "inline" : "attachment");
+      return await streamFile(env, file, canPreviewInline(file) ? "inline" : "attachment");
     }
     return serverError("Failed to open file", { detail: "presigned_url_unsupported" });
   }
 
   if (action === "blob" && request.method === "GET") {
-    return streamFile(env, file, "attachment");
+    return await streamFile(env, file, "attachment");
   }
 
   if (!action && request.method === "PATCH") {
