@@ -843,8 +843,10 @@ function CustomerFileLink({
   compact?: boolean;
 }) {
   const openUrl = buildUrl(`/customer-files/${file.id}/open`);
+  const inlinePreviewUrl = buildUrl(`/customer-files/${file.id}/preview`);
   const previewKind = customerFilePreviewKind(file);
-  const previewUrl = previewKind === "pdf" ? `${openUrl}#page=1&view=FitH&toolbar=0` : openUrl;
+  const previewUrl =
+    previewKind === "pdf" ? `${inlinePreviewUrl}#page=1&view=FitH&toolbar=0` : inlinePreviewUrl;
   return (
     <a
       className={stylex(styles.attachmentLink)}
