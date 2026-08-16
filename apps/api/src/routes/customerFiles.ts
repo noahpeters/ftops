@@ -41,16 +41,17 @@ export async function handleCustomerFiles(
     return serverError("Failed to sign download URL", { detail: "presigned_url_unsupported" });
   }
 
+  if (action === "open" && request.method === "GET") {
+    const signed = await signedUrl(env, file.storage_key, "GET");
+    if (signed) return Response.redirect(signed, 302);
+    if (env.ALLOW_R2_FALLBACK_UPLOADS === "true") {
+      return streamFile(env, file, canPreviewInline(file) ? "inline" : "attachment");
+    }
+    return serverError("Failed to open file", { detail: "presigned_url_unsupported" });
+  }
+
   if (action === "blob" && request.method === "GET") {
-    const object = await env.R2_TASK_FILES_BUCKET.get(file.storage_key);
-    if (!object) return notFound("File not found");
-    return new Response(object.body, {
-      headers: {
-        "content-type": file.content_type,
-        "content-disposition": `attachment; filename="${safeDispositionName(file.original_filename)}"`,
-        "cache-control": "private, no-store",
-      },
-    });
+    return streamFile(env, file, "attachment");
   }
 
   if (!action && request.method === "PATCH") {
@@ -69,6 +70,35 @@ export async function handleCustomerFiles(
   }
 
   return methodNotAllowed(["GET", "PATCH"]);
+}
+
+function canPreviewInline(file: CustomerFileRow): boolean {
+  const contentType = file.content_type.toLowerCase();
+  return [
+    "application/pdf",
+    "image/avif",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+  ].includes(contentType);
+}
+
+async function streamFile(
+  env: Env,
+  file: CustomerFileRow,
+  disposition: "inline" | "attachment"
+): Promise<Response> {
+  const object = await env.R2_TASK_FILES_BUCKET.get(file.storage_key);
+  if (!object) return notFound("File not found");
+  return new Response(object.body, {
+    headers: {
+      "content-type": file.content_type,
+      "content-disposition": `${disposition}; filename="${safeDispositionName(file.original_filename)}"`,
+      "cache-control": "private, no-store",
+      "x-content-type-options": "nosniff",
+    },
+  });
 }
 
 export async function signedUrl(

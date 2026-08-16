@@ -13,7 +13,6 @@ import {
   archiveContact,
   createCustomer,
   getCustomer,
-  getCustomerFileDownload,
   initCustomerFileUpload,
   listCustomers,
   completeCustomerFileUpload,
@@ -135,6 +134,31 @@ const styles = stylex.create({
     borderRadius: radius.sm,
     backgroundColor: colors.surfaceAlt,
     padding: "12px",
+  },
+  attachmentLink: {
+    display: "grid",
+    gap: "6px",
+    color: colors.text,
+    textDecoration: "none",
+    minWidth: 0,
+  },
+  attachmentPreview: {
+    width: "100%",
+    height: "120px",
+    display: "block",
+    overflow: "hidden",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceStrong,
+    objectFit: "cover",
+  },
+  attachmentPreviewCompact: { height: "82px" },
+  pdfPreview: { pointerEvents: "none" },
+  attachmentName: {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    textDecoration: "underline",
   },
 });
 
@@ -301,16 +325,6 @@ export function CustomersPanel({
     }
     if (reload) await reloadDetail();
     return true;
-  }
-  async function downloadCustomerFile(fileId: string) {
-    const result = await getCustomerFileDownload(fileId);
-    if (!result.ok || !result.data?.downloadUrl)
-      return setError(result.text || "Could not prepare download.");
-    window.location.assign(
-      result.data.downloadUrl.startsWith("/")
-        ? buildUrl(result.data.downloadUrl)
-        : result.data.downloadUrl
-    );
   }
   async function toggleFileDeprecated(fileId: string, deprecated: boolean) {
     const result = await setCustomerFileDeprecated(fileId, deprecated);
@@ -511,11 +525,7 @@ export function CustomersPanel({
                     {detail.files
                       .filter((file) => !file.deprecated_at)
                       .slice(0, 3)
-                      .map((file) => (
-                        <button key={file.id} onClick={() => downloadCustomerFile(file.id)}>
-                          {file.original_filename}
-                        </button>
-                      ))}
+                      .map((file) => <CustomerFileLink key={file.id} file={file} compact />)}
                   </div>
                   <div className={stylex(styles.summaryCard)}>
                     <b>Tasks</b>
@@ -700,7 +710,6 @@ export function CustomersPanel({
                       <CustomerFileRow
                         key={file.id}
                         file={file}
-                        onDownload={() => downloadCustomerFile(file.id)}
                         onDeprecated={() => toggleFileDeprecated(file.id, true)}
                       />
                     ))}
@@ -713,7 +722,6 @@ export function CustomersPanel({
                           <CustomerFileRow
                             key={file.id}
                             file={file}
-                            onDownload={() => downloadCustomerFile(file.id)}
                             onDeprecated={() => toggleFileDeprecated(file.id, false)}
                             deprecated
                           />
@@ -752,11 +760,7 @@ export function CustomersPanel({
                             .filter(
                               (file) => file.activity_id === activity.id && !file.deprecated_at
                             )
-                            .map((file) => (
-                              <button key={file.id} onClick={() => downloadCustomerFile(file.id)}>
-                                {file.original_filename}
-                              </button>
-                            ))}
+                            .map((file) => <CustomerFileLink key={file.id} file={file} compact />)}
                         </div>
                       )}
                     </article>
@@ -808,27 +812,84 @@ export function CustomersPanel({
 }
 function CustomerFileRow({
   file,
-  onDownload,
   onDeprecated,
   deprecated = false,
 }: {
   file: CustomerDetail["files"][number];
-  onDownload: () => void;
   onDeprecated: () => void;
   deprecated?: boolean;
 }) {
   return (
     <article className={stylex(styles.note)}>
-      <b>{file.original_filename}</b>
+      <CustomerFileLink file={file} />
       <div className={stylex(styles.muted)}>
         {formatFileSize(file.size_bytes)} · attached to “{file.note_subject}” · {file.created_at}
       </div>
       <div className={stylex(styles.actions)}>
-        <button onClick={onDownload}>Download</button>
         <button onClick={onDeprecated}>{deprecated ? "Restore" : "Mark deprecated"}</button>
       </div>
     </article>
   );
+}
+function CustomerFileLink({
+  file,
+  compact = false,
+}: {
+  file: CustomerDetail["files"][number];
+  compact?: boolean;
+}) {
+  const openUrl = buildUrl(`/customer-files/${file.id}/open`);
+  const previewKind = customerFilePreviewKind(file);
+  const previewUrl = previewKind === "pdf" ? `${openUrl}#page=1&view=FitH&toolbar=0` : openUrl;
+  return (
+    <a
+      className={stylex(styles.attachmentLink)}
+      href={openUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Open ${file.original_filename} in a new tab`}
+    >
+      {previewKind === "image" && (
+        <img
+          className={stylex(
+            styles.attachmentPreview,
+            compact && styles.attachmentPreviewCompact
+          )}
+          src={previewUrl}
+          alt={`Preview of ${file.original_filename}`}
+          loading="lazy"
+        />
+      )}
+      {previewKind === "pdf" && (
+        <iframe
+          className={stylex(
+            styles.attachmentPreview,
+            styles.pdfPreview,
+            compact && styles.attachmentPreviewCompact
+          )}
+          src={previewUrl}
+          title={`Preview of ${file.original_filename}`}
+          loading="lazy"
+          tabIndex={-1}
+        />
+      )}
+      <b className={stylex(styles.attachmentName)}>{file.original_filename}</b>
+    </a>
+  );
+}
+function customerFilePreviewKind(
+  file: CustomerDetail["files"][number]
+): "image" | "pdf" | null {
+  const contentType = file.content_type.toLowerCase();
+  const filename = file.original_filename.toLowerCase();
+  if (
+    ["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"].includes(contentType) ||
+    /\.(avif|gif|jpe?g|png|webp)$/.test(filename)
+  ) {
+    return "image";
+  }
+  if (contentType === "application/pdf" || filename.endsWith(".pdf")) return "pdf";
+  return null;
 }
 function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;

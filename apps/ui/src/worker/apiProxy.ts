@@ -55,7 +55,7 @@ const ALLOWLIST: AllowlistEntry[] = [
   { methods: new Set(["POST"]), pattern: /^\/customers\/[^/]+\/activities$/ },
   { methods: new Set(["POST"]), pattern: /^\/customers\/[^/]+\/files\/(?:init|complete)$/ },
   { methods: new Set(["PUT"]), pattern: /^\/customers\/[^/]+\/files\/upload$/ },
-  { methods: new Set(["GET"]), pattern: /^\/customer-files\/[^/]+\/(?:download|blob)$/ },
+  { methods: new Set(["GET"]), pattern: /^\/customer-files\/[^/]+\/(?:download|open|blob)$/ },
   { methods: new Set(["PATCH"]), pattern: /^\/customer-files\/[^/]+$/ },
   { methods: new Set(["GET"]), pattern: /^\/customers\/[^/]+\/(?:estimates|invoices)$/ },
   { methods: new Set(["GET"]), pattern: /^\/customers\/[^/]+\/quickbooks\/search$/ },
