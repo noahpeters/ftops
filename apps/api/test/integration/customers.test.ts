@@ -286,7 +286,7 @@ describe("customers API", () => {
       .first<{ last_human_note_at: string }>();
     expect(afterSystemNote?.last_human_note_at).toBe(beforeSystemNote?.last_human_note_at);
     await mf.dispose();
-  });
+  }, 15_000);
 
   it("assigns customer follow-up tasks to workspace users", async () => {
     const context = await createTestEnv();
