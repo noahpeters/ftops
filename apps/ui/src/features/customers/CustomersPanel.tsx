@@ -138,22 +138,33 @@ const styles = stylex.create({
   attachmentLink: {
     display: "grid",
     gap: "6px",
+    justifyItems: "start",
     color: colors.text,
     textDecoration: "none",
     minWidth: 0,
   },
   attachmentPreview: {
-    width: "100%",
-    height: "120px",
     display: "block",
     overflow: "hidden",
     border: `1px solid ${colors.border}`,
     borderRadius: radius.sm,
     backgroundColor: colors.surfaceStrong,
-    objectFit: "cover",
   },
-  attachmentPreviewCompact: { height: "82px" },
-  pdfPreview: { pointerEvents: "none" },
+  imagePreview: {
+    width: "100%",
+    height: "auto",
+    maxHeight: "120px",
+    objectFit: "contain",
+    objectPosition: "left center",
+  },
+  imagePreviewCompact: { maxHeight: "82px" },
+  pdfPreview: {
+    width: "min(100%, 204px)",
+    height: "auto",
+    aspectRatio: "8.5 / 11",
+    pointerEvents: "none",
+  },
+  pdfPreviewCompact: { width: "min(100%, 64px)" },
   attachmentName: {
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -857,7 +868,11 @@ function CustomerFileLink({
     >
       {previewKind === "image" && (
         <img
-          className={stylex(styles.attachmentPreview, compact && styles.attachmentPreviewCompact)}
+          className={stylex(
+            styles.attachmentPreview,
+            styles.imagePreview,
+            compact && styles.imagePreviewCompact
+          )}
           src={previewUrl}
           alt={`Preview of ${file.original_filename}`}
           loading="lazy"
@@ -868,7 +883,7 @@ function CustomerFileLink({
           className={stylex(
             styles.attachmentPreview,
             styles.pdfPreview,
-            compact && styles.attachmentPreviewCompact
+            compact && styles.pdfPreviewCompact
           )}
           src={previewUrl}
           title={`Preview of ${file.original_filename}`}
