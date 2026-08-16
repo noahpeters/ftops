@@ -29,7 +29,8 @@ export const MIGRATIONS = [
   "0025_customer_followups.sql",
   "0026_customer_note_files.sql",
   "0027_customer_statuses.sql",
-  "0030_daily_summary_deliveries.sql"
+  "0030_daily_summary_deliveries.sql",
+  "0031_quo_contact_sync.sql"
 ] as const;
-export const LATEST_MIGRATION = "0030_daily_summary_deliveries.sql";
-export const MIGRATIONS_COUNT = 30;
+export const LATEST_MIGRATION = "0031_quo_contact_sync.sql";
+export const MIGRATIONS_COUNT = 31;

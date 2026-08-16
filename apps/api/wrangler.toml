@@ -59,3 +59,4 @@ DAILY_SUMMARY_FROM_NAME = "FTOPS"
 APP_BASE_URL = "https://ops.from-trees.com"
 # INTEGRATIONS_MASTER_KEY should be set via `wrangler secret` or .dev.vars
 # QBO_CLIENT_ID, QBO_CLIENT_SECRET, QBO_OAUTH_STATE_SECRET, and RESEND_API_KEY must be Worker secrets.
+# QUO_API_KEY must be set as a Worker secret. QUO_API_BASE_URL is test-only and defaults to https://api.quo.com/v1.

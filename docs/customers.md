@@ -48,11 +48,21 @@ https://api.from-trees.com/ingest/qbo/webhook?env=production
 
 Set these API Worker secrets with `wrangler secret put`; do not commit them or add them to `wrangler.toml`:
 
+- `QUO_API_KEY` (Quo workspace API key; sent directly in the Authorization header)
+
 - `QBO_CLIENT_ID`
 - `QBO_CLIENT_SECRET`
 - `QBO_OAUTH_STATE_SECRET` (a long, random signing secret)
 
 - `INTEGRATIONS_MASTER_KEY` (32-byte key used for integration-secret encryption)
+
+## Quo contact sync
+
+FTOPS synchronizes human `Contact` records one way to Quo. A Customer remains the paid-work entity and is mapped only to Quo's contact `company` field; FTOPS does not create a Quo contact for a Customer without a human Contact. Contact create/update, Customer naming changes, and archive/restore changes enqueue durable background work. The stable FTOPS contact UUID is Quo's `externalId` and the returned Quo contact ID is persisted for later updates.
+
+FTOPS archive status has no effect on Quo sync. Archived Contacts, and Contacts belonging to archived Customers, continue to be created and updated in Quo so inbound callers remain identifiable. FTOPS never deletes Quo contacts. Failed network, rate-limit, and server requests back off and retry, while invalid requests and authentication failures remain visible in `quo_contact_sync.last_error`. The hourly Worker schedule recovers due work if a queue delivery was missed.
+
+For local development, put `QUO_API_KEY` in `apps/api/.dev.vars`. Production should use `cd apps/api && npx wrangler secret put QUO_API_KEY`. Never expose the key to the UI or commit it. `QUO_API_BASE_URL` exists only for tests; production uses `https://api.quo.com/v1`.
 
 `INTEGRATIONS_KEY_ID` and the production `QBO_REDIRECT_URI` are non-secret bindings. Sandbox and production use separate Intuit application credentials in their respective Worker environments. Ensure the encrypted integration also retains the Intuit webhook verifier token so the ingress worker can verify signatures.
 

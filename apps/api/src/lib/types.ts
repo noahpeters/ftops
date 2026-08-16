@@ -20,6 +20,8 @@ export type Env = {
   DAILY_SUMMARY_TIMEZONE?: string;
   DAILY_SUMMARY_EMAIL_API_URL?: string;
   APP_BASE_URL?: string;
+  QUO_API_KEY?: string;
+  QUO_API_BASE_URL?: string;
 };
 
 export type EventQueuePayload = {

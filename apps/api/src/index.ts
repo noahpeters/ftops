@@ -7,6 +7,7 @@ import type { IngestQueueMessage, WebhookEnvelope } from "@ftops/webhooks";
 import { processIngestQueueMessage } from "./processors/ingestQueue";
 import { noStore, sanitizeExternalError } from "./lib/security";
 import { sendDailySummaries } from "./services/dailySummary";
+import { enqueueDueQuoSyncs } from "./services/quo";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -73,7 +74,10 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, _ctx: ExecutionContext) {
-    await sendDailySummaries(env, new Date(controller.scheduledTime));
+    await Promise.all([
+      sendDailySummaries(env, new Date(controller.scheduledTime)),
+      enqueueDueQuoSyncs(env),
+    ]);
   },
 };
 

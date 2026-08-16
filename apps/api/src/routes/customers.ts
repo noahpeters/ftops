@@ -12,6 +12,7 @@ import {
 } from "../services/quickbooks";
 import { sanitizeExternalError } from "../lib/security";
 import { signedUrl } from "./customerFiles";
+import { enqueueCustomerQuoSync, enqueueQuoContactSync } from "../services/quo";
 
 const STATUSES = ["lead", "active", "completed", "archived"];
 const CONTACT_STATUSES = ["active", "inactive", "archived"];
@@ -186,6 +187,7 @@ export async function handleCustomers(
         "ftops",
         actor.email
       );
+      await enqueueCustomerQuoSync(env, workspaceId, customerId);
       return json(await loadDetail(env, workspaceId, customerId));
     }
     if (request.method === "DELETE") {
@@ -205,6 +207,7 @@ export async function handleCustomers(
         "ftops",
         actor.email
       );
+      await enqueueCustomerQuoSync(env, workspaceId, customerId);
       return json({ archived: true });
     }
     return methodNotAllowed(["GET", "PATCH", "DELETE"]);
@@ -228,6 +231,7 @@ export async function handleCustomers(
         if (request.method === "GET") return json(row);
         if (request.method === "DELETE") {
           await archiveContact(env, workspaceId, customerId, id, now);
+          await enqueueQuoContactSync(env, workspaceId, customerId, id);
           return json({ archived: true });
         }
         const firstName =
@@ -296,6 +300,7 @@ export async function handleCustomers(
           .run();
         if (bool(body.isPrimary)) await setPrimaryContact(env, workspaceId, customerId, id, now);
       }
+      await enqueueQuoContactSync(env, workspaceId, customerId, id);
     } else {
       const addressType = string(body.addressType);
       if (!ADDRESS_TYPES.includes(addressType)) return badRequest("invalid_address_type");

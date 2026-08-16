@@ -3,8 +3,16 @@ import { nowISO } from "../lib/utils";
 import { processCommercialRecordUpserted } from "./commercialRecordUpserted";
 import { processQuickbooksWebhook } from "./quickbooksWebhook";
 import { processQuickbooksBootstrap } from "./quickbooksBootstrap";
+import { processQuoContactSync } from "../services/quo";
 
 export async function processEventMessage(msg: EventQueuePayload, env: Env): Promise<void> {
+  if (msg.source === "ftops" && msg.type === "quo.contact.sync") {
+    await processQuoContactSync(
+      env,
+      (msg.payload ?? {}) as { contactId?: string; version?: number }
+    );
+    return;
+  }
   const now = nowISO();
   const eventId = crypto.randomUUID();
 
