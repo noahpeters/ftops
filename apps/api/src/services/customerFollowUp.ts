@@ -191,7 +191,7 @@ async function analyzeGuidance(env: Env, text: string, now: string): Promise<Fol
           {
             role: "system",
             content:
-              "Extract explicit future-contact guidance from a staff-written customer note. Return JSON only with type (date, cadence, or none), interpretedDate (ISO 8601 with timezone or null), cadence (object or null), confidence (0..1), and explanation. Do not infer a delay from ordinary project details. A cadence must include enough information to calculate its next occurrence.",
+              "Extract the staff member's explicit next customer-contact commitment from a staff-written customer note. Focus on outbound actions the staff member says they need, plan, or intend to take, such as calling, texting, emailing, sending drawings or pricing, or checking back. Do not confuse project work, installation timing, customer actions, or general discussion with staff follow-up. Resolve relative dates from the supplied current time in America/Los_Angeles. A bare weekday such as 'on Monday' means the next occurrence of that weekday after the current time; never replace an explicit weekday with the customer's default Friday cadence. Example: if the current time is Sunday 2026-08-16 and the note says 'I need to send him new drawings and any price changes on Monday', interpretedDate is 2026-08-17T09:00:00-07:00. Return JSON only with type (date, cadence, or none), interpretedDate (ISO 8601 with timezone or null), cadence (object or null), confidence (0..1), and explanation. A cadence must include enough information to calculate its next occurrence.",
           },
           { role: "user", content: `Current time: ${now}\nTimezone: ${ZONE}\nNote:\n${text}` },
         ],
@@ -239,10 +239,6 @@ function fallbackGuidance(text: string, nowIso: string): FollowUpGuidance {
   if (weeks) date = now.plus({ weeks: Number(weeks[1]) });
   if (/\bin two weeks\b/.test(lower)) date = now.plus({ weeks: 2 });
   if (/\btomorrow\b/.test(lower)) date = now.plus({ days: 1 });
-  const weekday = lower.match(
-    /\b(?:try\s+to\s+)?(?:contact|call|phone|follow\s+up|reach(?:\s+out)?)\b[^.!?\n]{0,50}\b(?:on\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/
-  );
-  if (weekday) date = nextWeekday(now, weekday[1]);
   const iso = date?.set({ hour: 9, minute: 0, second: 0, millisecond: 0 }).toUTC().toISO() || null;
   return {
     type: iso ? "date" : "none",
@@ -254,22 +250,6 @@ function fallbackGuidance(text: string, nowIso: string): FollowUpGuidance {
       : "No explicit future-contact guidance.",
     model: "deterministic-fallback",
   };
-}
-
-function nextWeekday(now: DateTime, weekdayName: string) {
-  const weekdays: Record<string, number> = {
-    monday: 1,
-    tuesday: 2,
-    wednesday: 3,
-    thursday: 4,
-    friday: 5,
-    saturday: 6,
-    sunday: 7,
-  };
-  const target = weekdays[weekdayName];
-  let days = (target - now.weekday + 7) % 7;
-  if (days === 0) days = 7;
-  return now.plus({ days });
 }
 
 function nextDefaultDate(status: string, anchor: DateTime) {

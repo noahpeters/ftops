@@ -45,16 +45,16 @@ describe("customer follow-up cadence", () => {
     expect(computeCustomerFollowUp({ status: "archived" }).next_follow_up_at).toBeNull();
   });
 
-  it("deterministically interprets an explicit next weekday when AI misses it", async () => {
+  it("uses AI to interpret an explicit next weekday", async () => {
     const context = await createTestEnv({
       env: {
         AI: {
           run: async () => ({
             response: JSON.stringify({
-              type: "none",
-              interpretedDate: null,
+              type: "date",
+              interpretedDate: "2026-08-17T09:00:00-07:00",
               confidence: 0.9,
-              explanation: "No guidance found.",
+              explanation: "Staff plans to contact the customer Monday.",
             }),
           }),
         },
@@ -86,7 +86,56 @@ describe("customer follow-up cadence", () => {
     expect(guidance).toEqual({
       guidance_type: "date",
       interpreted_date: "2026-08-17T16:00:00.000Z",
-      model: "deterministic-fallback",
+      model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    });
+    await mf.dispose();
+  });
+
+  it("uses AI to categorize sending drawings on Monday as follow-up", async () => {
+    const context = await createTestEnv({
+      env: {
+        AI: {
+          run: async () => ({
+            response: JSON.stringify({
+              type: "date",
+              interpretedDate: "2026-08-17T09:00:00-07:00",
+              confidence: 0.96,
+              explanation: "Staff needs to send drawings and pricing Monday.",
+            }),
+          }),
+        },
+      },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    await db
+      .prepare(
+        `INSERT INTO customers (id,workspace_id,display_name,status,created_at,updated_at) VALUES ('planned-weekday-customer','default','Planned Weekday Customer','active','2026-08-16T23:28:17.938Z','2026-08-16T23:28:17.938Z')`
+      )
+      .run();
+    await db
+      .prepare(
+        `INSERT INTO customer_activities (id,workspace_id,customer_id,activity_type,subject,body,source,occurred_at,created_by,created_at,is_human_authored) VALUES ('planned-weekday-note','default','planned-weekday-customer','note','Note',?, 'ftops','2026-08-16T23:28:17.938Z','user@example.com','2026-08-16T23:28:17.938Z',1)`
+      )
+      .bind(
+        `Texted with with James last night. He accepted the estimate and paid the down payment. We discussed potentially changing the size. We are going to widen the table to 48". Also discussed a bench on at least one end of the table, possibly both ends. But, may wait to add the second bench until after the table is installed and we know how it fills the space. I need to send him new drawings and any price changes on Monday.`
+      )
+      .run();
+
+    await processCustomerNoteFollowUpAnalysis(env, {
+      workspaceId: "default",
+      customerId: "planned-weekday-customer",
+      noteId: "planned-weekday-note",
+    });
+    const guidance = await db
+      .prepare(
+        `SELECT guidance_type,interpreted_date,model FROM customer_follow_up_guidance WHERE customer_id='planned-weekday-customer'`
+      )
+      .first<{ guidance_type: string; interpreted_date: string; model: string }>();
+    expect(guidance).toEqual({
+      guidance_type: "date",
+      interpreted_date: "2026-08-17T16:00:00.000Z",
+      model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     });
     await mf.dispose();
   });
