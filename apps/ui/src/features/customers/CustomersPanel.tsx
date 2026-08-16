@@ -842,9 +842,9 @@ function CustomerFileLink({
   file: CustomerDetail["files"][number];
   compact?: boolean;
 }) {
-  const openUrl = buildUrl(`/customer-files/${file.id}/open`);
   const inlinePreviewUrl = buildUrl(`/customer-files/${file.id}/preview`);
   const previewKind = customerFilePreviewKind(file);
+  const openUrl = previewKind ? inlinePreviewUrl : buildUrl(`/customer-files/${file.id}/blob`);
   const previewUrl =
     previewKind === "pdf" ? `${inlinePreviewUrl}#page=1&view=FitH&toolbar=0` : inlinePreviewUrl;
   return (
