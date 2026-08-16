@@ -1,6 +1,11 @@
 import { DateTime } from "luxon";
 import { describe, expect, it } from "vitest";
-import { computeCustomerFollowUp } from "../../src/services/customerFollowUp";
+import {
+  computeCustomerFollowUp,
+  enqueueMissingCustomerNoteFollowUps,
+  processCustomerNoteFollowUpAnalysis,
+} from "../../src/services/customerFollowUp";
+import { createTestEnv } from "../helpers/miniflare";
 
 const zone = "America/Los_Angeles";
 
@@ -38,5 +43,81 @@ describe("customer follow-up cadence", () => {
       follow_up_reason: "Customer asked us to call next month.",
     });
     expect(computeCustomerFollowUp({ status: "archived" }).next_follow_up_at).toBeNull();
+  });
+
+  it("deterministically interprets an explicit next weekday when AI misses it", async () => {
+    const context = await createTestEnv({
+      env: {
+        AI: {
+          run: async () => ({
+            response: JSON.stringify({
+              type: "none",
+              interpretedDate: null,
+              confidence: 0.9,
+              explanation: "No guidance found.",
+            }),
+          }),
+        },
+      },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    await db
+      .prepare(
+        `INSERT INTO customers (id,workspace_id,display_name,status,created_at,updated_at) VALUES ('weekday-customer','default','Weekday Customer','active','2026-08-16T23:28:17.938Z','2026-08-16T23:28:17.938Z')`
+      )
+      .run();
+    await db
+      .prepare(
+        `INSERT INTO customer_activities (id,workspace_id,customer_id,activity_type,subject,body,source,occurred_at,created_by,created_at,is_human_authored) VALUES ('weekday-note','default','weekday-customer','note','Note','No response to messages. Try to contact on Monday by phone.','ftops','2026-08-16T23:28:17.938Z','user@example.com','2026-08-16T23:28:17.938Z',1)`
+      )
+      .run();
+
+    await processCustomerNoteFollowUpAnalysis(env, {
+      workspaceId: "default",
+      customerId: "weekday-customer",
+      noteId: "weekday-note",
+    });
+    const guidance = await db
+      .prepare(
+        `SELECT guidance_type,interpreted_date,model FROM customer_follow_up_guidance WHERE customer_id='weekday-customer'`
+      )
+      .first<{ guidance_type: string; interpreted_date: string; model: string }>();
+    expect(guidance).toEqual({
+      guidance_type: "date",
+      interpreted_date: "2026-08-17T16:00:00.000Z",
+      model: "deterministic-fallback",
+    });
+    await mf.dispose();
+  });
+
+  it("re-enqueues the latest human note when guidance is missing", async () => {
+    const sent: unknown[] = [];
+    const context = await createTestEnv({
+      env: { EVENT_QUEUE: { send: async (message: unknown) => void sent.push(message) } },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    await db
+      .prepare(
+        `INSERT INTO customers (id,workspace_id,display_name,status,created_at,updated_at) VALUES ('repair-customer','default','Repair Customer','active','2026-08-16T00:00:00Z','2026-08-16T00:00:00Z')`
+      )
+      .run();
+    for (const [id, occurredAt] of [
+      ["old-note", "2026-08-15T00:00:00Z"],
+      ["latest-note", "2026-08-16T00:00:00Z"],
+    ]) {
+      await db
+        .prepare(
+          `INSERT INTO customer_activities (id,workspace_id,customer_id,activity_type,subject,source,occurred_at,created_by,created_at,is_human_authored) VALUES (?,'default','repair-customer','note','Note','ftops',?,'user@example.com',?,1)`
+        )
+        .bind(id, occurredAt, occurredAt)
+        .run();
+    }
+    expect(await enqueueMissingCustomerNoteFollowUps(env)).toBe(1);
+    expect(sent).toMatchObject([
+      { type: "customer.note.follow_up.analyze", payload: { noteId: "latest-note" } },
+    ]);
+    await mf.dispose();
   });
 });

@@ -22,6 +22,7 @@ import {
   updateCustomer,
   updateOpportunity,
   setCustomerFileDeprecated,
+  streamCustomerFollowUp,
   type Contact,
   type CustomerDetail,
   type CustomerSummary,
@@ -207,6 +208,7 @@ export function CustomersPanel({
 }) {
   const navigate = useNavigate();
   const detailCardRef = useRef<HTMLDivElement>(null);
+  const followUpStreamRef = useRef<EventSource | null>(null);
   const [rows, setRows] = useState<CustomerSummary[]>([]);
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [search, setSearch] = useState("");
@@ -223,6 +225,7 @@ export function CustomersPanel({
   const [creatingOpportunity, setCreatingOpportunity] = useState(false);
   const [editingOpportunityId, setEditingOpportunityId] = useState<string | null>(null);
   const [savingNote, setSavingNote] = useState(false);
+  const [analyzingFollowUp, setAnalyzingFollowUp] = useState(false);
   const [activeTab, setActiveTab] = useState<CustomerTab>("summary");
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
@@ -240,6 +243,9 @@ export function CustomersPanel({
     });
   }, [workspaceId]);
   useEffect(() => {
+    followUpStreamRef.current?.close();
+    followUpStreamRef.current = null;
+    setAnalyzingFollowUp(false);
     setActiveTab("summary");
     detailCardRef.current?.scrollTo({ top: 0 });
     if (!customerId) {
@@ -251,6 +257,7 @@ export function CustomersPanel({
       else setError(r.text);
     });
   }, [customerId]);
+  useEffect(() => () => followUpStreamRef.current?.close(), []);
   async function create() {
     if (!workspaceId) return;
     const displayName = prompt("Customer display name");
@@ -288,6 +295,18 @@ export function CustomersPanel({
       if (!note && files.length) {
         setError("The note was saved, but its attachments could not be linked.");
       } else if (note) {
+        followUpStreamRef.current?.close();
+        setAnalyzingFollowUp(true);
+        followUpStreamRef.current = streamCustomerFollowUp(customerId, note.id, (update) => {
+          setDetail((current) =>
+            current ? { ...current, customer: { ...current.customer, ...update } } : current
+          );
+          setRows((current) =>
+            current.map((row) => (row.id === customerId ? { ...row, ...update } : row))
+          );
+          setAnalyzingFollowUp(false);
+          followUpStreamRef.current = null;
+        });
         for (const file of files) {
           const uploaded = await uploadNoteFile(note.id, file, false);
           if (!uploaded) break;
@@ -519,10 +538,12 @@ export function CustomersPanel({
                         <p>Status: {detail.customer.status}</p>
                         <p>Lead source: {detail.customer.lead_source || "—"}</p>
                         <p>
-                          {followUpLabel(
-                            detail.customer.next_follow_up_at,
-                            detail.customer.follow_up_urgency
-                          )}
+                          {analyzingFollowUp
+                            ? "Analyzing follow-up…"
+                            : followUpLabel(
+                                detail.customer.next_follow_up_at,
+                                detail.customer.follow_up_urgency
+                              )}
                         </p>
                         {detail.customer.follow_up_reason && (
                           <p className={stylex(styles.muted)}>{detail.customer.follow_up_reason}</p>

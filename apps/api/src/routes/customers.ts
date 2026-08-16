@@ -13,7 +13,10 @@ import {
 import { sanitizeExternalError } from "../lib/security";
 import { signedUrl } from "./customerFiles";
 import { enqueueCustomerQuoSync, enqueueQuoContactSync } from "../services/quo";
-import { addComputedFollowUp, analyzeAndStoreFollowUpGuidance } from "../services/customerFollowUp";
+import {
+  addComputedFollowUp,
+  enqueueCustomerNoteFollowUpAnalysis,
+} from "../services/customerFollowUp";
 
 const STATUSES = ["lead", "active", "completed", "archived"];
 const CONTACT_STATUSES = ["active", "inactive", "archived"];
@@ -228,6 +231,19 @@ export async function handleCustomers(
   }
 
   const action = segments[1];
+  if (action === "follow-up-stream" && request.method === "GET") {
+    const noteId = url.searchParams.get("noteId")?.trim();
+    if (!noteId) return badRequest("missing_note_id");
+    const note = await env.DB.prepare(
+      `SELECT 1 FROM customer_activities
+       WHERE id=? AND workspace_id=? AND customer_id=?
+         AND activity_type='note' AND is_human_authored=1`
+    )
+      .bind(noteId, workspaceId, customerId)
+      .first();
+    if (!note) return notFound("Note not found");
+    return followUpStream(env, workspaceId, customerId, noteId, request.signal);
+  }
   if ((action === "contacts" || action === "addresses") && segments.length <= 3) {
     const allowedMethods = segments.length === 2 ? ["POST"] : ["GET", "PATCH", "DELETE"];
     if (!allowedMethods.includes(request.method)) return methodNotAllowed(allowedMethods);
@@ -457,13 +473,11 @@ export async function handleCustomers(
       );
     }
     await env.DB.batch(statements);
-    await analyzeAndStoreFollowUpGuidance(env, {
+    await enqueueCustomerNoteFollowUpAnalysis(env, {
       workspaceId,
       customerId,
       noteId,
-      subject,
-      body: nullable(body.body),
-      now,
+      occurredAt: now,
     });
     return json(
       await listRows(
@@ -584,6 +598,54 @@ export async function handleCustomers(
       customer
     );
   return notFound("Route not found");
+}
+
+function followUpStream(
+  env: Env,
+  workspaceId: string,
+  customerId: string,
+  noteId: string,
+  signal: AbortSignal
+) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      controller.enqueue(encoder.encode(": connected\n\n"));
+      for (let attempt = 0; attempt < 25 && !signal.aborted; attempt += 1) {
+        const row = await loadFollowUpState(env, workspaceId, customerId);
+        if (row?.source_note_id === noteId) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(row)}\n\n`));
+          controller.close();
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache, no-transform",
+    },
+  });
+}
+
+async function loadFollowUpState(env: Env, workspaceId: string, customerId: string) {
+  const row = await env.DB.prepare(
+    `SELECT c.id,c.status,c.created_at,
+            (SELECT MAX(a.occurred_at) FROM customer_activities a
+             WHERE a.workspace_id=c.workspace_id AND a.customer_id=c.id
+               AND a.activity_type='note' AND a.is_human_authored=1) AS last_human_note_at,
+            g.guidance_type,g.interpreted_date,g.cadence_json,
+            g.confidence AS guidance_confidence,g.explanation AS guidance_explanation,g.source_note_id
+     FROM customers c
+     LEFT JOIN customer_follow_up_guidance g ON g.customer_id=c.id AND g.workspace_id=c.workspace_id
+     WHERE c.workspace_id=? AND c.id=?`
+  )
+    .bind(workspaceId, customerId)
+    .first<Record<string, unknown>>();
+  return row ? addComputedFollowUp(row) : null;
 }
 
 async function handleQuickbooks(

@@ -80,6 +80,7 @@ describe("ops api proxy allowlist", () => {
     ["GET", "/api/customers/customer_1/opportunities/opportunity_1"],
     ["PATCH", "/api/customers/customer_1/opportunities/opportunity_1"],
     ["POST", "/api/customers/customer_1/activities"],
+    ["GET", "/api/customers/customer_1/follow-up-stream?noteId=note_1"],
     ["POST", "/api/customers/customer_1/files/init"],
     ["PUT", "/api/customers/customer_1/files/upload?storageKey=customers%2Ffile"],
     ["POST", "/api/customers/customer_1/files/complete"],

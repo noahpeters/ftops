@@ -4,12 +4,20 @@ import { processCommercialRecordUpserted } from "./commercialRecordUpserted";
 import { processQuickbooksWebhook } from "./quickbooksWebhook";
 import { processQuickbooksBootstrap } from "./quickbooksBootstrap";
 import { processQuoContactSync } from "../services/quo";
+import { processCustomerNoteFollowUpAnalysis } from "../services/customerFollowUp";
 
 export async function processEventMessage(msg: EventQueuePayload, env: Env): Promise<void> {
   if (msg.source === "ftops" && msg.type === "quo.contact.sync") {
     await processQuoContactSync(
       env,
       (msg.payload ?? {}) as { contactId?: string; version?: number }
+    );
+    return;
+  }
+  if (msg.source === "ftops" && msg.type === "customer.note.follow_up.analyze") {
+    await processCustomerNoteFollowUpAnalysis(
+      env,
+      (msg.payload ?? {}) as { workspaceId?: string; customerId?: string; noteId?: string }
     );
     return;
   }

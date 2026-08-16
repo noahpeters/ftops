@@ -53,6 +53,7 @@ const ALLOWLIST: AllowlistEntry[] = [
     pattern: /^\/customers\/[^/]+\/opportunities\/[^/]+$/,
   },
   { methods: new Set(["POST"]), pattern: /^\/customers\/[^/]+\/activities$/ },
+  { methods: new Set(["GET"]), pattern: /^\/customers\/[^/]+\/follow-up-stream$/ },
   { methods: new Set(["POST"]), pattern: /^\/customers\/[^/]+\/files\/(?:init|complete)$/ },
   { methods: new Set(["PUT"]), pattern: /^\/customers\/[^/]+\/files\/upload$/ },
   {

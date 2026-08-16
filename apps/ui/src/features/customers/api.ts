@@ -183,6 +183,21 @@ export function addNote(id: string, input: Record<string, unknown>) {
     body: JSON.stringify(input),
   });
 }
+export function streamCustomerFollowUp(
+  customerId: string,
+  noteId: string,
+  onUpdate: (update: Partial<CustomerSummary>) => void
+) {
+  const source = new EventSource(
+    buildUrl(`/customers/${customerId}/follow-up-stream`, { noteId }),
+    { withCredentials: true }
+  );
+  source.onmessage = (event) => {
+    onUpdate(JSON.parse(event.data) as Partial<CustomerSummary>);
+    source.close();
+  };
+  return source;
+}
 export function initCustomerFileUpload(
   customerId: string,
   input: { activityId: string; filename: string; contentType: string; sizeBytes: number }

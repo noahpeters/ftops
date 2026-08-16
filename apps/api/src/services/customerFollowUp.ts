@@ -74,6 +74,77 @@ export async function analyzeAndStoreFollowUpGuidance(
   return guidance;
 }
 
+export async function enqueueCustomerNoteFollowUpAnalysis(
+  env: Env,
+  input: { workspaceId: string; customerId: string; noteId: string; occurredAt: string }
+) {
+  await env.EVENT_QUEUE.send({
+    source: "ftops",
+    type: "customer.note.follow_up.analyze",
+    externalId: input.noteId,
+    idempotencyKey: `customer-note-follow-up/${input.noteId}`,
+    payload: input,
+    receivedAt: input.occurredAt,
+  });
+}
+
+export async function enqueueMissingCustomerNoteFollowUps(env: Env) {
+  const rows = await env.DB.prepare(
+    `SELECT a.workspace_id,a.customer_id,a.id AS note_id,a.occurred_at
+     FROM customer_activities a
+     JOIN customers c ON c.id=a.customer_id AND c.workspace_id=a.workspace_id
+     LEFT JOIN customer_follow_up_guidance g
+       ON g.customer_id=a.customer_id AND g.workspace_id=a.workspace_id
+     WHERE a.activity_type='note' AND a.is_human_authored=1 AND c.status!='archived'
+       AND a.occurred_at=(
+         SELECT MAX(latest.occurred_at) FROM customer_activities latest
+         WHERE latest.workspace_id=a.workspace_id AND latest.customer_id=a.customer_id
+           AND latest.activity_type='note' AND latest.is_human_authored=1
+       )
+       AND (g.source_note_id IS NULL OR g.source_note_id!=a.id)
+     ORDER BY a.occurred_at ASC
+     LIMIT 100`
+  ).all<{
+    workspace_id: string;
+    customer_id: string;
+    note_id: string;
+    occurred_at: string;
+  }>();
+  for (const row of rows.results ?? []) {
+    await enqueueCustomerNoteFollowUpAnalysis(env, {
+      workspaceId: row.workspace_id,
+      customerId: row.customer_id,
+      noteId: row.note_id,
+      occurredAt: row.occurred_at,
+    });
+  }
+  return rows.results?.length ?? 0;
+}
+
+export async function processCustomerNoteFollowUpAnalysis(
+  env: Env,
+  payload: { workspaceId?: string; customerId?: string; noteId?: string }
+) {
+  if (!payload.workspaceId || !payload.customerId || !payload.noteId)
+    throw new Error("customer_note_follow_up_payload_invalid");
+  const note = await env.DB.prepare(
+    `SELECT subject,body,occurred_at FROM customer_activities
+     WHERE id=? AND workspace_id=? AND customer_id=?
+       AND activity_type='note' AND is_human_authored=1`
+  )
+    .bind(payload.noteId, payload.workspaceId, payload.customerId)
+    .first<{ subject: string; body: string | null; occurred_at: string }>();
+  if (!note) throw new Error("customer_note_follow_up_note_not_found");
+  return await analyzeAndStoreFollowUpGuidance(env, {
+    workspaceId: payload.workspaceId,
+    customerId: payload.customerId,
+    noteId: payload.noteId,
+    subject: note.subject,
+    body: note.body,
+    now: note.occurred_at,
+  });
+}
+
 export function computeCustomerFollowUp(
   row: CustomerFollowUpRow,
   now = DateTime.now().setZone(ZONE)
@@ -112,6 +183,7 @@ export function addComputedFollowUp<T extends CustomerFollowUpRow>(row: T, now?:
 }
 
 async function analyzeGuidance(env: Env, text: string, now: string): Promise<FollowUpGuidance> {
+  const deterministic = fallbackGuidance(text, now);
   if (env.AI) {
     try {
       const result = await env.AI.run(MODEL, {
@@ -128,12 +200,15 @@ async function analyzeGuidance(env: Env, text: string, now: string): Promise<Fol
         temperature: 0,
       });
       const response = typeof result === "string" ? result : result.response;
-      if (typeof response === "string") return normalizeGuidance(JSON.parse(response), MODEL);
+      if (typeof response === "string") {
+        const analyzed = normalizeGuidance(JSON.parse(response), MODEL);
+        return deterministic.type !== "none" && analyzed.type === "none" ? deterministic : analyzed;
+      }
     } catch (error) {
       console.warn("customer follow-up AI analysis failed", error);
     }
   }
-  return fallbackGuidance(text, now);
+  return deterministic;
 }
 
 function normalizeGuidance(value: unknown, model: string): FollowUpGuidance {
@@ -164,6 +239,10 @@ function fallbackGuidance(text: string, nowIso: string): FollowUpGuidance {
   if (weeks) date = now.plus({ weeks: Number(weeks[1]) });
   if (/\bin two weeks\b/.test(lower)) date = now.plus({ weeks: 2 });
   if (/\btomorrow\b/.test(lower)) date = now.plus({ days: 1 });
+  const weekday = lower.match(
+    /\b(?:try\s+to\s+)?(?:contact|call|phone|follow\s+up|reach(?:\s+out)?)\b[^.!?\n]{0,50}\b(?:on\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/
+  );
+  if (weekday) date = nextWeekday(now, weekday[1]);
   const iso = date?.set({ hour: 9, minute: 0, second: 0, millisecond: 0 }).toUTC().toISO() || null;
   return {
     type: iso ? "date" : "none",
@@ -175,6 +254,22 @@ function fallbackGuidance(text: string, nowIso: string): FollowUpGuidance {
       : "No explicit future-contact guidance.",
     model: "deterministic-fallback",
   };
+}
+
+function nextWeekday(now: DateTime, weekdayName: string) {
+  const weekdays: Record<string, number> = {
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+    sunday: 7,
+  };
+  const target = weekdays[weekdayName];
+  let days = (target - now.weekday + 7) % 7;
+  if (days === 0) days = 7;
+  return now.plus({ days });
 }
 
 function nextDefaultDate(status: string, anchor: DateTime) {

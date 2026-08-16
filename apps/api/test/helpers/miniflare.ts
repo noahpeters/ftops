@@ -29,6 +29,7 @@ export async function createTestEnv(options?: { env?: Record<string, unknown> })
     const env = {
       DB: db,
       R2_TASK_FILES_BUCKET: taskFilesBucket,
+      EVENT_QUEUE: { send: async () => undefined },
       ...(options?.env ?? {}),
     } as unknown as Env;
 

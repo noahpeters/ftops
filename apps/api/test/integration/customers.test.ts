@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTestEnv } from "../helpers/miniflare";
 import { route } from "../../src/lib/router";
 import type { ExecutionContext } from "@cloudflare/workers-types";
+import { processEventMessage } from "../../src/processors/eventProcessor";
+import type { EventQueuePayload } from "../../src/lib/types";
 
 describe("customers API", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -169,6 +171,7 @@ describe("customers API", () => {
   });
 
   it("stores AI note guidance and lets the newest human note supersede it", async () => {
+    const queued: EventQueuePayload[] = [];
     const run = vi
       .fn()
       .mockResolvedValueOnce({
@@ -189,7 +192,12 @@ describe("customers API", () => {
           explanation: "No explicit future-contact guidance.",
         }),
       });
-    const context = await createTestEnv({ env: { AI: { run } } });
+    const context = await createTestEnv({
+      env: {
+        AI: { run },
+        EVENT_QUEUE: { send: vi.fn(async (message: EventQueuePayload) => queued.push(message)) },
+      },
+    });
     if (!context) return;
     const { env, db, mf } = context;
     const created = await request(env, "/customers", {
@@ -198,10 +206,14 @@ describe("customers API", () => {
     });
     const customer = (await created.json()) as { customer: { id: string } };
 
-    await request(env, `/customers/${customer.customer.id}/activities`, {
+    const firstNoteResponse = await request(env, `/customers/${customer.customer.id}/activities`, {
       method: "POST",
       body: JSON.stringify({ subject: "Call", body: "Please follow up next month." }),
     });
+    expect(firstNoteResponse.status).toBe(201);
+    expect(run).not.toHaveBeenCalled();
+    expect(queued).toHaveLength(1);
+    await processEventMessage(queued.shift()!, env);
     const guided = (await (await request(env, `/customers/${customer.customer.id}`)).json()) as {
       customer: {
         next_follow_up_at: string;
@@ -217,16 +229,31 @@ describe("customers API", () => {
     });
     const firstSourceNoteId = guided.customer.source_note_id;
 
-    await request(env, `/customers/${customer.customer.id}/activities`, {
+    const secondNoteResponse = await request(env, `/customers/${customer.customer.id}/activities`, {
       method: "POST",
       body: JSON.stringify({ subject: "Update", body: "Measurements confirmed." }),
     });
+    const secondActivities = (await secondNoteResponse.json()) as Array<{
+      id: string;
+      activity_type: string;
+    }>;
+    const secondNoteId = secondActivities.find((activity) => activity.activity_type === "note")!.id;
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(queued).toHaveLength(1);
+    await processEventMessage(queued.shift()!, env);
     const superseded = (await (
       await request(env, `/customers/${customer.customer.id}`)
     ).json()) as { customer: { guidance_type: string; source_note_id: string } };
     expect(superseded.customer.guidance_type).toBe("none");
     expect(superseded.customer.source_note_id).not.toBe(firstSourceNoteId);
     expect(run).toHaveBeenCalledTimes(2);
+
+    const streamed = await request(
+      env,
+      `/customers/${customer.customer.id}/follow-up-stream?noteId=${secondNoteId}`
+    );
+    expect(streamed.headers.get("content-type")).toBe("text/event-stream");
+    expect(await streamed.text()).toContain(`\"source_note_id\":\"${secondNoteId}\"`);
 
     const beforeSystemNote = await db
       .prepare(
