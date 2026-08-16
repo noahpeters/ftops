@@ -158,13 +158,20 @@ const styles = stylex.create({
     objectPosition: "left center",
   },
   imagePreviewCompact: { maxHeight: "82px" },
-  pdfPreview: {
+  pdfPreviewContainer: {
+    position: "relative",
     width: "min(100%, 204px)",
-    height: "auto",
     aspectRatio: "8.5 / 11",
+  },
+  pdfPreviewContainerCompact: { width: "min(100%, 64px)" },
+  pdfPreview: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    border: 0,
     pointerEvents: "none",
   },
-  pdfPreviewCompact: { width: "min(100%, 64px)" },
   attachmentName: {
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -857,7 +864,7 @@ function CustomerFileLink({
   const previewKind = customerFilePreviewKind(file);
   const openUrl = previewKind ? inlinePreviewUrl : buildUrl(`/customer-files/${file.id}/blob`);
   const previewUrl =
-    previewKind === "pdf" ? `${inlinePreviewUrl}#page=1&view=FitH&toolbar=0` : inlinePreviewUrl;
+    previewKind === "pdf" ? `${inlinePreviewUrl}#page=1&view=Fit&toolbar=0` : inlinePreviewUrl;
   return (
     <a
       className={stylex(styles.attachmentLink)}
@@ -879,17 +886,21 @@ function CustomerFileLink({
         />
       )}
       {previewKind === "pdf" && (
-        <iframe
+        <span
           className={stylex(
             styles.attachmentPreview,
-            styles.pdfPreview,
-            compact && styles.pdfPreviewCompact
+            styles.pdfPreviewContainer,
+            compact && styles.pdfPreviewContainerCompact
           )}
-          src={previewUrl}
-          title={`Preview of ${file.original_filename}`}
-          loading="lazy"
-          tabIndex={-1}
-        />
+        >
+          <iframe
+            className={stylex(styles.pdfPreview)}
+            src={previewUrl}
+            title={`Preview of ${file.original_filename}`}
+            loading="lazy"
+            tabIndex={-1}
+          />
+        </span>
       )}
       <b className={stylex(styles.attachmentName)}>{file.original_filename}</b>
     </a>
