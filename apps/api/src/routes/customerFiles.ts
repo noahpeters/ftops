@@ -41,15 +41,6 @@ export async function handleCustomerFiles(
     return serverError("Failed to sign download URL", { detail: "presigned_url_unsupported" });
   }
 
-  if (action === "open" && request.method === "GET") {
-    const signed = await signedUrl(env, file.storage_key, "GET");
-    if (signed) return Response.redirect(signed, 302);
-    if (env.ALLOW_R2_FALLBACK_UPLOADS === "true") {
-      return await streamFile(env, file, canPreviewInline(file) ? "inline" : "attachment");
-    }
-    return serverError("Failed to open file", { detail: "presigned_url_unsupported" });
-  }
-
   if (action === "preview" && request.method === "GET") {
     if (!canPreviewInline(file)) return badRequest("preview_unsupported");
     return await streamFile(env, file, "inline");

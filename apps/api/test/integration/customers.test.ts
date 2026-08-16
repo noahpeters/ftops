@@ -358,11 +358,6 @@ describe("customers API", () => {
     expect((await download.json()) as unknown).toMatchObject({
       downloadUrl: `/customer-files/${file.id}/blob`,
     });
-    const opened = await request(env, `/customer-files/${file.id}/open`);
-    expect(opened.status).toBe(200);
-    expect(opened.headers.get("content-type")).toBe("application/pdf");
-    expect(opened.headers.get("content-disposition")).toBe('inline; filename="selections.pdf"');
-    expect(await opened.text()).toBe("pdfdata");
     const previewed = await request(env, `/customer-files/${file.id}/preview`);
     expect(previewed.status).toBe(200);
     expect(previewed.headers.get("content-type")).toBe("application/pdf");
