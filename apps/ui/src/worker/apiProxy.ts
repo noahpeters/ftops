@@ -21,6 +21,7 @@ const ACCESS_HEADER_KEYS = [
 const FORWARDED_HEADER_KEYS = [
   "accept",
   "content-type",
+  "origin",
   "x-debug-user-email",
   "x-auth-request-email",
   "cf-access-authenticated-user-email",

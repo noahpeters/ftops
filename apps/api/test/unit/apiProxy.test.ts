@@ -26,6 +26,30 @@ describe("ops api proxy allowlist", () => {
     expect(upstreamUrl.search).toBe("?workspaceId=ws_123");
   });
 
+  it("preserves the browser origin for integration mutations", async () => {
+    const fetch = vi.fn(async (req: Request) => new Response("ok"));
+    const env = { API: { fetch } } as unknown as ApiProxyEnv;
+    const body = JSON.stringify({ provider: "quo", secrets: { apiKey: "secret" } });
+
+    const response = await handleApiProxyRequest(
+      new Request("https://ops.from-trees.com/api/integrations", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "cf-access-authenticated-user-email": "noah@from-trees.com",
+          origin: "https://ops.from-trees.com",
+        },
+        body,
+      }),
+      env
+    );
+
+    expect(response.status).toBe(200);
+    const upstreamRequest = fetch.mock.calls[0][0] as Request;
+    expect(upstreamRequest.headers.get("origin")).toBe("https://ops.from-trees.com");
+    expect(await upstreamRequest.text()).toBe(body);
+  });
+
   it("rejects disallowed paths without proxying", async () => {
     const fetch = vi.fn();
     const env = { API: { fetch } } as unknown as ApiProxyEnv;
