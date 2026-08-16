@@ -50,6 +50,11 @@ export async function handleCustomerFiles(
     return serverError("Failed to open file", { detail: "presigned_url_unsupported" });
   }
 
+  if (action === "preview" && request.method === "GET") {
+    if (!canPreviewInline(file)) return badRequest("preview_unsupported");
+    return await streamFile(env, file, "inline");
+  }
+
   if (action === "blob" && request.method === "GET") {
     return await streamFile(env, file, "attachment");
   }

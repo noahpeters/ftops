@@ -363,6 +363,11 @@ describe("customers API", () => {
     expect(opened.headers.get("content-type")).toBe("application/pdf");
     expect(opened.headers.get("content-disposition")).toBe('inline; filename="selections.pdf"');
     expect(await opened.text()).toBe("pdfdata");
+    const previewed = await request(env, `/customer-files/${file.id}/preview`);
+    expect(previewed.status).toBe(200);
+    expect(previewed.headers.get("content-type")).toBe("application/pdf");
+    expect(previewed.headers.get("content-disposition")).toBe('inline; filename="selections.pdf"');
+    expect(await previewed.text()).toBe("pdfdata");
     await mf.dispose();
   });
 
