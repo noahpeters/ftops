@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import type { Env } from "../lib/types";
+import { addComputedFollowUp } from "./customerFollowUp";
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
 const DEFAULT_EMAIL_API_URL = "https://api.resend.com/emails";
@@ -27,7 +28,7 @@ type DueCustomer = {
   id: string;
   display_name: string;
   next_follow_up_at: string;
-  follow_up_count: number;
+  follow_up_urgency: "overdue" | "due_today" | "upcoming" | "none";
 };
 
 export type DailySummaryResult = {
@@ -53,7 +54,7 @@ export async function sendDailySummaryForUser(
   requestedAt: Date = new Date(),
   fetcher: typeof fetch = fetch
 ): Promise<ManualDailySummaryResult | null> {
-  const { timezone, summaryDate, start, end } = summaryWindow(env, requestedAt);
+  const { timezone, localNow, summaryDate, start, end } = summaryWindow(env, requestedAt);
   const user = await env.DB.prepare(
     `SELECT u.workspace_id, w.name AS workspace_name, u.user_id, u.name, u.email
      FROM users u
@@ -66,7 +67,7 @@ export async function sendDailySummaryForUser(
 
   const [tasks, customers] = await Promise.all([
     loadDueTasks(env, user, start, end),
-    loadDueCustomers(env, workspaceId, start, end),
+    loadDueCustomers(env, workspaceId, end, localNow),
   ]);
   const message = renderDailySummary(env, user, summaryDate, timezone, tasks, customers);
   const providerMessageId = await sendEmail(
@@ -135,7 +136,7 @@ export async function sendDailySummaries(
     try {
       const [tasks, customers] = await Promise.all([
         loadDueTasks(env, user, start, end),
-        loadDueCustomers(env, user.workspace_id, start, end),
+        loadDueCustomers(env, user.workspace_id, end, localNow),
       ]);
       const message = renderDailySummary(env, user, summaryDate, timezone, tasks, customers);
       const providerMessageId = await sendEmail(
@@ -195,20 +196,27 @@ async function loadDueTasks(env: Env, user: SummaryUser, start: string, end: str
   return rows.results ?? [];
 }
 
-async function loadDueCustomers(env: Env, workspaceId: string, start: string, end: string) {
+async function loadDueCustomers(env: Env, workspaceId: string, end: string, now: DateTime) {
   const rows = await env.DB.prepare(
-    `SELECT c.id, c.display_name, MIN(t.due_at) AS next_follow_up_at,
-            COUNT(t.id) AS follow_up_count
+    `SELECT c.id,c.display_name,c.status,c.created_at,
+            (SELECT MAX(a.occurred_at) FROM customer_activities a
+             WHERE a.workspace_id=c.workspace_id AND a.customer_id=c.id
+               AND a.activity_type='note' AND a.is_human_authored=1) AS last_human_note_at,
+            g.guidance_type,g.interpreted_date,g.cadence_json,g.explanation AS guidance_explanation
      FROM customers c
-     JOIN tasks t ON t.customer_id = c.id AND t.workspace_id = c.workspace_id
-     WHERE c.workspace_id=? AND t.status NOT IN ('done','canceled')
-       AND t.due_at>=? AND t.due_at<?
-     GROUP BY c.id, c.display_name
-     ORDER BY next_follow_up_at ASC, c.display_name ASC`
+     LEFT JOIN customer_follow_up_guidance g ON g.customer_id=c.id AND g.workspace_id=c.workspace_id
+     WHERE c.workspace_id=? AND c.status!='archived'
+     ORDER BY c.display_name ASC`
   )
-    .bind(workspaceId, start, end)
-    .all<DueCustomer>();
-  return rows.results ?? [];
+    .bind(workspaceId)
+    .all<Record<string, unknown>>();
+  return (rows.results ?? [])
+    .map((row) => addComputedFollowUp(row, now))
+    .filter(
+      (row): row is typeof row & DueCustomer =>
+        Boolean(row.next_follow_up_at) && String(row.next_follow_up_at) < end
+    )
+    .sort((a, b) => a.next_follow_up_at.localeCompare(b.next_follow_up_at));
 }
 
 function renderDailySummary(
@@ -235,9 +243,7 @@ function renderDailySummary(
     ? customers
         .map(
           (customer) =>
-            `- ${customer.display_name} (${formatTime(customer.next_follow_up_at, timezone)}${
-              customer.follow_up_count > 1 ? `, ${customer.follow_up_count} follow-ups` : ""
-            })`
+            `- ${customer.display_name} (${customer.follow_up_urgency === "overdue" ? "overdue · " : ""}${formatDateTime(customer.next_follow_up_at, timezone)})`
         )
         .join("\n")
     : "- No customer follow-ups are due today.";
@@ -258,8 +264,8 @@ function renderDailySummary(
         .map(
           (customer) =>
             `<li><strong>${escapeHtml(customer.display_name)}</strong> <span style="color:#6b6259">${escapeHtml(
-              formatTime(customer.next_follow_up_at, timezone)
-            )}${customer.follow_up_count > 1 ? ` · ${customer.follow_up_count} follow-ups` : ""}</span></li>`
+              `${customer.follow_up_urgency === "overdue" ? "overdue · " : ""}${formatDateTime(customer.next_follow_up_at, timezone)}`
+            )}</span></li>`
         )
         .join("")}</ul>`
     : "<p>No customer follow-ups are due today.</p>";
@@ -315,6 +321,12 @@ function formatTime(value: string, timezone: string) {
   return DateTime.fromISO(value, { zone: "utc" })
     .setZone(timezone)
     .toLocaleString(DateTime.TIME_SIMPLE);
+}
+
+function formatDateTime(value: string, timezone: string) {
+  return DateTime.fromISO(value, { zone: "utc" })
+    .setZone(timezone)
+    .toLocaleString(DateTime.DATETIME_MED);
 }
 
 function escapeHtml(value: string) {

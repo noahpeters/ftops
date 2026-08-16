@@ -13,6 +13,7 @@ import {
 import { sanitizeExternalError } from "../lib/security";
 import { signedUrl } from "./customerFiles";
 import { enqueueCustomerQuoSync, enqueueQuoContactSync } from "../services/quo";
+import { addComputedFollowUp, analyzeAndStoreFollowUpGuidance } from "../services/customerFollowUp";
 
 const STATUSES = ["lead", "active", "completed", "archived"];
 const CONTACT_STATUSES = ["active", "inactive", "archived"];
@@ -59,8 +60,7 @@ export async function handleCustomers(
       const sort = url.searchParams.get("sort")?.trim() || "name_asc";
       const orderBy = {
         name_asc: "c.display_name COLLATE NOCASE ASC",
-        next_follow_up_asc:
-          "CASE WHEN next_follow_up_at IS NULL THEN 1 ELSE 0 END, next_follow_up_at ASC, c.display_name COLLATE NOCASE ASC",
+        next_follow_up_asc: "c.display_name COLLATE NOCASE ASC",
         last_note_desc:
           "CASE WHEN last_note_at IS NULL THEN 1 ELSE 0 END, last_note_at DESC, c.display_name COLLATE NOCASE ASC",
       }[sort];
@@ -76,10 +76,10 @@ export async function handleCustomers(
                 pc.display_name AS primary_contact, pc.email, pc.phone,
                 COALESCE(ee.sync_status, 'not_linked') AS quickbooks_sync_status,
                 ee.last_synced_at, ee.last_error,
-                (SELECT MIN(t.due_at) FROM tasks t
-                 WHERE t.workspace_id=c.workspace_id AND t.customer_id=c.id
-                   AND t.due_at IS NOT NULL
-                   AND t.status IN ('scheduled','blocked','in progress')) AS next_follow_up_at,
+                (SELECT MAX(a.occurred_at) FROM customer_activities a
+                 WHERE a.workspace_id=c.workspace_id AND a.customer_id=c.id
+                   AND a.activity_type='note' AND a.is_human_authored=1) AS last_human_note_at,
+                g.guidance_type,g.interpreted_date,g.cadence_json,g.explanation AS guidance_explanation,
                 (SELECT MAX(a.occurred_at) FROM customer_activities a
                  WHERE a.workspace_id=c.workspace_id AND a.customer_id=c.id
                    AND a.activity_type='note') AS last_note_at,
@@ -87,11 +87,25 @@ export async function handleCustomers(
                 (SELECT COALESCE(SUM(i.balance),0) FROM invoices i WHERE i.customer_id=c.id AND COALESCE(i.balance,0)>0) AS open_invoice_balance
          FROM customers c LEFT JOIN contacts pc ON pc.id=c.primary_contact_id
          LEFT JOIN external_entities ee ON ee.workspace_id=c.workspace_id AND ee.local_entity_type='customer' AND ee.local_entity_id=c.id
+         LEFT JOIN customer_follow_up_guidance g ON g.customer_id=c.id AND g.workspace_id=c.workspace_id
          WHERE ${filters.join(" AND ")} ORDER BY ${orderBy}`
       )
         .bind(...values)
         .all();
-      return json(result.results ?? []);
+      const rows = (result.results ?? []).map((row) => addComputedFollowUp(row));
+      if (sort === "next_follow_up_asc") {
+        rows.sort((a, b) => {
+          if (!a.next_follow_up_at && !b.next_follow_up_at)
+            return String(a.display_name).localeCompare(String(b.display_name));
+          if (!a.next_follow_up_at) return 1;
+          if (!b.next_follow_up_at) return -1;
+          return (
+            a.next_follow_up_at.localeCompare(b.next_follow_up_at) ||
+            String(a.display_name).localeCompare(String(b.display_name))
+          );
+        });
+      }
+      return json(rows);
     }
     if (request.method === "POST") {
       const body = await readBody(request);
@@ -405,11 +419,12 @@ export async function handleCustomers(
       if (!assignee) return badRequest("invalid_follow_up_assignee");
     }
     const now = nowISO();
+    const noteId = crypto.randomUUID();
     const statements = [
       env.DB.prepare(
-        `INSERT INTO customer_activities (id,workspace_id,customer_id,activity_type,subject,body,source,occurred_at,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`
+        `INSERT INTO customer_activities (id,workspace_id,customer_id,activity_type,subject,body,source,occurred_at,created_by,created_at,is_human_authored) VALUES (?,?,?,?,?,?,?,?,?,?,1)`
       ).bind(
-        crypto.randomUUID(),
+        noteId,
         workspaceId,
         customerId,
         "note",
@@ -442,6 +457,14 @@ export async function handleCustomers(
       );
     }
     await env.DB.batch(statements);
+    await analyzeAndStoreFollowUpGuidance(env, {
+      workspaceId,
+      customerId,
+      noteId,
+      subject,
+      body: nullable(body.body),
+      now,
+    });
     return json(
       await listRows(
         env,
@@ -703,13 +726,18 @@ async function handleQuickbooks(
 }
 
 async function loadDetail(env: Env, workspaceId: string, id: string) {
-  const customer = await env.DB.prepare(
+  const customerRow = await env.DB.prepare(
     `SELECT c.*,COALESCE(ee.sync_status,'not_linked') quickbooks_sync_status,ee.integration_id,ee.external_id quickbooks_customer_id,ee.last_synced_at,ee.last_error,
-            (SELECT MIN(t.due_at) FROM tasks t WHERE t.workspace_id=c.workspace_id AND t.customer_id=c.id AND t.due_at IS NOT NULL AND t.status IN ('scheduled','blocked','in progress')) AS next_follow_up_at
-     FROM customers c LEFT JOIN external_entities ee ON ee.workspace_id=c.workspace_id AND ee.local_entity_type='customer' AND ee.local_entity_id=c.id WHERE c.workspace_id=? AND c.id=?`
+            (SELECT MAX(a.occurred_at) FROM customer_activities a WHERE a.workspace_id=c.workspace_id AND a.customer_id=c.id AND a.activity_type='note' AND a.is_human_authored=1) AS last_human_note_at,
+            g.guidance_type,g.interpreted_date,g.cadence_json,g.confidence AS guidance_confidence,g.explanation AS guidance_explanation,g.source_note_id
+     FROM customers c
+     LEFT JOIN external_entities ee ON ee.workspace_id=c.workspace_id AND ee.local_entity_type='customer' AND ee.local_entity_id=c.id
+     LEFT JOIN customer_follow_up_guidance g ON g.customer_id=c.id AND g.workspace_id=c.workspace_id
+     WHERE c.workspace_id=? AND c.id=?`
   )
     .bind(workspaceId, id)
     .first();
+  const customer = customerRow ? addComputedFollowUp(customerRow) : customerRow;
   return {
     customer,
     contacts: await listRows(
