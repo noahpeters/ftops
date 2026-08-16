@@ -20,11 +20,6 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci --workspaces
-      - name: Show preview fix formatting
-        run: |
-          cp apps/ui/src/features/customers/CustomersPanel.tsx /tmp/CustomersPanel.tsx
-          npx prettier --write apps/ui/src/features/customers/CustomersPanel.tsx
-          diff -u /tmp/CustomersPanel.tsx apps/ui/src/features/customers/CustomersPanel.tsx || true
       - name: Verify
         run: npm run verify
 
