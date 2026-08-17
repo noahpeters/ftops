@@ -239,6 +239,7 @@ export function CustomersPanel({
   const [editingCustomer, setEditingCustomer] = useState(false);
   const [customerHasChanges, setCustomerHasChanges] = useState(false);
   const [creatingNote, setCreatingNote] = useState(false);
+  const [noteCanSave, setNoteCanSave] = useState(false);
   const [creatingOpportunity, setCreatingOpportunity] = useState(false);
   const [editingOpportunityId, setEditingOpportunityId] = useState<string | null>(null);
   const [savingNote, setSavingNote] = useState(false);
@@ -337,6 +338,10 @@ export function CustomersPanel({
       setError(r.text);
     }
     setSavingNote(false);
+  }
+  function openNoteEditor() {
+    setNoteCanSave(false);
+    setCreatingNote(true);
   }
   async function uploadNoteFile(activityId: string, file: File, reload = true) {
     if (!customerId) return false;
@@ -764,18 +769,8 @@ export function CustomersPanel({
                 <div className={stylex(styles.section)} role="tabpanel">
                   <div className={stylex(styles.actions)}>
                     <h4>Recent notes</h4>
-                    {!creatingNote && (
-                      <button onClick={() => setCreatingNote(true)}>Add note</button>
-                    )}
+                    {!creatingNote && <button onClick={openNoteEditor}>Add note</button>}
                   </div>
-                  {creatingNote && (
-                    <NoteForm
-                      onSave={saveNote}
-                      onCancel={() => setCreatingNote(false)}
-                      saving={savingNote}
-                      users={users}
-                    />
-                  )}
                   {!detail.activities.some((activity) => activity.activity_type === "note") && (
                     <p className={stylex(styles.muted)}>No notes yet.</p>
                   )}
@@ -830,15 +825,7 @@ export function CustomersPanel({
               {activeTab === "activity" && (
                 <div className={stylex(styles.section)} role="tabpanel">
                   <h4>Activity</h4>
-                  {!creatingNote && <button onClick={() => setCreatingNote(true)}>Add note</button>}
-                  {creatingNote && (
-                    <NoteForm
-                      onSave={saveNote}
-                      onCancel={() => setCreatingNote(false)}
-                      saving={savingNote}
-                      users={users}
-                    />
-                  )}
+                  {!creatingNote && <button onClick={openNoteEditor}>Add note</button>}
                   {detail.activities.map((activity) => (
                     <article key={activity.id} className={stylex(styles.note)}>
                       <b>{activity.subject}</b>{" "}
@@ -901,6 +888,25 @@ export function CustomersPanel({
                     ))}
                   </div>
                 </>
+              )}
+              {creatingNote && (
+                <RightSideEditor
+                  eyebrow="Note"
+                  title={`Add note for ${detail.customer.display_name}`}
+                  formId="customer-note-editor-form"
+                  saveDisabled={!noteCanSave}
+                  saving={savingNote}
+                  saveLabel="Save note"
+                  onCancel={() => setCreatingNote(false)}
+                >
+                  <NoteForm
+                    id="customer-note-editor-form"
+                    onSave={saveNote}
+                    saving={savingNote}
+                    users={users}
+                    onCanSaveChange={setNoteCanSave}
+                  />
+                </RightSideEditor>
               )}
             </>
           )}
@@ -1135,11 +1141,13 @@ function CustomerForm({
   );
 }
 function NoteForm({
+  id,
   onSave,
-  onCancel,
   saving,
   users,
+  onCanSaveChange,
 }: {
+  id: string;
   onSave: (input: {
     subject: string;
     body: string;
@@ -1148,9 +1156,9 @@ function NoteForm({
     followUpAssignedTo?: string;
     files: File[];
   }) => Promise<void>;
-  onCancel: () => void;
   saving: boolean;
   users: WorkspaceUser[];
+  onCanSaveChange: (canSave: boolean) => void;
 }) {
   const [subject, setSubject] = useState("Note");
   const [body, setBody] = useState("");
@@ -1159,8 +1167,14 @@ function NoteForm({
   const [followUpDescription, setFollowUpDescription] = useState("");
   const [followUpAssignedTo, setFollowUpAssignedTo] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const canSave =
+    Boolean(subject.trim()) &&
+    Boolean(body.trim()) &&
+    (!scheduleFollowUp || (Boolean(followUpAt) && Boolean(followUpDescription.trim())));
+  useEffect(() => onCanSaveChange(canSave), [canSave, onCanSaveChange]);
   return (
     <form
+      id={id}
       className={stylex(styles.form)}
       onSubmit={(event) => {
         event.preventDefault();
@@ -1271,14 +1285,6 @@ function NoteForm({
       <span className={stylex(styles.muted)}>
         Files are uploaded when the note is saved. Maximum 100 MB per file.
       </span>
-      <div className={stylex(styles.actions)}>
-        <button type="submit" disabled={saving}>
-          {saving ? "Saving note and files…" : "Save note"}
-        </button>
-        <button type="button" disabled={saving} onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
     </form>
   );
 }
