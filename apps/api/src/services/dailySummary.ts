@@ -246,9 +246,9 @@ function renderDailySummary(
             `- ${customer.display_name} (${customer.follow_up_urgency === "overdue" ? "overdue · " : ""}${formatDateTime(customer.next_follow_up_at, timezone)})`
         )
         .join("\n")
-    : "- No customer follow-ups are due today.";
+    : "- No customer follow-ups are due or overdue.";
 
-  const text = `Good morning, ${user.name}.\n\nFTOPS daily summary for ${dateLabel}\n\nTasks due today\n${taskText}\n\nCustomer follow-ups due today\n${customerText}\n\nOpen FTOPS: ${appBaseUrl}/tasks`;
+  const text = `Good morning, ${user.name}.\n\nFTOPS daily summary for ${dateLabel}\n\nTasks due today\n${taskText}\n\nCustomer follow-ups due or overdue\n${customerText}\n\nOpen FTOPS: ${appBaseUrl}/tasks`;
   const taskHtml = tasks.length
     ? `<ul>${tasks
         .map((task) => {
@@ -268,12 +268,12 @@ function renderDailySummary(
             )}</span></li>`
         )
         .join("")}</ul>`
-    : "<p>No customer follow-ups are due today.</p>";
+    : "<p>No customer follow-ups are due or overdue.</p>";
   const html = `<div style="font-family:Arial,sans-serif;max-width:680px;color:#2b251f;line-height:1.5"><p>Good morning, ${escapeHtml(
     user.name
   )}.</p><h1 style="font-size:24px">FTOPS daily summary</h1><p>${escapeHtml(
     dateLabel
-  )} · ${escapeHtml(user.workspace_name)}</p><h2 style="font-size:18px">Tasks due today</h2>${taskHtml}<h2 style="font-size:18px">Customer follow-ups due today</h2>${customerHtml}<p><a href="${escapeHtml(
+  )} · ${escapeHtml(user.workspace_name)}</p><h2 style="font-size:18px">Tasks due today</h2>${taskHtml}<h2 style="font-size:18px">Customer follow-ups due or overdue</h2>${customerHtml}<p><a href="${escapeHtml(
     `${appBaseUrl}/tasks`
   )}">Open FTOPS tasks</a></p></div>`;
   return { subject: `FTOPS daily summary — ${dateLabel}`, text, html };

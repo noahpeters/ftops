@@ -24,7 +24,8 @@ describe("daily summary emails", () => {
       .prepare(
         `INSERT INTO customers
           (id,workspace_id,display_name,status,created_at,updated_at)
-         VALUES ('customer-1','default','Acme Cabinets','active',?,?)`
+         VALUES ('customer-1','default','Acme Cabinets','active',?,?),
+                ('customer-2','default','Overdue Millwork','active','2026-08-01T00:00:00.000Z','2026-08-01T00:00:00.000Z')`
       )
       .bind("2026-08-14T00:00:00.000Z", "2026-08-14T00:00:00.000Z")
       .run();
@@ -51,8 +52,11 @@ describe("daily summary emails", () => {
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     const body = JSON.parse(String(request.body)) as { text: string; html: string };
     expect(body.text).toContain("Finish checklist");
-    expect(body.text).toContain("Customer follow-ups due today");
+    expect(body.text).toContain("Customer follow-ups due or overdue");
     expect(body.text).toContain("Acme Cabinets");
+    expect(body.text).toContain("Overdue Millwork (overdue · ");
+    expect(body.html).toContain("Overdue Millwork");
+    expect(body.html).toContain("overdue · ");
     expect(body.html).toContain("https://ops.example.com/tasks");
     await mf.dispose();
   });
