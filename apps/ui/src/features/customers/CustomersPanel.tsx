@@ -118,6 +118,28 @@ const styles = stylex.create({
     flexWrap: "wrap",
     padding: "10px 0 4px",
     borderBottom: `1px solid ${colors.border}`,
+    "@media (max-width: 760px)": {
+      display: "none",
+    },
+  },
+  mobileTabPicker: {
+    display: "none",
+    "@media (max-width: 760px)": {
+      display: "grid",
+      gap: "6px",
+      padding: "10px 0 4px",
+    },
+  },
+  mobileTabSelect: {
+    width: "100%",
+    minHeight: "44px",
+    boxSizing: "border-box",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.sm,
+    padding: "8px 10px",
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
+    font: "inherit",
   },
   detailTab: {
     border: "none",
@@ -461,6 +483,9 @@ export function CustomersPanel({
   const editingOpportunity = detail?.opportunities.find(
     (opportunity) => opportunity.id === editingOpportunityId
   );
+  const openTaskCount =
+    detail?.tasks.filter((task) => task.status !== "done" && task.status !== "canceled").length ??
+    0;
   return (
     <section className={stylex(styles.panel)}>
       <div className={stylex(styles.titleRow)}>
@@ -558,17 +583,26 @@ export function CustomersPanel({
                   >
                     {tab.label}
                     {tab.id === "tasks" && (
-                      <span className={stylex(styles.tabBadge)}>
-                        {
-                          detail.tasks.filter(
-                            (task) => task.status !== "done" && task.status !== "canceled"
-                          ).length
-                        }
-                      </span>
+                      <span className={stylex(styles.tabBadge)}>{openTaskCount}</span>
                     )}
                   </button>
                 ))}
               </div>
+              <label className={stylex(styles.mobileTabPicker)}>
+                <span className={stylex(styles.muted)}>Customer section</span>
+                <select
+                  className={stylex(styles.mobileTabSelect)}
+                  value={activeTab}
+                  onChange={(event) => setActiveTab(event.target.value as CustomerTab)}
+                >
+                  {CUSTOMER_TABS.map((tab) => (
+                    <option key={tab.id} value={tab.id}>
+                      {tab.label}
+                      {tab.id === "tasks" ? ` (${openTaskCount})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {activeTab === "summary" && (
                 <div className={stylex(styles.grid)} role="tabpanel">
                   <div>
