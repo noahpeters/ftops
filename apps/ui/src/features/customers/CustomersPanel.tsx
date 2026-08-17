@@ -242,8 +242,10 @@ export function CustomersPanel({
   const [creatingNote, setCreatingNote] = useState(false);
   const [noteCanSave, setNoteCanSave] = useState(false);
   const [creatingOpportunity, setCreatingOpportunity] = useState(false);
+  const [opportunityCanSave, setOpportunityCanSave] = useState(false);
   const [editingOpportunityId, setEditingOpportunityId] = useState<string | null>(null);
   const [savingNote, setSavingNote] = useState(false);
+  const [savingEditor, setSavingEditor] = useState(false);
   const [analyzingFollowUp, setAnalyzingFollowUp] = useState(false);
   const [activeTab, setActiveTab] = useState<CustomerTab>("summary");
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -268,6 +270,12 @@ export function CustomersPanel({
     setAnalyzingFollowUp(false);
     setActiveTab("summary");
     setActiveTaskId(null);
+    setEditingCustomer(false);
+    setCreatingNote(false);
+    setCreatingContact(false);
+    setEditingContactId(null);
+    setCreatingOpportunity(false);
+    setEditingOpportunityId(null);
     detailCardRef.current?.scrollTo({ top: 0 });
     if (!customerId) {
       setDetail(null);
@@ -291,7 +299,9 @@ export function CustomersPanel({
   }
   async function saveCustomer(input: CustomerInput) {
     if (!customerId) return;
+    setSavingEditor(true);
     const r = await updateCustomer(customerId, input);
+    setSavingEditor(false);
     if (r.ok && r.data) {
       setDetail(r.data);
       setEditingCustomer(false);
@@ -401,10 +411,12 @@ export function CustomersPanel({
   }
   async function saveOpportunity(input: OpportunityInput, opportunityId?: string) {
     if (!customerId) return;
+    setSavingEditor(true);
     const payload = { ...input, budgetCents: Math.round(input.budget * 100) };
     const r = opportunityId
       ? await updateOpportunity(customerId, opportunityId, payload)
       : await addOpportunity(customerId, payload);
+    setSavingEditor(false);
     if (r.ok && r.data) {
       setDetail(r.data);
       setCreatingOpportunity(false);
@@ -413,9 +425,11 @@ export function CustomersPanel({
   }
   async function saveContact(input: ContactInput, contactId?: string) {
     if (!customerId) return;
+    setSavingEditor(true);
     const r = contactId
       ? await updateContact(customerId, contactId, input)
       : await addContact(customerId, input);
+    setSavingEditor(false);
     if (r.ok && r.data) {
       setDetail(r.data);
       setEditingContactId(null);
@@ -444,6 +458,9 @@ export function CustomersPanel({
     else setError(r.text);
   }
   const editingContact = detail?.contacts.find((contact) => contact.id === editingContactId);
+  const editingOpportunity = detail?.opportunities.find(
+    (opportunity) => opportunity.id === editingOpportunityId
+  );
   return (
     <section className={stylex(styles.panel)}>
       <div className={stylex(styles.titleRow)}>
@@ -664,36 +681,33 @@ export function CustomersPanel({
               {activeTab === "opportunities" && (
                 <div className={stylex(styles.section)} role="tabpanel">
                   <h4>Opportunities</h4>
-                  {!creatingOpportunity && (
-                    <button onClick={() => setCreatingOpportunity(true)}>Add opportunity</button>
+                  {!creatingOpportunity && !editingOpportunityId && (
+                    <button
+                      onClick={() => {
+                        setOpportunityCanSave(false);
+                        setCreatingOpportunity(true);
+                      }}
+                    >
+                      Add opportunity
+                    </button>
                   )}
-                  {creatingOpportunity && (
-                    <OpportunityForm
-                      onSave={(input) => saveOpportunity(input)}
-                      onCancel={() => setCreatingOpportunity(false)}
-                    />
-                  )}
-                  {detail.opportunities.map((opportunity) =>
-                    editingOpportunityId === opportunity.id ? (
-                      <OpportunityForm
-                        key={opportunity.id}
-                        opportunity={opportunity}
-                        onSave={(input) => saveOpportunity(input, opportunity.id)}
-                        onCancel={() => setEditingOpportunityId(null)}
-                      />
-                    ) : (
-                      <article key={opportunity.id} className={stylex(styles.contact)}>
-                        <b>{opportunity.description}</b>
-                        <div>
-                          {opportunity.opportunity_type} · {opportunity.status} ·{" "}
-                          {formatBudget(opportunity.budget_cents)}
-                        </div>
-                        <button onClick={() => setEditingOpportunityId(opportunity.id)}>
-                          Edit
-                        </button>
-                      </article>
-                    )
-                  )}
+                  {detail.opportunities.map((opportunity) => (
+                    <article key={opportunity.id} className={stylex(styles.contact)}>
+                      <b>{opportunity.description}</b>
+                      <div>
+                        {opportunity.opportunity_type} · {opportunity.status} ·{" "}
+                        {formatBudget(opportunity.budget_cents)}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setOpportunityCanSave(false);
+                          setEditingOpportunityId(opportunity.id);
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </article>
+                  ))}
                 </div>
               )}
               {activeTab === "tasks" && (
@@ -746,6 +760,7 @@ export function CustomersPanel({
                   title={`Edit ${detail.customer.display_name}`}
                   formId="customer-editor-form"
                   saveDisabled={!customerHasChanges}
+                  saving={savingEditor}
                   onCancel={() => setEditingCustomer(false)}
                 >
                   <CustomerForm
@@ -762,6 +777,7 @@ export function CustomersPanel({
                   title={editingContact ? `Edit ${editingContact.display_name}` : "Add contact"}
                   formId="customer-contact-editor-form"
                   saveDisabled={!contactCanSave}
+                  saving={savingEditor}
                   saveLabel={editingContact ? "Save" : "Add contact"}
                   onCancel={() => {
                     setCreatingContact(false);
@@ -773,6 +789,27 @@ export function CustomersPanel({
                     contact={editingContact}
                     onSave={(input) => saveContact(input, editingContact?.id)}
                     onCanSaveChange={setContactCanSave}
+                  />
+                </RightSideEditor>
+              )}
+              {(creatingOpportunity || editingOpportunity) && (
+                <RightSideEditor
+                  eyebrow="Opportunity"
+                  title={editingOpportunity ? "Edit opportunity" : "Add opportunity"}
+                  formId="customer-opportunity-editor-form"
+                  saveDisabled={!opportunityCanSave}
+                  saving={savingEditor}
+                  saveLabel={editingOpportunity ? "Save" : "Add opportunity"}
+                  onCancel={() => {
+                    setCreatingOpportunity(false);
+                    setEditingOpportunityId(null);
+                  }}
+                >
+                  <OpportunityForm
+                    id="customer-opportunity-editor-form"
+                    opportunity={editingOpportunity}
+                    onSave={(input) => saveOpportunity(input, editingOpportunity?.id)}
+                    onCanSaveChange={setOpportunityCanSave}
                   />
                 </RightSideEditor>
               )}
@@ -1033,24 +1070,36 @@ type OpportunityInput = {
   status: string;
 };
 function OpportunityForm({
+  id,
   opportunity,
   onSave,
-  onCancel,
+  onCanSaveChange,
 }: {
+  id: string;
   opportunity?: Opportunity;
   onSave: (input: OpportunityInput) => void;
-  onCancel: () => void;
+  onCanSaveChange: (canSave: boolean) => void;
 }) {
   const [description, setDescription] = useState(opportunity?.description || "");
   const [type, setType] = useState<string>(opportunity?.opportunity_type || "furniture");
   const [budget, setBudget] = useState(opportunity ? String(opportunity.budget_cents / 100) : "");
   const [status, setStatus] = useState<string>(opportunity?.status || "scoping");
+  const parsedBudget = Number(budget);
+  const isValid = Boolean(description.trim()) && budget !== "" && parsedBudget >= 0;
+  const hasChanges = opportunity
+    ? description.trim() !== opportunity.description ||
+      type !== opportunity.opportunity_type ||
+      parsedBudget !== opportunity.budget_cents / 100 ||
+      status !== opportunity.status
+    : isValid;
+  useEffect(() => onCanSaveChange(isValid && hasChanges), [hasChanges, isValid, onCanSaveChange]);
   return (
     <form
+      id={id}
       className={stylex(styles.form)}
       onSubmit={(event) => {
         event.preventDefault();
-        onSave({ description, type, budget: Number(budget), status });
+        onSave({ description: description.trim(), type, budget: parsedBudget, status });
       }}
     >
       <textarea
@@ -1086,12 +1135,6 @@ function OpportunityForm({
         <option value="accepted">accepted</option>
         <option value="lost">lost</option>
       </select>
-      <div className={stylex(styles.actions)}>
-        <button type="submit">Save opportunity</button>
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
     </form>
   );
 }
