@@ -62,7 +62,7 @@ jobs:
       - name: Install
         run: npm ci --workspaces
       - name: Deploy Webhooks
-        run: npm run deploy:webhooks
+        run: npm --workspace apps/webhooks run deploy:unsafe
 
   deploy-ui:
     runs-on: ubuntu-latest
