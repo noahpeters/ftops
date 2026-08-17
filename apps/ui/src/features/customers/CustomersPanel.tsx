@@ -488,6 +488,7 @@ export function CustomersPanel({
     0;
   const nonLostOpportunityCount =
     detail?.opportunities.filter((opportunity) => opportunity.status !== "lost").length ?? 0;
+  const currentFileCount = detail?.files.filter((file) => !file.deprecated_at).length ?? 0;
   return (
     <section className={stylex(styles.panel)}>
       <div className={stylex(styles.titleRow)}>
@@ -593,6 +594,9 @@ export function CustomersPanel({
                     {tab.id === "opportunities" && (
                       <span className={stylex(styles.tabBadge)}>{nonLostOpportunityCount}</span>
                     )}
+                    {tab.id === "files" && (
+                      <span className={stylex(styles.tabBadge)}>{currentFileCount}</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -608,6 +612,7 @@ export function CustomersPanel({
                       {tab.label}
                       {tab.id === "tasks" ? ` (${openTaskCount})` : ""}
                       {tab.id === "opportunities" ? ` (${nonLostOpportunityCount})` : ""}
+                      {tab.id === "files" ? ` (${currentFileCount})` : ""}
                     </option>
                   ))}
                 </select>
@@ -659,16 +664,6 @@ export function CustomersPanel({
                     ) : (
                       <p className={stylex(styles.muted)}>No primary contact.</p>
                     )}
-                  </div>
-                  <div className={stylex(styles.summaryCard)}>
-                    <b>Attachments</b>
-                    <p>{detail.files.filter((file) => !file.deprecated_at).length} current</p>
-                    {detail.files
-                      .filter((file) => !file.deprecated_at)
-                      .slice(0, 3)
-                      .map((file) => (
-                        <CustomerFileLink key={file.id} file={file} compact />
-                      ))}
                   </div>
                 </div>
               )}
