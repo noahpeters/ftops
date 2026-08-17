@@ -45,10 +45,6 @@ npm run build
 
 The build output includes both client and server bundles for Cloudflare SSR.
 
-## Deploy
+## Deployment
 
-```bash
-npm run deploy
-```
-
-Requires a Cloudflare API token in the environment for Wrangler (`CLOUDFLARE_API_TOKEN`).
+Do not deploy the UI to Cloudflare from a local environment. Production deployments must be initiated only by pushing to the GitHub `main` branch and allowing GitHub Actions to complete the deployment.

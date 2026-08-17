@@ -37,24 +37,14 @@ npm run tidy
 npm run verify
 ```
 
-Deploy (guarded):
+## Deployment
 
-```sh
-npm run deploy
-npm run deploy:dev
-npm run deploy:prod
-```
+Do not deploy this worker to Cloudflare from a local environment. Production deployments must be initiated only by pushing to the GitHub `main` branch and allowing GitHub Actions to complete the deployment.
 
 Production notes:
 
 - This worker is internal-only (service binding). Disable the `workers.dev` route in the
   Cloudflare dashboard and ensure no public routes are configured for `api.from-trees.com/*`.
-
-Deploy (unsafe, skips tests):
-
-```sh
-npm run deploy:unsafe
-```
 
 DB execute:
 
@@ -62,6 +52,8 @@ DB execute:
 npm run db:execute -- "<SQL>"
 npm run db:execute:remote -- "<SQL>"
 ```
+
+Do not run remote database writes or migrations against production locally. Production migration checks and application are owned by GitHub Actions after a push to `main`.
 
 Migration manifest:
 

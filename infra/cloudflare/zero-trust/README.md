@@ -35,9 +35,9 @@ terraform fmt
 terraform validate
 terraform plan \
   -var "account_id=YOUR_ACCOUNT_ID"
-terraform apply \
-  -var "account_id=YOUR_ACCOUNT_ID"
 ```
+
+Never run `terraform apply` against production from a local environment. Production infrastructure changes must be initiated only by pushing to the GitHub `main` branch; GitHub Actions runs and monitors the apply.
 
 ## Discovery
 
@@ -59,13 +59,7 @@ node tools/state-audit.mjs
 
 ## Import existing Access config
 
-Terraform 1.5+ supports import blocks (see `imports.tf`). Run `terraform plan` or `terraform apply` to execute the imports. If you prefer manual imports, use:
-
-```sh
-terraform import cloudflare_zero_trust_access_application.ops 125d8016e23830dcaf86de127ce90576/2ff0566a-c5d5-4b3a-871a-222203a7ef73
-terraform import cloudflare_zero_trust_access_policy.admin account/125d8016e23830dcaf86de127ce90576/26d82360-264b-4102-84ea-690dfe3411f8
-terraform import cloudflare_zero_trust_access_policy.public_legal account/125d8016e23830dcaf86de127ce90576/af136f20-30a8-4b01-b6e8-449da982ea92
-```
+Terraform 1.5+ supports import blocks (see `imports.tf`). Imports that affect production are executed by GitHub Actions, never manually from a local environment.
 
 CI discovers and imports the exact-path legal applications before planning or applying. This is
 necessary while Terraform state is stored in the repository, because state changes from a failed

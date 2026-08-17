@@ -35,15 +35,13 @@ npm run dev:ui
 npm run verify
 ```
 
-## Deploy
+## Deployment policy
 
-```sh
-npm run deploy:api
-npm run deploy:webhooks
-npm run deploy:ui
+Production deployments must only be initiated by pushing changes to the GitHub `main` branch. GitHub Actions owns the complete deployment process, including applying database migrations before deploying the API, deploying the webhooks and UI, and applying Terraform.
+
+Never deploy or apply production changes directly to Cloudflare from a local environment. In particular, do not run the local `deploy:*`, `wrangler deploy`, database migration, or `terraform apply` commands against production. After pushing to `main`, monitor the GitHub Actions workflow until every deployment job completes successfully.
 
 Webhook ingress details are in `docs/webhooks.md`.
-```
 
 ## Infrastructure
 

@@ -24,7 +24,7 @@
   },
   "simple-git-hooks": {
     "pre-commit": "npm run fmt:check && npm run check:migration-edits",
-    "pre-push": "npm run verify && npm run check:remote-migrations"
+    "pre-push": "npm run verify"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "4.55.1"

@@ -41,8 +41,8 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci --workspaces
-      - name: Check remote migrations
-        run: npm run check:remote-migrations
+      - name: Apply production migrations
+        run: npm --workspace apps/api run db:migrate:remote
       - name: Deploy API
         run: npm --workspace apps/api run deploy:unsafe
 
