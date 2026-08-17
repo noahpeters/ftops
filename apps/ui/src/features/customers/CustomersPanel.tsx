@@ -107,6 +107,15 @@ const styles = stylex.create({
   table: { width: "100%", borderCollapse: "collapse" },
   cell: { padding: "7px", borderBottom: `1px solid ${colors.border}`, textAlign: "left" },
   actions: { display: "flex", gap: "8px", flexWrap: "wrap" },
+  editorDangerZone: {
+    marginTop: "auto",
+    paddingTop: "16px",
+    borderTop: `1px solid ${colors.border}`,
+  },
+  dangerButton: {
+    borderColor: colors.errorText,
+    color: colors.errorText,
+  },
   form: { display: "grid", gap: "8px", padding: "12px 0" },
   check: { display: "flex", gap: "6px", alignItems: "center" },
   contact: { borderBottom: `1px solid ${colors.border}`, padding: "10px 0" },
@@ -460,13 +469,17 @@ export function CustomersPanel({
       await refresh();
     } else setError((r.data as { error?: string } | null)?.error || r.text);
   }
-  async function removeContact(contact: Contact) {
-    if (!customerId || !confirm(`Archive ${contact.display_name}?`)) return;
+  async function removeContact(contact: Contact): Promise<boolean> {
+    if (!customerId || !confirm(`Archive ${contact.display_name}?`)) return false;
     const r = await archiveContact(customerId, contact.id);
-    if (!r.ok) return setError(r.text);
+    if (!r.ok) {
+      setError(r.text);
+      return false;
+    }
     const loaded = await getCustomer(customerId);
     if (loaded.ok) setDetail(loaded.data);
     await refresh();
+    return true;
   }
   async function action(name: string, extra: Record<string, unknown> = {}) {
     if (!customerId || !integrationId) return setError("Enter the QuickBooks integration ID.");
@@ -702,9 +715,6 @@ export function CustomersPanel({
                         >
                           Edit
                         </button>
-                        {contact.status !== "archived" && (
-                          <button onClick={() => removeContact(contact)}>Archive</button>
-                        )}
                       </div>
                     </div>
                   ))}
@@ -822,6 +832,25 @@ export function CustomersPanel({
                     onSave={(input) => saveContact(input, editingContact?.id)}
                     onCanSaveChange={setContactCanSave}
                   />
+                  {editingContact && editingContact.status !== "archived" && (
+                    <div className={stylex(styles.editorDangerZone)}>
+                      <button
+                        type="button"
+                        className={stylex(styles.dangerButton)}
+                        disabled={savingEditor}
+                        onClick={() => {
+                          void (async () => {
+                            setSavingEditor(true);
+                            const archived = await removeContact(editingContact);
+                            setSavingEditor(false);
+                            if (archived) setEditingContactId(null);
+                          })();
+                        }}
+                      >
+                        Archive contact
+                      </button>
+                    </div>
+                  )}
                 </RightSideEditor>
               )}
               {(creatingOpportunity || editingOpportunity) && (
