@@ -671,9 +671,9 @@ export function CustomersPanel({
                           {detail.contacts.find((contact) => contact.is_primary)?.email ||
                             "No email"}{" "}
                           ·{" "}
-                          {formatPhoneNumber(
-                            detail.contacts.find((contact) => contact.is_primary)?.phone
-                          ) || "No phone"}
+                          <PhoneLink
+                            phone={detail.contacts.find((contact) => contact.is_primary)?.phone}
+                          />
                         </p>
                       </>
                     ) : (
@@ -703,8 +703,7 @@ export function CustomersPanel({
                         {contact.role || "Contact"} · {contact.status}
                       </div>
                       <div>
-                        {contact.email || "No email"} ·{" "}
-                        {formatPhoneNumber(contact.phone) || "No phone"}
+                        {contact.email || "No email"} · <PhoneLink phone={contact.phone} />
                       </div>
                       <div className={stylex(styles.actions)}>
                         <button
@@ -1201,6 +1200,11 @@ function OpportunityForm({
 }
 function formatBudget(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+function PhoneLink({ phone }: { phone: string | null | undefined }) {
+  const formatted = formatPhoneNumber(phone);
+  if (!formatted || !phone) return <>No phone</>;
+  return <a href={`tel:${phone.trim()}`}>{formatted}</a>;
 }
 type CustomerInput = { displayName: string; status: string; leadSource: string };
 function CustomerForm({
