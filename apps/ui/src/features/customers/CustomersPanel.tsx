@@ -251,7 +251,7 @@ export function CustomersPanel({
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [search, setSearch] = useState("");
   const [statuses, setStatuses] = useState<string[]>(["lead", "active"]);
-  const [sort, setSort] = useState("name_asc");
+  const [sort, setSort] = useState("next_follow_up_asc");
   const [users, setUsers] = useState<WorkspaceUser[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [integrationId, setIntegrationId] = useState("");
