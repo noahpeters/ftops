@@ -332,6 +332,7 @@ export function ProjectsPanel({
               <li key={item.id}>
                 <button
                   type="button"
+                  data-button-layout="card"
                   className={stylex(
                     styles.listButton,
                     selectedProjectId === item.id && styles.listButtonActive

@@ -23,7 +23,7 @@ const styles = stylex.create({
     boxSizing: "border-box",
     backgroundColor: colors.surface,
     borderLeft: `1px solid ${colors.border}`,
-    padding: "20px 18px",
+    padding: "8px",
     display: "flex",
     flexDirection: "column",
     gap: spacing.md,
@@ -32,7 +32,7 @@ const styles = stylex.create({
     "@media (max-width: 600px)": {
       width: "100vw",
       maxWidth: "100vw",
-      padding: "16px",
+      padding: "8px",
     },
   },
   header: {
@@ -64,8 +64,8 @@ const styles = stylex.create({
     justifyContent: "flex-end",
   },
   button: {
-    minHeight: "36px",
-    padding: "7px 12px",
+    height: "36px",
+    padding: "6px 10px",
     border: `1px solid ${colors.border}`,
     borderRadius: radius.sm,
     cursor: "pointer",
@@ -113,6 +113,7 @@ export function RightSideEditor({
     <>
       <button
         type="button"
+        data-button-layout="overlay"
         className={stylex(styles.overlay)}
         aria-label={`Cancel ${eyebrow.toLowerCase()} editing`}
         onClick={onCancel}

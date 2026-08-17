@@ -81,7 +81,7 @@ const styles = stylex.create({
     border: `1px solid ${colors.border}`,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
-    padding: "14px",
+    padding: "8px",
   },
   scrollCard: {
     maxHeight: "calc(100vh - 190px)",
@@ -93,7 +93,7 @@ const styles = stylex.create({
   item: {
     width: "100%",
     textAlign: "left",
-    padding: "10px",
+    padding: "8px",
     border: `1px solid ${colors.border}`,
     borderRadius: radius.sm,
     backgroundColor: colors.surfaceAlt,
@@ -131,7 +131,7 @@ const styles = stylex.create({
   section: { borderTop: `1px solid ${colors.border}`, paddingTop: "12px", marginTop: "16px" },
   table: { width: "100%", borderCollapse: "collapse" },
   cell: { padding: "7px", borderBottom: `1px solid ${colors.border}`, textAlign: "left" },
-  actions: { display: "flex", gap: "8px", flexWrap: "wrap" },
+  actions: { display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" },
   editorDangerZone: {
     marginTop: "auto",
     paddingTop: "16px",
@@ -210,7 +210,7 @@ const styles = stylex.create({
     border: `1px solid ${colors.border}`,
     borderRadius: radius.sm,
     backgroundColor: colors.surfaceAlt,
-    padding: "12px",
+    padding: "8px",
   },
   attachmentLink: {
     display: "grid",
@@ -668,6 +668,7 @@ export function CustomersPanel({
             {rows.map((row) => (
               <li key={row.id}>
                 <button
+                  data-button-layout="card"
                   className={stylex(styles.item, row.id === customerId && styles.active)}
                   onClick={() => navigate(`/customers/${row.id}`)}
                 >

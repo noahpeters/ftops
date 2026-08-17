@@ -810,6 +810,7 @@ export default function App(): JSX.Element {
           {mobileMenuOpen && (
             <button
               type="button"
+              data-button-layout="overlay"
               className={stylex(styles.mobileOverlay)}
               aria-label="Close navigation menu"
               onClick={() => setMobileMenuOpen(false)}

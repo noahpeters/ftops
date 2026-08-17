@@ -14,3 +14,9 @@ button {
   border: 1px solid grey;
   box-shadow: 1px 1px 1px brown;
 }
+
+button:not([role="tab"]):not([data-button-layout]) {
+  box-sizing: border-box;
+  height: 36px;
+  padding: 6px 10px;
+}
