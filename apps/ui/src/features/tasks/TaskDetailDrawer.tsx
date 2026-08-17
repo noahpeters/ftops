@@ -11,6 +11,7 @@ import {
   initFileUpload,
   listFiles,
   fetchNotes,
+  getTask,
   updateTask,
   type TaskFile,
   type TaskNote,
@@ -149,6 +150,57 @@ type Props = {
   onUpdated: () => Promise<void>;
 };
 
+type TaskEditorDrawerProps = {
+  taskId: string;
+  workspaceId: string | null;
+  users: WorkspaceUser[];
+  onClose: () => void;
+  onUpdated: () => Promise<void>;
+  initialTask?: TaskRow;
+};
+
+export function TaskEditorDrawer({
+  taskId,
+  workspaceId,
+  users,
+  onClose,
+  onUpdated,
+  initialTask,
+}: TaskEditorDrawerProps): JSX.Element | null {
+  const [task, setTask] = useState<TaskRow | null>(initialTask?.id === taskId ? initialTask : null);
+
+  useEffect(() => {
+    let active = true;
+    if (initialTask?.id === taskId) {
+      setTask(initialTask);
+    } else {
+      setTask(null);
+    }
+    void getTask(taskId).then((result) => {
+      if (active && result.ok && result.data) setTask(result.data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [initialTask, taskId]);
+
+  if (!task) return null;
+
+  return (
+    <TaskDetailDrawer
+      task={task}
+      workspaceId={workspaceId}
+      users={users}
+      onClose={onClose}
+      onUpdated={async () => {
+        await onUpdated();
+        const result = await getTask(taskId);
+        if (result.ok && result.data) setTask(result.data);
+      }}
+    />
+  );
+}
+
 export function TaskDetailDrawer({
   task,
   workspaceId,
@@ -208,21 +260,41 @@ export function TaskDetailDrawer({
   }, [workspaceId]);
 
   const completedAt = useMemo(() => formatDateTime(task.completed_at), [task.completed_at]);
-
-  async function handleSave() {
-    setSaving(true);
-    const payload = {
+  const taskUpdates = useMemo(
+    () => ({
       title: title.trim() || task.title,
       description: description.trim() || null,
       status,
       assigned_to: assignedTo.trim() || null,
-      due_at: dueDate ? new Date(dueDate).toISOString() : null,
+      due_at:
+        dueDate === toDateTimeInput(task.due_at)
+          ? (task.due_at ?? null)
+          : dueDate
+            ? new Date(dueDate).toISOString()
+            : null,
       customer_id: customerId.trim() || null,
-    };
-    const result = await updateTask(task.id, payload);
+    }),
+    [assignedTo, customerId, description, dueDate, status, task, title]
+  );
+  const hasChanges = useMemo(
+    () =>
+      taskUpdates.title !== task.title ||
+      taskUpdates.description !== (task.description ?? null) ||
+      taskUpdates.status !== task.status ||
+      taskUpdates.assigned_to !== (task.assigned_to ?? null) ||
+      taskUpdates.due_at !== (task.due_at ?? null) ||
+      taskUpdates.customer_id !== (task.customer_id ?? null),
+    [task, taskUpdates]
+  );
+
+  async function handleSave() {
+    if (!hasChanges) return;
+    setSaving(true);
+    const result = await updateTask(task.id, taskUpdates);
     setSaving(false);
     if (result.ok) {
       await onUpdated();
+      onClose();
     }
   }
 
@@ -339,9 +411,18 @@ export function TaskDetailDrawer({
             <div className={stylex(styles.label)}>Task</div>
             <div className={stylex(styles.title)}>{task.title}</div>
           </div>
-          <button type="button" onClick={onClose}>
-            Close
-          </button>
+          <div className={stylex(styles.actions)}>
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={!hasChanges || saving}
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button type="button" onClick={onClose} disabled={saving}>
+              Cancel
+            </button>
+          </div>
         </div>
 
         <section className={stylex(styles.section)}>
@@ -427,9 +508,6 @@ export function TaskDetailDrawer({
               </select>
             </div>
           </div>
-          <button type="button" onClick={() => void handleSave()} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
-          </button>
         </section>
 
         <section className={stylex(styles.section)}>

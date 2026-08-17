@@ -5,6 +5,7 @@ import Markdown from "react-markdown";
 import stylex from "~/lib/stylex";
 import { buildUrl } from "@/lib/api";
 import { listUsers, type WorkspaceUser } from "../users/api";
+import { TaskEditorDrawer } from "../tasks/TaskDetailDrawer";
 import { colors, radius } from "../../theme/tokens.stylex";
 import {
   addContact,
@@ -227,6 +228,7 @@ export function CustomersPanel({
   const [savingNote, setSavingNote] = useState(false);
   const [analyzingFollowUp, setAnalyzingFollowUp] = useState(false);
   const [activeTab, setActiveTab] = useState<CustomerTab>("summary");
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const refresh = useCallback(async () => {
     if (!workspaceId) return;
     const result = await listCustomers(workspaceId, { search, status: statuses, sort });
@@ -247,6 +249,7 @@ export function CustomersPanel({
     followUpStreamRef.current = null;
     setAnalyzingFollowUp(false);
     setActiveTab("summary");
+    setActiveTaskId(null);
     detailCardRef.current?.scrollTo({ top: 0 });
     if (!customerId) {
       setDetail(null);
@@ -690,7 +693,19 @@ export function CustomersPanel({
                   {detail.tasks.map((task) => {
                     const assignee = users.find((user) => user.user_id === task.assigned_to);
                     return (
-                      <article key={task.id} className={stylex(styles.note)}>
+                      <article
+                        key={task.id}
+                        className={stylex(styles.note)}
+                        onClick={() => setActiveTaskId(task.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setActiveTaskId(task.id);
+                          }
+                        }}
+                      >
                         <b>{task.title}</b>
                         <div className={stylex(styles.muted)}>
                           {task.status} ·{" "}
@@ -703,6 +718,15 @@ export function CustomersPanel({
                     );
                   })}
                 </div>
+              )}
+              {activeTaskId && (
+                <TaskEditorDrawer
+                  taskId={activeTaskId}
+                  workspaceId={workspaceId}
+                  users={users}
+                  onClose={() => setActiveTaskId(null)}
+                  onUpdated={reloadDetail}
+                />
               )}
               {activeTab === "contacts" && (
                 <div className={stylex(styles.section)} role="tabpanel">

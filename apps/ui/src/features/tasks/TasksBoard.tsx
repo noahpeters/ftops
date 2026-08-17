@@ -11,7 +11,7 @@ import {
   type TaskRow,
   type WorkspaceUser,
 } from "./api";
-import { TaskDetailDrawer } from "./TaskDetailDrawer";
+import { TaskEditorDrawer } from "./TaskDetailDrawer";
 import { listProjects, type ProjectRow } from "../projects/api";
 
 type LaneKey = "scheduled" | "blocked" | "in progress" | "done" | "canceled";
@@ -483,8 +483,9 @@ export function TasksBoard({ workspaceId }: { workspaceId: string | null }): JSX
       )}
 
       {activeTask && (
-        <TaskDetailDrawer
-          task={activeTask}
+        <TaskEditorDrawer
+          taskId={activeTask.id}
+          initialTask={activeTask}
           workspaceId={workspaceId}
           users={users}
           onClose={() => setActiveTaskId(null)}
