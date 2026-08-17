@@ -7,6 +7,7 @@ import { buildUrl } from "@/lib/api";
 import { listUsers, type WorkspaceUser } from "../users/api";
 import { TaskEditorDrawer } from "../tasks/TaskDetailDrawer";
 import { RightSideEditor } from "../../components/RightSideEditor";
+import { formatPhoneNumber } from "../../lib/formatPhoneNumber";
 import { colors, radius } from "../../theme/tokens.stylex";
 import {
   addContact,
@@ -545,7 +546,7 @@ export function CustomersPanel({
                   <strong>{row.display_name}</strong>
                   <div>{row.company_name}</div>
                   <div className={stylex(styles.muted)}>
-                    {row.primary_contact} · {row.email || row.phone}
+                    {row.primary_contact} · {row.email || formatPhoneNumber(row.phone)}
                   </div>
                   <span className={stylex(styles.badge)}>{row.status}</span>
                   <span className={stylex(styles.badge)}>QBO: {row.quickbooks_sync_status}</span>
@@ -657,8 +658,9 @@ export function CustomersPanel({
                           {detail.contacts.find((contact) => contact.is_primary)?.email ||
                             "No email"}{" "}
                           ·{" "}
-                          {detail.contacts.find((contact) => contact.is_primary)?.phone ||
-                            "No phone"}
+                          {formatPhoneNumber(
+                            detail.contacts.find((contact) => contact.is_primary)?.phone
+                          ) || "No phone"}
                         </p>
                       </>
                     ) : (
@@ -688,7 +690,8 @@ export function CustomersPanel({
                         {contact.role || "Contact"} · {contact.status}
                       </div>
                       <div>
-                        {contact.email || "No email"} · {contact.phone || "No phone"}
+                        {contact.email || "No email"} ·{" "}
+                        {formatPhoneNumber(contact.phone) || "No phone"}
                       </div>
                       <div className={stylex(styles.actions)}>
                         <button
