@@ -17,7 +17,7 @@ import {
   createCustomer,
   getCustomer,
   initCustomerFileUpload,
-  listCustomers,
+  listCustomerPage,
   completeCustomerFileUpload,
   qboAction,
   qboSearch,
@@ -31,6 +31,13 @@ import {
   type CustomerSummary,
   type Opportunity,
 } from "./api";
+
+const glimmer = stylex.keyframes({
+  "0%": { backgroundPosition: "200% 0" },
+  "100%": { backgroundPosition: "-200% 0" },
+});
+
+const CUSTOMER_PAGE_SIZE = 25;
 
 const styles = stylex.create({
   panel: { padding: "24px 32px" },
@@ -82,6 +89,7 @@ const styles = stylex.create({
     "@media (max-width: 760px)": { maxHeight: "none", overflowY: "visible" },
   },
   list: { listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "8px" },
+  resultCount: { color: colors.textSubtle, fontSize: "13px", margin: "0 0 10px" },
   item: {
     width: "100%",
     textAlign: "left",
@@ -92,6 +100,23 @@ const styles = stylex.create({
     cursor: "pointer",
   },
   active: { borderColor: colors.accent },
+  glimmer: {
+    borderRadius: radius.sm,
+    backgroundImage: `linear-gradient(90deg, ${colors.neutralBg} 25%, ${colors.surfaceStrong} 50%, ${colors.neutralBg} 75%)`,
+    backgroundSize: "200% 100%",
+    animationName: glimmer,
+    animationDuration: "1.4s",
+    animationIterationCount: "infinite",
+    animationTimingFunction: "ease-in-out",
+  },
+  listGlimmer: { height: "132px" },
+  glimmerLine: { height: "14px", marginBottom: "12px" },
+  glimmerLineShort: { width: "42%" },
+  glimmerLineMedium: { width: "68%" },
+  detailGlimmerHeader: { height: "28px", width: "46%", marginBottom: "18px" },
+  detailGlimmerTabs: { height: "40px", marginBottom: "18px" },
+  detailGlimmerCard: { height: "150px" },
+  loadSentinel: { height: "1px" },
   muted: { color: colors.textSubtle, fontSize: "13px" },
   error: { color: colors.errorText },
   badge: {
@@ -256,9 +281,17 @@ export function CustomersPanel({
 }) {
   const navigate = useNavigate();
   const detailCardRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const listRequestRef = useRef(0);
   const followUpStreamRef = useRef<EventSource | null>(null);
   const [rows, setRows] = useState<CustomerSummary[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalContacts, setTotalContacts] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [statuses, setStatuses] = useState<string[]>(["lead", "active"]);
   const [sort, setSort] = useState("next_follow_up_asc");
@@ -282,14 +315,74 @@ export function CustomersPanel({
   const [activeTab, setActiveTab] = useState<CustomerTab>("summary");
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const refresh = useCallback(async () => {
-    if (!workspaceId) return;
-    const result = await listCustomers(workspaceId, { search, status: statuses, sort });
-    if (result.ok) setRows(result.data ?? []);
-    else setError(result.text);
+    if (!workspaceId) {
+      listRequestRef.current += 1;
+      setRows([]);
+      setTotal(0);
+      setTotalContacts(0);
+      setHasMore(false);
+      setListLoading(false);
+      setLoadingMore(false);
+      return;
+    }
+    const requestId = ++listRequestRef.current;
+    setListLoading(true);
+    setLoadingMore(false);
+    setHasMore(false);
+    setRows([]);
+    setTotal(0);
+    setTotalContacts(0);
+    const result = await listCustomerPage(workspaceId, {
+      search,
+      status: statuses,
+      sort,
+      limit: CUSTOMER_PAGE_SIZE,
+      offset: 0,
+    });
+    if (requestId !== listRequestRef.current) return;
+    setListLoading(false);
+    if (result.ok && result.data) {
+      setRows(result.data.items);
+      setTotal(result.data.total);
+      setTotalContacts(result.data.totalContacts);
+      setHasMore(result.data.hasMore);
+    } else setError(result.text);
   }, [workspaceId, search, statuses, sort]);
+  const loadMore = useCallback(async () => {
+    if (!workspaceId || listLoading || loadingMore || !hasMore) return;
+    const requestId = listRequestRef.current;
+    setLoadingMore(true);
+    const result = await listCustomerPage(workspaceId, {
+      search,
+      status: statuses,
+      sort,
+      limit: CUSTOMER_PAGE_SIZE,
+      offset: rows.length,
+    });
+    if (requestId !== listRequestRef.current) return;
+    setLoadingMore(false);
+    if (result.ok && result.data) {
+      setRows((current) => [...current, ...result.data!.items]);
+      setTotal(result.data.total);
+      setTotalContacts(result.data.totalContacts);
+      setHasMore(result.data.hasMore);
+    } else setError(result.text);
+  }, [hasMore, listLoading, loadingMore, rows.length, search, sort, statuses, workspaceId]);
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !hasMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) void loadMore();
+      },
+      { rootMargin: "240px" }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore]);
   useEffect(() => {
     if (!workspaceId) return setUsers([]);
     void listUsers(workspaceId).then((result) => {
@@ -311,12 +404,21 @@ export function CustomersPanel({
     detailCardRef.current?.scrollTo({ top: 0 });
     if (!customerId) {
       setDetail(null);
+      setDetailLoading(false);
       return;
     }
+    setDetail(null);
+    setDetailLoading(true);
+    let canceled = false;
     void getCustomer(customerId).then((r) => {
+      if (canceled) return;
+      setDetailLoading(false);
       if (r.ok) setDetail(r.data);
       else setError(r.text);
     });
+    return () => {
+      canceled = true;
+    };
   }, [customerId]);
   useEffect(() => () => followUpStreamRef.current?.close(), []);
   async function create() {
@@ -549,7 +651,13 @@ export function CustomersPanel({
       {error && <p className={stylex(styles.error)}>{error}</p>}
       <div className={stylex(styles.layout)}>
         <div className={stylex(styles.card, styles.scrollCard)}>
+          <p className={stylex(styles.resultCount)} aria-live="polite">
+            {listLoading
+              ? "Loading customers…"
+              : `${total} matching customer${total === 1 ? "" : "s"} · ${totalContacts} contact${totalContacts === 1 ? "" : "s"}`}
+          </p>
           <ul className={stylex(styles.list)}>
+            {listLoading && <CustomerListGlimmer />}
             {rows.map((row) => (
               <li key={row.id}>
                 <button
@@ -576,10 +684,14 @@ export function CustomersPanel({
                 </button>
               </li>
             ))}
+            {loadingMore && <CustomerListGlimmer count={2} />}
           </ul>
+          <div ref={loadMoreRef} className={stylex(styles.loadSentinel)} aria-hidden="true" />
         </div>
         <div ref={detailCardRef} className={stylex(styles.card, styles.scrollCard)}>
-          {!detail ? (
+          {detailLoading ? (
+            <CustomerDetailGlimmer />
+          ) : !detail ? (
             <p className={stylex(styles.muted)}>Select a customer.</p>
           ) : (
             <>
@@ -1033,6 +1145,32 @@ export function CustomersPanel({
     </section>
   );
 }
+function CustomerListGlimmer({ count = 4 }: { count?: number }) {
+  return Array.from({ length: count }, (_, index) => (
+    <li key={`customer-glimmer-${index}`} aria-hidden="true">
+      <div className={stylex(styles.item, styles.listGlimmer)}>
+        <div className={stylex(styles.glimmer, styles.glimmerLine, styles.glimmerLineMedium)} />
+        <div className={stylex(styles.glimmer, styles.glimmerLine, styles.glimmerLineShort)} />
+        <div className={stylex(styles.glimmer, styles.glimmerLine)} />
+        <div className={stylex(styles.glimmer, styles.glimmerLine, styles.glimmerLineMedium)} />
+      </div>
+    </li>
+  ));
+}
+
+function CustomerDetailGlimmer() {
+  return (
+    <div aria-label="Loading customer details" role="status">
+      <div className={stylex(styles.glimmer, styles.detailGlimmerHeader)} />
+      <div className={stylex(styles.glimmer, styles.detailGlimmerTabs)} />
+      <div className={stylex(styles.grid)}>
+        <div className={stylex(styles.glimmer, styles.detailGlimmerCard)} />
+        <div className={stylex(styles.glimmer, styles.detailGlimmerCard)} />
+      </div>
+    </div>
+  );
+}
+
 function CustomerFileRow({
   file,
   onDeprecated,

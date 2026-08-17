@@ -58,6 +58,20 @@ describe("customers API", () => {
       expect.objectContaining({ status: "active" }),
     ]);
 
+    const pagedList = await request(
+      env,
+      "/customers?workspaceId=default&status=lead,active&limit=1&offset=0"
+    );
+    expect(pagedList.status).toBe(200);
+    expect(await pagedList.json()).toMatchObject({
+      items: [expect.objectContaining({ id: detail.customer.id })],
+      total: 1,
+      totalContacts: 0,
+      limit: 1,
+      offset: 0,
+      hasMore: false,
+    });
+
     const note = await request(env, `/customers/${detail.customer.id}/activities`, {
       method: "POST",
       headers: { "X-Debug-User-Email": "author@example.com" },

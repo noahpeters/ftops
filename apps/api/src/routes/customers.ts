@@ -61,6 +61,11 @@ export async function handleCustomers(
         values.push(...statuses);
       }
       const sort = url.searchParams.get("sort")?.trim() || "name_asc";
+      const limitParam = url.searchParams.get("limit");
+      const offsetParam = url.searchParams.get("offset");
+      const paged = limitParam !== null || offsetParam !== null;
+      const limit = clampNumber(parseNumber(limitParam, 25), 1, 100);
+      const offset = clampNumber(parseNumber(offsetParam, 0), 0, Number.MAX_SAFE_INTEGER);
       const orderBy = {
         name_asc: "c.display_name COLLATE NOCASE ASC",
         next_follow_up_asc: "c.display_name COLLATE NOCASE ASC",
@@ -108,6 +113,27 @@ export async function handleCustomers(
             a.next_follow_up_at.localeCompare(b.next_follow_up_at) ||
             String(a.display_name).localeCompare(String(b.display_name))
           );
+        });
+      }
+      if (paged) {
+        const items = rows.slice(offset, offset + limit);
+        const contactCount = await env.DB.prepare(
+          `SELECT COUNT(ct.id) AS total
+           FROM customers c
+           LEFT JOIN contacts pc ON pc.id=c.primary_contact_id
+           LEFT JOIN contacts ct ON ct.customer_id=c.id AND ct.workspace_id=c.workspace_id
+           LEFT JOIN external_entities ee ON ee.workspace_id=c.workspace_id AND ee.local_entity_type='customer' AND ee.local_entity_id=c.id
+           WHERE ${filters.join(" AND ")}`
+        )
+          .bind(...values)
+          .first<{ total: number }>();
+        return json({
+          items,
+          total: rows.length,
+          totalContacts: Number(contactCount?.total ?? 0),
+          limit,
+          offset,
+          hasMore: offset + items.length < rows.length,
         });
       }
       return json(rows);
@@ -907,6 +933,14 @@ function nullable(value: unknown) {
 }
 function bool(value: unknown) {
   return value === true || value === 1 ? 1 : 0;
+}
+function parseNumber(value: string | null, fallback: number) {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);

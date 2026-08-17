@@ -19,6 +19,14 @@ export type CustomerSummary = {
   follow_up_reason: string | null;
   last_note_at: string | null;
 };
+export type CustomerPage = {
+  items: CustomerSummary[];
+  total: number;
+  totalContacts: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+};
 export type CustomerDetail = {
   customer: CustomerSummary & {
     notes?: string | null;
@@ -105,6 +113,21 @@ export function listCustomers(
       search: filters.search,
       status: filters.status?.join(","),
       sort: filters.sort,
+    })
+  );
+}
+export function listCustomerPage(
+  workspaceId: string,
+  filters: { search?: string; status?: string[]; sort?: string; limit: number; offset: number }
+) {
+  return fetchJson<CustomerPage>(
+    buildUrl("/customers", {
+      workspaceId,
+      search: filters.search,
+      status: filters.status?.join(","),
+      sort: filters.sort,
+      limit: filters.limit,
+      offset: filters.offset,
     })
   );
 }
