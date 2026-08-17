@@ -97,6 +97,8 @@ describe("ops api proxy allowlist", () => {
     ["POST", "/api/integrations/qbo/disconnect"],
     ["POST", "/api/integrations/qbo/bootstrap"],
     ["POST", "/api/workspaces/ws_123/users/user_1/daily-summary"],
+    ["GET", "/api/preferences"],
+    ["PUT", "/api/preferences/customer_status_filters"],
   ])("forwards customer API %s %s", async (method, path) => {
     const fetch = vi.fn(async () => new Response("ok"));
     const env = { API: { fetch } } as unknown as ApiProxyEnv;

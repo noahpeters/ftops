@@ -96,6 +96,8 @@ const ALLOWLIST: AllowlistEntry[] = [
   { methods: new Set(["GET"]), pattern: /^\/ingest\/requests(?:\/[^/]+)?$/ },
   { methods: new Set(["POST"]), pattern: /^\/admin\/ingest-requests\/[^/]+\/replay$/ },
   { methods: new Set(["GET"]), pattern: /^\/me$/ },
+  { methods: new Set(["GET"]), pattern: /^\/preferences$/ },
+  { methods: new Set(["PUT"]), pattern: /^\/preferences\/[^/]+$/ },
 ];
 
 export async function handleApiProxyRequest(request: Request, env: ApiProxyEnv): Promise<Response> {

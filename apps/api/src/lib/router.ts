@@ -15,6 +15,7 @@ import { handleAdmin } from "../routes/admin";
 import { handleMe } from "../routes/me";
 import { handleCustomers } from "../routes/customers";
 import { handleCustomerFiles } from "../routes/customerFiles";
+import { handlePreferences } from "../routes/preferences";
 
 export type SegmentHandler = (
   segments: string[],
@@ -87,6 +88,7 @@ async function routesRoot(
       me: handleMe,
       customers: handleCustomers,
       "customer-files": handleCustomerFiles,
+      preferences: handlePreferences,
     },
     () => notFound("Route not found")
   );

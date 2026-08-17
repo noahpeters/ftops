@@ -275,9 +275,13 @@ const CUSTOMER_TABS: Array<{ id: CustomerTab; label: string }> = [
 export function CustomersPanel({
   workspaceId,
   customerId,
+  initialStatuses,
+  onStatusesChange,
 }: {
   workspaceId: string | null;
   customerId?: string;
+  initialStatuses: string[];
+  onStatusesChange: (statuses: string[]) => void;
 }) {
   const navigate = useNavigate();
   const detailCardRef = useRef<HTMLDivElement>(null);
@@ -293,7 +297,7 @@ export function CustomersPanel({
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [search, setSearch] = useState("");
-  const [statuses, setStatuses] = useState<string[]>(["lead", "active"]);
+  const [statuses, setStatuses] = useState<string[]>(initialStatuses);
   const [sort, setSort] = useState("next_follow_up_asc");
   const [users, setUsers] = useState<WorkspaceUser[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -629,13 +633,13 @@ export function CustomersPanel({
                 <input
                   type="checkbox"
                   checked={statuses.includes(status)}
-                  onChange={(event) =>
-                    setStatuses((current) =>
-                      event.target.checked
-                        ? [...current, status]
-                        : current.filter((value) => value !== status)
-                    )
-                  }
+                  onChange={(event) => {
+                    const next = event.target.checked
+                      ? [...statuses, status]
+                      : statuses.filter((value) => value !== status);
+                    setStatuses(next);
+                    onStatusesChange(next);
+                  }}
                 />
                 {status}
               </label>

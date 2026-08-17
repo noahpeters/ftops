@@ -28,6 +28,7 @@ import { WorkspacesPanel } from "./features/workspaces/WorkspacesPanel";
 import { TasksBoard } from "./features/tasks/TasksBoard";
 import { UsersPanel } from "./features/users/UsersPanel";
 import { CustomersPanel } from "./features/customers/CustomersPanel";
+import { getPreferences, setPreference, type UserPreferences } from "./features/preferences/api";
 
 const EXAMPLE_URIS = ["manual://proposal/demo", "shopify://order/example", "qbo://invoice/example"];
 
@@ -423,6 +424,11 @@ type AppContextValue = {
   setSelectedWorkspaceId: (value: string | null) => void;
   actor: ActorInfo | null;
   actorLoading: boolean;
+  userPreferences: UserPreferences;
+  updateUserPreference: (
+    key: keyof UserPreferences,
+    value: UserPreferences[keyof UserPreferences]
+  ) => void;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -465,6 +471,7 @@ export default function App(): JSX.Element {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [actor, setActor] = useState<ActorInfo | null>(null);
   const [actorLoading, setActorLoading] = useState(false);
+  const [userPreferences, setUserPreferences] = useState<UserPreferences>({});
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -496,14 +503,27 @@ export default function App(): JSX.Element {
 
   const refreshActor = useCallback(async () => {
     setActorLoading(true);
-    const result = await fetchMe();
-    if (result.ok && result.data) {
-      setActor(result.data);
+    const [actorResult, preferenceResult] = await Promise.all([fetchMe(), getPreferences()]);
+    if (actorResult.ok && actorResult.data) {
+      setActor(actorResult.data);
+      const preferences = preferenceResult.ok ? (preferenceResult.data ?? {}) : {};
+      setUserPreferences(preferences);
+      setRailCollapsed(preferences.left_rail_collapsed ?? false);
     } else {
       setActor(null);
+      setUserPreferences({});
+      setRailCollapsed(false);
     }
     setActorLoading(false);
   }, []);
+
+  const updateUserPreference = useCallback(
+    (key: keyof UserPreferences, value: UserPreferences[keyof UserPreferences]) => {
+      setUserPreferences((current) => ({ ...current, [key]: value }));
+      void setPreference(key, value);
+    },
+    []
+  );
 
   useEffect(() => {
     void refreshWorkspaces();
@@ -779,6 +799,8 @@ export default function App(): JSX.Element {
     setSelectedWorkspaceId,
     actor,
     actorLoading,
+    userPreferences,
+    updateUserPreference,
   };
 
   return (
@@ -812,7 +834,11 @@ export default function App(): JSX.Element {
               className={stylex(styles.desktopRailToggle)}
               aria-label={railCollapsed ? "Expand navigation" : "Minimize navigation"}
               aria-expanded={!railCollapsed}
-              onClick={() => setRailCollapsed((current) => !current)}
+              onClick={() => {
+                const next = !railCollapsed;
+                setRailCollapsed(next);
+                updateUserPreference("left_rail_collapsed", next);
+              }}
             >
               {railCollapsed ? "›" : "‹ Minimize"}
             </button>
@@ -1400,7 +1426,8 @@ export function TemplatesRoute(): JSX.Element {
 }
 
 export function CustomersRoute(): JSX.Element {
-  const { selectedWorkspaceId, actor, actorLoading } = useAppState();
+  const { selectedWorkspaceId, actor, actorLoading, userPreferences, updateUserPreference } =
+    useAppState();
   const { customerId } = useParams();
   const isWorkspaceMember = Boolean(
     actor?.isSystemAdmin ||
@@ -1412,6 +1439,8 @@ export function CustomersRoute(): JSX.Element {
     <CustomersPanel
       workspaceId={selectedWorkspaceId}
       customerId={customerId ? decodeURIComponent(customerId) : undefined}
+      initialStatuses={userPreferences.customer_status_filters ?? ["lead", "active"]}
+      onStatusesChange={(statuses) => updateUserPreference("customer_status_filters", statuses)}
     />
   );
 }
