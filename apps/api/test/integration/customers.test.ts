@@ -544,6 +544,32 @@ describe("customers API", () => {
       budget_cents: 1925000,
       status: "quoted",
     });
+
+    const listed = (await (await request(env, "/customers?workspaceId=default")).json()) as Array<{
+      id: string;
+      non_lost_opportunity_total_cents: number;
+    }>;
+    expect(listed).toContainEqual(
+      expect.objectContaining({
+        id: customer.customer.id,
+        non_lost_opportunity_total_cents: 1925000,
+      })
+    );
+
+    const lost = await request(env, `${path}/${opportunityId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "lost" }),
+    });
+    expect(lost.status).toBe(200);
+    const listedAfterLoss = (await (
+      await request(env, "/customers?workspaceId=default")
+    ).json()) as Array<{ id: string; non_lost_opportunity_total_cents: number }>;
+    expect(listedAfterLoss).toContainEqual(
+      expect.objectContaining({
+        id: customer.customer.id,
+        non_lost_opportunity_total_cents: 0,
+      })
+    );
     await mf.dispose();
   });
 });

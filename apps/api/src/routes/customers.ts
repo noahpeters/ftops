@@ -87,7 +87,9 @@ export async function handleCustomers(
                  WHERE a.workspace_id=c.workspace_id AND a.customer_id=c.id
                    AND a.activity_type='note') AS last_note_at,
                 (SELECT COUNT(*) FROM estimates e WHERE e.customer_id=c.id AND COALESCE(e.status,'open') NOT IN ('closed','deleted','rejected')) AS open_estimate_count,
-                (SELECT COALESCE(SUM(i.balance),0) FROM invoices i WHERE i.customer_id=c.id AND COALESCE(i.balance,0)>0) AS open_invoice_balance
+                (SELECT COALESCE(SUM(i.balance),0) FROM invoices i WHERE i.customer_id=c.id AND COALESCE(i.balance,0)>0) AS open_invoice_balance,
+                (SELECT COALESCE(SUM(o.budget_cents),0) FROM customer_opportunities o
+                 WHERE o.workspace_id=c.workspace_id AND o.customer_id=c.id AND o.status<>'lost') AS non_lost_opportunity_total_cents
          FROM customers c LEFT JOIN contacts pc ON pc.id=c.primary_contact_id
          LEFT JOIN external_entities ee ON ee.workspace_id=c.workspace_id AND ee.local_entity_type='customer' AND ee.local_entity_id=c.id
          LEFT JOIN customer_follow_up_guidance g ON g.customer_id=c.id AND g.workspace_id=c.workspace_id

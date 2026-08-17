@@ -13,6 +13,7 @@ export type CustomerSummary = {
   last_error: string | null;
   open_estimate_count: number;
   open_invoice_balance: number;
+  non_lost_opportunity_total_cents: number;
   next_follow_up_at: string | null;
   follow_up_urgency: "overdue" | "due_today" | "upcoming" | "none";
   follow_up_reason: string | null;

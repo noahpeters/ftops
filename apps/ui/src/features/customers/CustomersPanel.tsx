@@ -486,6 +486,8 @@ export function CustomersPanel({
   const openTaskCount =
     detail?.tasks.filter((task) => task.status !== "done" && task.status !== "canceled").length ??
     0;
+  const nonLostOpportunityCount =
+    detail?.opportunities.filter((opportunity) => opportunity.status !== "lost").length ?? 0;
   return (
     <section className={stylex(styles.panel)}>
       <div className={stylex(styles.titleRow)}>
@@ -553,6 +555,9 @@ export function CustomersPanel({
                     {row.open_estimate_count} open estimates · $
                     {Number(row.open_invoice_balance || 0).toFixed(2)} due
                   </div>
+                  <div className={stylex(styles.muted)}>
+                    {formatBudget(row.non_lost_opportunity_total_cents || 0)} opportunity value
+                  </div>
                 </button>
               </li>
             ))}
@@ -585,6 +590,9 @@ export function CustomersPanel({
                     {tab.id === "tasks" && (
                       <span className={stylex(styles.tabBadge)}>{openTaskCount}</span>
                     )}
+                    {tab.id === "opportunities" && (
+                      <span className={stylex(styles.tabBadge)}>{nonLostOpportunityCount}</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -599,6 +607,7 @@ export function CustomersPanel({
                     <option key={tab.id} value={tab.id}>
                       {tab.label}
                       {tab.id === "tasks" ? ` (${openTaskCount})` : ""}
+                      {tab.id === "opportunities" ? ` (${nonLostOpportunityCount})` : ""}
                     </option>
                   ))}
                 </select>
@@ -660,15 +669,6 @@ export function CustomersPanel({
                       .map((file) => (
                         <CustomerFileLink key={file.id} file={file} compact />
                       ))}
-                  </div>
-                  <div className={stylex(styles.summaryCard)}>
-                    <b>Opportunities</b>
-                    <p>{detail.opportunities.length} total</p>
-                    {detail.opportunities.slice(0, 3).map((opportunity) => (
-                      <div key={opportunity.id} className={stylex(styles.muted)}>
-                        {opportunity.description} · {opportunity.status}
-                      </div>
-                    ))}
                   </div>
                 </div>
               )}
