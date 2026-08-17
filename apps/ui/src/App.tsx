@@ -186,6 +186,20 @@ const styles = stylex.create({
       alignItems: "stretch",
     },
   },
+  logoutSection: {
+    marginTop: "auto",
+    padding: "16px 12px",
+    borderTop: `1px solid ${colors.border}`,
+  },
+  logoutSectionCollapsed: {
+    padding: "16px 8px",
+    display: "flex",
+    justifyContent: "center",
+    "@media (max-width: 760px)": {
+      padding: "16px 12px",
+      display: "block",
+    },
+  },
   tabButton: {
     border: `1px solid ${colors.border}`,
     backgroundColor: colors.surfaceAlt,
@@ -914,6 +928,27 @@ export default function App(): JSX.Element {
                 <AppNavLink to="/users" label="Users" collapsed={railCollapsed} />
               )}
             </nav>
+            <div
+              className={stylex(
+                styles.logoutSection,
+                railCollapsed && styles.logoutSectionCollapsed
+              )}
+            >
+              <a
+                href="/cdn-cgi/access/logout"
+                className={stylex(styles.tabButton, railCollapsed && styles.tabButtonCollapsed)}
+                title={railCollapsed ? "Log out" : undefined}
+                aria-label={railCollapsed ? "Log out" : undefined}
+              >
+                <span className={stylex(railCollapsed && styles.tabLabelCollapsed)}>Log out</span>
+                <span
+                  aria-hidden="true"
+                  className={stylex(styles.tabInitial, railCollapsed && styles.tabInitialVisible)}
+                >
+                  L
+                </span>
+              </a>
+            </div>
           </aside>
           <main className={stylex(styles.mainContent)}>
             <div className={stylex(styles.mobileTopbar)}>
