@@ -9,8 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ReactNode } from "react";
-import { NavLink, Outlet, useNavigate, useParams } from "react-router";
+import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router";
 import stylex from "~/lib/stylex";
 import { colors, spacing, radius } from "./theme/tokens.stylex";
 import { buildUrl, fetchJson, fetchMe, setDebugEmailHeader } from "./lib/api";
@@ -47,6 +46,12 @@ const styles = stylex.create({
       gridTemplateColumns: "1fr",
     },
   },
+  appShellCollapsed: {
+    gridTemplateColumns: "64px minmax(0, 1fr)",
+    "@media (max-width: 760px)": {
+      gridTemplateColumns: "1fr",
+    },
+  },
   sidebar: {
     position: "sticky",
     top: 0,
@@ -57,10 +62,20 @@ const styles = stylex.create({
     backgroundColor: colors.surface,
     overflowY: "auto",
     "@media (max-width: 760px)": {
-      position: "relative",
-      height: "auto",
-      borderRight: "none",
-      borderBottom: `1px solid ${colors.border}`,
+      position: "fixed",
+      zIndex: 30,
+      inset: "0 auto 0 0",
+      width: "min(86vw, 320px)",
+      height: "100vh",
+      borderRight: `1px solid ${colors.border}`,
+      transform: "translateX(-100%)",
+      transition: "transform 180ms ease",
+      boxShadow: "0 18px 40px rgba(47, 33, 24, 0.2)",
+    },
+  },
+  sidebarMobileOpen: {
+    "@media (max-width: 760px)": {
+      transform: "translateX(0)",
     },
   },
   mainContent: {
@@ -72,6 +87,73 @@ const styles = stylex.create({
     gap: spacing.lg,
     padding: "24px 20px 18px",
     borderBottom: `1px solid ${colors.border}`,
+  },
+  appHeaderCollapsed: {
+    display: "none",
+    "@media (max-width: 760px)": {
+      display: "flex",
+    },
+  },
+  desktopRailToggle: {
+    margin: "12px 12px 0",
+    minHeight: "36px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
+    cursor: "pointer",
+    "@media (max-width: 760px)": {
+      display: "none",
+    },
+  },
+  mobileTopbar: {
+    display: "none",
+    "@media (max-width: 760px)": {
+      position: "sticky",
+      top: 0,
+      zIndex: 20,
+      display: "flex",
+      alignItems: "center",
+      gap: spacing.md,
+      minHeight: "56px",
+      padding: "8px 16px",
+      borderBottom: `1px solid ${colors.border}`,
+      backgroundColor: colors.surface,
+    },
+  },
+  hamburgerButton: {
+    width: "40px",
+    height: "40px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
+    cursor: "pointer",
+    fontSize: "22px",
+    lineHeight: 1,
+  },
+  mobileBrand: {
+    fontWeight: 600,
+    fontSize: "18px",
+  },
+  mobileCloseRow: {
+    display: "none",
+    "@media (max-width: 760px)": {
+      display: "flex",
+      justifyContent: "flex-end",
+      padding: "12px 12px 0",
+    },
+  },
+  mobileOverlay: {
+    display: "none",
+    "@media (max-width: 760px)": {
+      position: "fixed",
+      zIndex: 25,
+      inset: 0,
+      display: "block",
+      border: 0,
+      backgroundColor: "rgba(47, 33, 24, 0.28)",
+    },
   },
   headerControls: {
     display: "flex",
@@ -95,6 +177,14 @@ const styles = stylex.create({
     gap: spacing.sm,
     padding: "16px 12px",
   },
+  tabsCollapsed: {
+    padding: "16px 8px",
+    alignItems: "center",
+    "@media (max-width: 760px)": {
+      padding: "16px 12px",
+      alignItems: "stretch",
+    },
+  },
   tabButton: {
     border: `1px solid ${colors.border}`,
     backgroundColor: colors.surfaceAlt,
@@ -111,6 +201,33 @@ const styles = stylex.create({
     backgroundColor: colors.accent,
     color: colors.surface,
     borderColor: colors.accent,
+  },
+  tabButtonCollapsed: {
+    width: "40px",
+    minWidth: "40px",
+    padding: "9px 0",
+    textAlign: "center",
+    fontWeight: 600,
+    "@media (max-width: 760px)": {
+      width: "100%",
+      padding: "8px 14px",
+      textAlign: "left",
+    },
+  },
+  tabLabelCollapsed: {
+    display: "none",
+    "@media (max-width: 760px)": {
+      display: "inline",
+    },
+  },
+  tabInitial: {
+    display: "none",
+  },
+  tabInitialVisible: {
+    display: "inline",
+    "@media (max-width: 760px)": {
+      display: "none",
+    },
   },
   panel: {
     padding: "24px 32px",
@@ -320,6 +437,7 @@ export function useAppState(): AppContextValue {
 
 export default function App(): JSX.Element {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [recordUri, setRecordUri] = useState<string>("");
   const [autoRunOnSelect, setAutoRunOnSelect] = useState<boolean>(true);
@@ -347,6 +465,12 @@ export default function App(): JSX.Element {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [actor, setActor] = useState<ActorInfo | null>(null);
   const [actorLoading, setActorLoading] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -660,9 +784,41 @@ export default function App(): JSX.Element {
   return (
     <AppContext.Provider value={appContextValue}>
       <div className={stylex(styles.app)}>
-        <div className={stylex(styles.appShell)}>
-          <aside className={stylex(styles.sidebar)}>
-            <header className={stylex(styles.appHeader)}>
+        <div className={stylex(styles.appShell, railCollapsed && styles.appShellCollapsed)}>
+          {mobileMenuOpen && (
+            <button
+              type="button"
+              className={stylex(styles.mobileOverlay)}
+              aria-label="Close navigation menu"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+          )}
+          <aside
+            id="app-navigation"
+            className={stylex(styles.sidebar, mobileMenuOpen && styles.sidebarMobileOpen)}
+          >
+            <div className={stylex(styles.mobileCloseRow)}>
+              <button
+                type="button"
+                className={stylex(styles.hamburgerButton)}
+                aria-label="Close navigation menu"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <button
+              type="button"
+              className={stylex(styles.desktopRailToggle)}
+              aria-label={railCollapsed ? "Expand navigation" : "Minimize navigation"}
+              aria-expanded={!railCollapsed}
+              onClick={() => setRailCollapsed((current) => !current)}
+            >
+              {railCollapsed ? "›" : "‹ Minimize"}
+            </button>
+            <header
+              className={stylex(styles.appHeader, railCollapsed && styles.appHeaderCollapsed)}
+            >
               <div>
                 <h1>ftops</h1>
                 <p>Operations</p>
@@ -698,21 +854,54 @@ export default function App(): JSX.Element {
               </div>
             </header>
 
-            <nav className={stylex(styles.tabs)}>
-              {isSystemAdmin && <AppNavLink to="/plan-preview">Plan Preview</AppNavLink>}
-              {isSystemAdmin && <AppNavLink to="/events">Events Viewer</AppNavLink>}
-              {isSystemAdmin && <AppNavLink to="/demo">Demo</AppNavLink>}
-              {isWorkspaceAdmin && <AppNavLink to="/templates">Templates</AppNavLink>}
-              {isWorkspaceMember && <AppNavLink to="/customers">Customers</AppNavLink>}
-              {isWorkspaceMember && <AppNavLink to="/projects">Projects</AppNavLink>}
-              {isWorkspaceMember && <AppNavLink to="/tasks">Tasks</AppNavLink>}
-              {isWorkspaceAdmin && <AppNavLink to="/integrations">Integrations</AppNavLink>}
-              {isWorkspaceAdmin && <AppNavLink to="/ingest">Ingest</AppNavLink>}
-              {isSystemAdmin && <AppNavLink to="/workspaces">Workspaces</AppNavLink>}
-              {isWorkspaceAdmin && <AppNavLink to="/users">Users</AppNavLink>}
+            <nav className={stylex(styles.tabs, railCollapsed && styles.tabsCollapsed)}>
+              {isSystemAdmin && (
+                <AppNavLink to="/plan-preview" label="Plan Preview" collapsed={railCollapsed} />
+              )}
+              {isSystemAdmin && (
+                <AppNavLink to="/events" label="Events Viewer" collapsed={railCollapsed} />
+              )}
+              {isSystemAdmin && <AppNavLink to="/demo" label="Demo" collapsed={railCollapsed} />}
+              {isWorkspaceAdmin && (
+                <AppNavLink to="/templates" label="Templates" collapsed={railCollapsed} />
+              )}
+              {isWorkspaceMember && (
+                <AppNavLink to="/customers" label="Customers" collapsed={railCollapsed} />
+              )}
+              {isWorkspaceMember && (
+                <AppNavLink to="/projects" label="Projects" collapsed={railCollapsed} />
+              )}
+              {isWorkspaceMember && (
+                <AppNavLink to="/tasks" label="Tasks" collapsed={railCollapsed} />
+              )}
+              {isWorkspaceAdmin && (
+                <AppNavLink to="/integrations" label="Integrations" collapsed={railCollapsed} />
+              )}
+              {isWorkspaceAdmin && (
+                <AppNavLink to="/ingest" label="Ingest" collapsed={railCollapsed} />
+              )}
+              {isSystemAdmin && (
+                <AppNavLink to="/workspaces" label="Workspaces" collapsed={railCollapsed} />
+              )}
+              {isWorkspaceAdmin && (
+                <AppNavLink to="/users" label="Users" collapsed={railCollapsed} />
+              )}
             </nav>
           </aside>
           <main className={stylex(styles.mainContent)}>
+            <div className={stylex(styles.mobileTopbar)}>
+              <button
+                type="button"
+                className={stylex(styles.hamburgerButton)}
+                aria-label="Open navigation menu"
+                aria-controls="app-navigation"
+                aria-expanded={mobileMenuOpen}
+                onClick={() => setMobileMenuOpen(true)}
+              >
+                ☰
+              </button>
+              <span className={stylex(styles.mobileBrand)}>ftops</span>
+            </div>
             <DevMigrationBanner />
             <Outlet />
           </main>
@@ -722,13 +911,27 @@ export default function App(): JSX.Element {
   );
 }
 
-function AppNavLink({ to, children }: { to: string; children: ReactNode }) {
+function AppNavLink({ to, label, collapsed }: { to: string; label: string; collapsed: boolean }) {
   return (
     <NavLink
-      className={({ isActive }) => stylex(styles.tabButton, isActive && styles.tabButtonActive)}
+      className={({ isActive }) =>
+        stylex(
+          styles.tabButton,
+          collapsed && styles.tabButtonCollapsed,
+          isActive && styles.tabButtonActive
+        )
+      }
       to={to}
+      title={collapsed ? label : undefined}
+      aria-label={collapsed ? label : undefined}
     >
-      {children}
+      <span className={stylex(collapsed && styles.tabLabelCollapsed)}>{label}</span>
+      <span
+        aria-hidden="true"
+        className={stylex(styles.tabInitial, collapsed && styles.tabInitialVisible)}
+      >
+        {label.charAt(0)}
+      </span>
     </NavLink>
   );
 }
