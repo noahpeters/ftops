@@ -44,7 +44,7 @@ jobs:
       - name: Check remote migrations
         run: npm run check:remote-migrations
       - name: Deploy API
-        run: npm run deploy:api
+        run: npm --workspace apps/api run deploy:unsafe
 
   deploy-webhooks:
     runs-on: ubuntu-latest
