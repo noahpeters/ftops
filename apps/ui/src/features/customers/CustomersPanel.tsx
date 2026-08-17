@@ -6,6 +6,7 @@ import stylex from "~/lib/stylex";
 import { buildUrl } from "@/lib/api";
 import { listUsers, type WorkspaceUser } from "../users/api";
 import { TaskEditorDrawer } from "../tasks/TaskDetailDrawer";
+import { RightSideEditor } from "../../components/RightSideEditor";
 import { colors, radius } from "../../theme/tokens.stylex";
 import {
   addContact,
@@ -236,6 +237,7 @@ export function CustomersPanel({
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [creatingContact, setCreatingContact] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(false);
+  const [customerHasChanges, setCustomerHasChanges] = useState(false);
   const [creatingNote, setCreatingNote] = useState(false);
   const [creatingOpportunity, setCreatingOpportunity] = useState(false);
   const [editingOpportunityId, setEditingOpportunityId] = useState<string | null>(null);
@@ -549,32 +551,29 @@ export function CustomersPanel({
                     <div className={stylex(styles.actions)}>
                       <b>Customer</b>
                       {!editingCustomer && (
-                        <button onClick={() => setEditingCustomer(true)}>Edit customer</button>
+                        <button
+                          onClick={() => {
+                            setCustomerHasChanges(false);
+                            setEditingCustomer(true);
+                          }}
+                        >
+                          Edit customer
+                        </button>
                       )}
                     </div>
-                    {editingCustomer ? (
-                      <CustomerForm
-                        customer={detail.customer}
-                        onSave={saveCustomer}
-                        onCancel={() => setEditingCustomer(false)}
-                      />
-                    ) : (
-                      <>
-                        <p>Name: {detail.customer.display_name}</p>
-                        <p>Status: {detail.customer.status}</p>
-                        <p>Lead source: {detail.customer.lead_source || "—"}</p>
-                        <p>
-                          {analyzingFollowUp
-                            ? "Analyzing follow-up…"
-                            : followUpLabel(
-                                detail.customer.next_follow_up_at,
-                                detail.customer.follow_up_urgency
-                              )}
-                        </p>
-                        {detail.customer.follow_up_reason && (
-                          <p className={stylex(styles.muted)}>{detail.customer.follow_up_reason}</p>
-                        )}
-                      </>
+                    <p>Name: {detail.customer.display_name}</p>
+                    <p>Status: {detail.customer.status}</p>
+                    <p>Lead source: {detail.customer.lead_source || "—"}</p>
+                    <p>
+                      {analyzingFollowUp
+                        ? "Analyzing follow-up…"
+                        : followUpLabel(
+                            detail.customer.next_follow_up_at,
+                            detail.customer.follow_up_urgency
+                          )}
+                    </p>
+                    {detail.customer.follow_up_reason && (
+                      <p className={stylex(styles.muted)}>{detail.customer.follow_up_reason}</p>
                     )}
                   </div>
                   <div className={stylex(styles.summaryCard)}>
@@ -734,6 +733,22 @@ export function CustomersPanel({
                   onClose={() => setActiveTaskId(null)}
                   onUpdated={reloadDetail}
                 />
+              )}
+              {editingCustomer && (
+                <RightSideEditor
+                  eyebrow="Customer"
+                  title={`Edit ${detail.customer.display_name}`}
+                  formId="customer-editor-form"
+                  saveDisabled={!customerHasChanges}
+                  onCancel={() => setEditingCustomer(false)}
+                >
+                  <CustomerForm
+                    id="customer-editor-form"
+                    customer={detail.customer}
+                    onSave={saveCustomer}
+                    onDirtyChange={setCustomerHasChanges}
+                  />
+                </RightSideEditor>
               )}
               {activeTab === "contacts" && (
                 <div className={stylex(styles.section)} role="tabpanel">
@@ -1058,23 +1073,31 @@ function formatBudget(cents: number) {
 }
 type CustomerInput = { displayName: string; status: string; leadSource: string };
 function CustomerForm({
+  id,
   customer,
   onSave,
-  onCancel,
+  onDirtyChange,
 }: {
+  id: string;
   customer: CustomerDetail["customer"];
   onSave: (input: CustomerInput) => void;
-  onCancel: () => void;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const [displayName, setDisplayName] = useState(customer.display_name);
   const [status, setStatus] = useState(customer.status);
   const [leadSource, setLeadSource] = useState(customer.lead_source || "");
+  const hasChanges =
+    displayName.trim() !== customer.display_name ||
+    status !== customer.status ||
+    leadSource.trim() !== (customer.lead_source || "");
+  useEffect(() => onDirtyChange(hasChanges), [hasChanges, onDirtyChange]);
   return (
     <form
+      id={id}
       className={stylex(styles.form)}
       onSubmit={(event) => {
         event.preventDefault();
-        onSave({ displayName, status, leadSource });
+        onSave({ displayName: displayName.trim(), status, leadSource: leadSource.trim() });
       }}
     >
       <label>
@@ -1108,12 +1131,6 @@ function CustomerForm({
           onChange={(e) => setLeadSource(e.target.value)}
         />
       </label>
-      <div className={stylex(styles.actions)}>
-        <button type="submit">Save customer</button>
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
     </form>
   );
 }

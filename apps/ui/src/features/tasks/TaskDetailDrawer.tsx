@@ -20,41 +20,11 @@ import {
 } from "./api";
 import { buildUrl } from "@/lib/api";
 import { listCustomers, type CustomerSummary } from "@/features/customers/api";
+import { RightSideEditor } from "@/components/RightSideEditor";
 
 const STATUS_OPTIONS = ["scheduled", "blocked", "in progress", "done", "canceled"];
 
 const styles = stylex.create({
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    backgroundColor: "rgba(47, 33, 24, 0.18)",
-  },
-  drawer: {
-    position: "fixed",
-    top: 0,
-    right: 0,
-    height: "100vh",
-    width: "420px",
-    maxWidth: "92vw",
-    backgroundColor: colors.surface,
-    borderLeft: `1px solid ${colors.border}`,
-    padding: "20px 18px",
-    display: "flex",
-    flexDirection: "column",
-    gap: spacing.md,
-    overflowY: "auto",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: spacing.sm,
-  },
-  title: {
-    fontSize: "20px",
-    lineHeight: "1.4",
-    fontWeight: 600,
-  },
   label: {
     fontSize: "12px",
     lineHeight: "1.4",
@@ -403,164 +373,149 @@ export function TaskDetailDrawer({
   }
 
   return (
-    <>
-      <div className={stylex(styles.overlay)} onClick={onClose} />
-      <aside className={stylex(styles.drawer)}>
-        <div className={stylex(styles.header)}>
-          <div>
-            <div className={stylex(styles.label)}>Task</div>
-            <div className={stylex(styles.title)}>{task.title}</div>
-          </div>
-          <div className={stylex(styles.actions)}>
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={!hasChanges || saving}
-            >
-              {saving ? "Saving..." : "Save"}
-            </button>
-            <button type="button" onClick={onClose} disabled={saving}>
-              Cancel
-            </button>
-          </div>
+    <RightSideEditor
+      eyebrow="Task"
+      title={task.title}
+      onSave={() => void handleSave()}
+      onCancel={onClose}
+      saveDisabled={!hasChanges}
+      saving={saving}
+    >
+      <section className={stylex(styles.section)}>
+        <div className={stylex(styles.label)}>Fields</div>
+        <div className={stylex(styles.field)}>
+          <label className={stylex(styles.label)}>Title</label>
+          <input
+            className={stylex(styles.input)}
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+          />
         </div>
-
-        <section className={stylex(styles.section)}>
-          <div className={stylex(styles.label)}>Fields</div>
-          <div className={stylex(styles.field)}>
-            <label className={stylex(styles.label)}>Title</label>
-            <input
-              className={stylex(styles.input)}
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </div>
-          <div className={stylex(styles.field)}>
-            <label className={stylex(styles.label)}>Description</label>
-            <textarea
-              className={stylex(styles.textarea)}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </div>
-          <div className={stylex(styles.row)}>
-            <div className={stylex(styles.field)}>
-              <label className={stylex(styles.label)}>Status</label>
-              <select value={status} onChange={(event) => setStatus(event.target.value)}>
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className={stylex(styles.field)}>
-              <label className={stylex(styles.label)}>Assigned</label>
-              <select
-                className={stylex(styles.input)}
-                value={assignedTo}
-                onChange={(event) => setAssignedTo(event.target.value)}
-              >
-                <option value="">Unassigned</option>
-                {users.map((user) => (
-                  <option key={user.user_id} value={user.user_id}>
-                    {user.name} ({user.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className={stylex(styles.row)}>
-            <div className={stylex(styles.field)}>
-              <label className={stylex(styles.label)}>Due date and time</label>
-              <input
-                className={stylex(styles.input)}
-                type="datetime-local"
-                value={dueDate}
-                onChange={(event) => setDueDate(event.target.value)}
-              />
-            </div>
-            <div className={stylex(styles.field)}>
-              <label className={stylex(styles.label)}>Completed</label>
-              <span className={stylex(styles.metaText)}>{completedAt}</span>
-            </div>
-          </div>
-          <div className={stylex(styles.row)}>
-            <div className={stylex(styles.field)}>
-              <label className={stylex(styles.label)}>Template ID</label>
-              <span className={stylex(styles.metaText)}>
-                {task.template_id ?? task.template_key ?? "—"}
-              </span>
-            </div>
-            <div className={stylex(styles.field)}>
-              <label className={stylex(styles.label)}>Customer</label>
-              <select
-                className={stylex(styles.input)}
-                value={customerId}
-                onChange={(event) => setCustomerId(event.target.value)}
-              >
-                <option value="">Unassigned</option>
-                {buildCustomerOptions(customers).map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </section>
-
-        <section className={stylex(styles.section)}>
-          <div className={stylex(styles.label)}>Notes</div>
-          {noteError && <span className={stylex(styles.metaText)}>{noteError}</span>}
-          <div className={stylex(styles.list)}>
-            {notes.length === 0 && <span className={stylex(styles.metaText)}>No notes yet.</span>}
-            {notes.map((note) => (
-              <div key={note.id} className={stylex(styles.noteCard)}>
-                <div className={stylex(styles.noteMeta)}>
-                  {note.author_email} · {note.created_at}
-                </div>
-                <div>{note.body}</div>
-              </div>
-            ))}
-          </div>
+        <div className={stylex(styles.field)}>
+          <label className={stylex(styles.label)}>Description</label>
           <textarea
             className={stylex(styles.textarea)}
-            value={noteDraft}
-            onChange={(event) => setNoteDraft(event.target.value)}
-            placeholder="Add a note..."
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
           />
-          <button type="button" onClick={() => void handleAddNote()}>
-            Add note
-          </button>
-        </section>
-
-        <section className={stylex(styles.section)}>
-          <div className={stylex(styles.label)}>Files</div>
-          {fileError && <span className={stylex(styles.metaText)}>{fileError}</span>}
-          <div className={stylex(styles.list)}>
-            {files.length === 0 && <span className={stylex(styles.metaText)}>No files yet.</span>}
-            {files.map((file) => (
-              <div key={file.id} className={stylex(styles.fileRow)}>
-                <div className={stylex(styles.fileMeta)}>
-                  <strong>{file.original_filename}</strong>
-                  <span>{formatFileMeta(file)}</span>
-                </div>
-                <div className={stylex(styles.actions)}>
-                  <button type="button" onClick={() => void handleDownload(file)}>
-                    Download
-                  </button>
-                  <button type="button" onClick={() => void handleDelete(file.id)}>
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
+        </div>
+        <div className={stylex(styles.row)}>
+          <div className={stylex(styles.field)}>
+            <label className={stylex(styles.label)}>Status</label>
+            <select value={status} onChange={(event) => setStatus(event.target.value)}>
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </div>
-          <input type="file" onChange={handleUpload} />
-        </section>
-      </aside>
-    </>
+          <div className={stylex(styles.field)}>
+            <label className={stylex(styles.label)}>Assigned</label>
+            <select
+              className={stylex(styles.input)}
+              value={assignedTo}
+              onChange={(event) => setAssignedTo(event.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {users.map((user) => (
+                <option key={user.user_id} value={user.user_id}>
+                  {user.name} ({user.email})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className={stylex(styles.row)}>
+          <div className={stylex(styles.field)}>
+            <label className={stylex(styles.label)}>Due date and time</label>
+            <input
+              className={stylex(styles.input)}
+              type="datetime-local"
+              value={dueDate}
+              onChange={(event) => setDueDate(event.target.value)}
+            />
+          </div>
+          <div className={stylex(styles.field)}>
+            <label className={stylex(styles.label)}>Completed</label>
+            <span className={stylex(styles.metaText)}>{completedAt}</span>
+          </div>
+        </div>
+        <div className={stylex(styles.row)}>
+          <div className={stylex(styles.field)}>
+            <label className={stylex(styles.label)}>Template ID</label>
+            <span className={stylex(styles.metaText)}>
+              {task.template_id ?? task.template_key ?? "—"}
+            </span>
+          </div>
+          <div className={stylex(styles.field)}>
+            <label className={stylex(styles.label)}>Customer</label>
+            <select
+              className={stylex(styles.input)}
+              value={customerId}
+              onChange={(event) => setCustomerId(event.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {buildCustomerOptions(customers).map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section className={stylex(styles.section)}>
+        <div className={stylex(styles.label)}>Notes</div>
+        {noteError && <span className={stylex(styles.metaText)}>{noteError}</span>}
+        <div className={stylex(styles.list)}>
+          {notes.length === 0 && <span className={stylex(styles.metaText)}>No notes yet.</span>}
+          {notes.map((note) => (
+            <div key={note.id} className={stylex(styles.noteCard)}>
+              <div className={stylex(styles.noteMeta)}>
+                {note.author_email} · {note.created_at}
+              </div>
+              <div>{note.body}</div>
+            </div>
+          ))}
+        </div>
+        <textarea
+          className={stylex(styles.textarea)}
+          value={noteDraft}
+          onChange={(event) => setNoteDraft(event.target.value)}
+          placeholder="Add a note..."
+        />
+        <button type="button" onClick={() => void handleAddNote()}>
+          Add note
+        </button>
+      </section>
+
+      <section className={stylex(styles.section)}>
+        <div className={stylex(styles.label)}>Files</div>
+        {fileError && <span className={stylex(styles.metaText)}>{fileError}</span>}
+        <div className={stylex(styles.list)}>
+          {files.length === 0 && <span className={stylex(styles.metaText)}>No files yet.</span>}
+          {files.map((file) => (
+            <div key={file.id} className={stylex(styles.fileRow)}>
+              <div className={stylex(styles.fileMeta)}>
+                <strong>{file.original_filename}</strong>
+                <span>{formatFileMeta(file)}</span>
+              </div>
+              <div className={stylex(styles.actions)}>
+                <button type="button" onClick={() => void handleDownload(file)}>
+                  Download
+                </button>
+                <button type="button" onClick={() => void handleDelete(file.id)}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <input type="file" onChange={handleUpload} />
+      </section>
+    </RightSideEditor>
   );
 }
 
