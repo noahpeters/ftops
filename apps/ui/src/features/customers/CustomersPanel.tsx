@@ -236,6 +236,7 @@ export function CustomersPanel({
   const [matches, setMatches] = useState<Array<{ id: string; displayName: string }>>([]);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [creatingContact, setCreatingContact] = useState(false);
+  const [contactCanSave, setContactCanSave] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(false);
   const [customerHasChanges, setCustomerHasChanges] = useState(false);
   const [creatingNote, setCreatingNote] = useState(false);
@@ -442,6 +443,7 @@ export function CustomersPanel({
     if (r.ok) setMatches((r.data ?? []) as Array<{ id: string; displayName: string }>);
     else setError(r.text);
   }
+  const editingContact = detail?.contacts.find((contact) => contact.id === editingContactId);
   return (
     <section className={stylex(styles.panel)}>
       <div className={stylex(styles.titleRow)}>
@@ -622,42 +624,41 @@ export function CustomersPanel({
               {activeTab === "contacts" && (
                 <div className={stylex(styles.section)} role="tabpanel">
                   <h4>Contacts</h4>
-                  {!creatingContact && (
-                    <button onClick={() => setCreatingContact(true)}>Add contact</button>
+                  {!creatingContact && !editingContactId && (
+                    <button
+                      onClick={() => {
+                        setContactCanSave(false);
+                        setCreatingContact(true);
+                      }}
+                    >
+                      Add contact
+                    </button>
                   )}
-                  {creatingContact && (
-                    <ContactForm
-                      onSave={(input) => saveContact(input)}
-                      onCancel={() => setCreatingContact(false)}
-                    />
-                  )}
-                  {detail.contacts.map((contact) =>
-                    editingContactId === contact.id ? (
-                      <ContactForm
-                        key={contact.id}
-                        contact={contact}
-                        onSave={(input) => saveContact(input, contact.id)}
-                        onCancel={() => setEditingContactId(null)}
-                      />
-                    ) : (
-                      <div key={contact.id} className={stylex(styles.contact)}>
-                        <b>{contact.display_name}</b>
-                        {contact.is_primary ? " · Primary" : ""}
-                        <div>
-                          {contact.role || "Contact"} · {contact.status}
-                        </div>
-                        <div>
-                          {contact.email || "No email"} · {contact.phone || "No phone"}
-                        </div>
-                        <div className={stylex(styles.actions)}>
-                          <button onClick={() => setEditingContactId(contact.id)}>Edit</button>
-                          {contact.status !== "archived" && (
-                            <button onClick={() => removeContact(contact)}>Archive</button>
-                          )}
-                        </div>
+                  {detail.contacts.map((contact) => (
+                    <div key={contact.id} className={stylex(styles.contact)}>
+                      <b>{contact.display_name}</b>
+                      {contact.is_primary ? " · Primary" : ""}
+                      <div>
+                        {contact.role || "Contact"} · {contact.status}
                       </div>
-                    )
-                  )}
+                      <div>
+                        {contact.email || "No email"} · {contact.phone || "No phone"}
+                      </div>
+                      <div className={stylex(styles.actions)}>
+                        <button
+                          onClick={() => {
+                            setContactCanSave(false);
+                            setEditingContactId(contact.id);
+                          }}
+                        >
+                          Edit
+                        </button>
+                        {contact.status !== "archived" && (
+                          <button onClick={() => removeContact(contact)}>Archive</button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
               {activeTab === "opportunities" && (
@@ -752,6 +753,26 @@ export function CustomersPanel({
                     customer={detail.customer}
                     onSave={saveCustomer}
                     onDirtyChange={setCustomerHasChanges}
+                  />
+                </RightSideEditor>
+              )}
+              {(creatingContact || editingContact) && (
+                <RightSideEditor
+                  eyebrow="Contact"
+                  title={editingContact ? `Edit ${editingContact.display_name}` : "Add contact"}
+                  formId="customer-contact-editor-form"
+                  saveDisabled={!contactCanSave}
+                  saveLabel={editingContact ? "Save" : "Add contact"}
+                  onCancel={() => {
+                    setCreatingContact(false);
+                    setEditingContactId(null);
+                  }}
+                >
+                  <ContactForm
+                    id="customer-contact-editor-form"
+                    contact={editingContact}
+                    onSave={(input) => saveContact(input, editingContact?.id)}
+                    onCanSaveChange={setContactCanSave}
                   />
                 </RightSideEditor>
               )}
@@ -1328,13 +1349,15 @@ type ContactInput = {
   isPrimary: boolean;
 };
 function ContactForm({
+  id,
   contact,
   onSave,
-  onCancel,
+  onCanSaveChange,
 }: {
+  id: string;
   contact?: Contact;
   onSave: (input: ContactInput) => void;
-  onCancel: () => void;
+  onCanSaveChange: (canSave: boolean) => void;
 }) {
   const [firstName, setFirstName] = useState(contact?.first_name || "");
   const [lastName, setLastName] = useState(contact?.last_name || "");
@@ -1343,12 +1366,32 @@ function ContactForm({
   const [role, setRole] = useState(contact?.role || "");
   const [status, setStatus] = useState<string>(contact?.status || "active");
   const [isPrimary, setIsPrimary] = useState(Boolean(contact?.is_primary));
+  const hasName = Boolean(firstName.trim() || lastName.trim());
+  const hasChanges = contact
+    ? firstName.trim() !== (contact.first_name || "") ||
+      lastName.trim() !== (contact.last_name || "") ||
+      email.trim() !== (contact.email || "") ||
+      phone.trim() !== (contact.phone || "") ||
+      role.trim() !== (contact.role || "") ||
+      status !== contact.status ||
+      isPrimary !== Boolean(contact.is_primary)
+    : hasName;
+  useEffect(() => onCanSaveChange(hasName && hasChanges), [hasChanges, hasName, onCanSaveChange]);
   return (
     <form
+      id={id}
       className={stylex(styles.form)}
       onSubmit={(event) => {
         event.preventDefault();
-        onSave({ firstName, lastName, email, phone, role, status, isPrimary });
+        onSave({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          role: role.trim(),
+          status,
+          isPrimary,
+        });
       }}
     >
       <input
@@ -1400,12 +1443,6 @@ function ContactForm({
         />{" "}
         Primary contact
       </label>
-      <div className={stylex(styles.actions)}>
-        <button type="submit">Save contact</button>
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
     </form>
   );
 }
