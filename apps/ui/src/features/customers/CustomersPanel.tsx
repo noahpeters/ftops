@@ -151,7 +151,7 @@ const styles = stylex.create({
     display: "flex",
     gap: "6px",
     flexWrap: "wrap",
-    padding: "10px 0 4px",
+    padding: "10px 0 0",
     borderBottom: `1px solid ${colors.border}`,
     "@media (max-width: 760px)": {
       display: "none",
@@ -177,16 +177,19 @@ const styles = stylex.create({
     font: "inherit",
   },
   detailTab: {
-    border: "none",
-    borderBottom: "3px solid transparent",
-    borderRadius: 0,
-    padding: "8px 10px",
+    border: `1px solid ${colors.border}`,
+    borderRadius: `${radius.sm} ${radius.sm} 0 0`,
+    padding: "6px 8px 8px",
     color: colors.textMuted,
     cursor: "pointer",
   },
   detailTabActive: {
     color: colors.text,
-    borderBottomColor: colors.accent,
+    borderBottom: "none",
+    boxShadow: "none",
+    marginBottom: "-1px",
+    padding: "8px 10px",
+    backgroundColor: colors.surface,
     fontWeight: 600,
   },
   tabBadge: {
