@@ -127,7 +127,12 @@ const styles = stylex.create({
     fontSize: "12px",
     marginRight: "6px",
   },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "12px" },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+    gap: "12px",
+    padding: "8px",
+  },
   section: { borderTop: `1px solid ${colors.border}`, paddingTop: "12px", marginTop: "16px" },
   table: { width: "100%", borderCollapse: "collapse" },
   cell: { padding: "7px", borderBottom: `1px solid ${colors.border}`, textAlign: "left" },
