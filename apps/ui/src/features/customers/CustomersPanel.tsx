@@ -131,6 +131,20 @@ const styles = stylex.create({
     borderBottomColor: colors.accent,
     fontWeight: 600,
   },
+  tabBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: "20px",
+    height: "20px",
+    marginLeft: "6px",
+    padding: "0 6px",
+    borderRadius: "999px",
+    backgroundColor: colors.neutralBg,
+    color: colors.neutralText,
+    fontSize: "11px",
+    fontWeight: 600,
+  },
   summaryCard: {
     border: `1px solid ${colors.border}`,
     borderRadius: radius.sm,
@@ -517,6 +531,15 @@ export function CustomersPanel({
                     onClick={() => setActiveTab(tab.id)}
                   >
                     {tab.label}
+                    {tab.id === "tasks" && (
+                      <span className={stylex(styles.tabBadge)}>
+                        {
+                          detail.tasks.filter(
+                            (task) => task.status !== "done" && task.status !== "canceled"
+                          ).length
+                        }
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -580,22 +603,6 @@ export function CustomersPanel({
                       .map((file) => (
                         <CustomerFileLink key={file.id} file={file} compact />
                       ))}
-                  </div>
-                  <div className={stylex(styles.summaryCard)}>
-                    <b>Tasks</b>
-                    <p>
-                      {
-                        detail.tasks.filter(
-                          (task) => task.status !== "done" && task.status !== "canceled"
-                        ).length
-                      }{" "}
-                      open
-                    </p>
-                    {detail.tasks.slice(0, 3).map((task) => (
-                      <div key={task.id} className={stylex(styles.muted)}>
-                        {task.title} · {task.due_at ? formatDateTime(task.due_at) : "No due date"}
-                      </div>
-                    ))}
                   </div>
                   <div className={stylex(styles.summaryCard)}>
                     <b>Opportunities</b>
