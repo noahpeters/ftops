@@ -61,7 +61,7 @@ const styles = stylex.create({
     flexDirection: "column",
     borderRight: `1px solid ${colors.border}`,
     backgroundColor: colors.surface,
-    overflowY: "auto",
+    overflow: "hidden",
     "@media (max-width: 760px)": {
       position: "fixed",
       zIndex: 30,
@@ -85,6 +85,7 @@ const styles = stylex.create({
   appHeader: {
     display: "flex",
     flexDirection: "column",
+    flexShrink: 0,
     gap: spacing.lg,
     padding: "24px 20px 18px",
     borderBottom: `1px solid ${colors.border}`,
@@ -175,6 +176,9 @@ const styles = stylex.create({
   tabs: {
     display: "flex",
     flexDirection: "column",
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
     gap: spacing.sm,
     padding: "16px 12px",
   },
@@ -187,6 +191,7 @@ const styles = stylex.create({
     },
   },
   logoutSection: {
+    flexShrink: 0,
     marginTop: "auto",
     padding: "16px 12px",
     borderTop: `1px solid ${colors.border}`,
