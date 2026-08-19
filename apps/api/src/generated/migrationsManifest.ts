@@ -32,7 +32,8 @@ export const MIGRATIONS = [
   "0030_daily_summary_deliveries.sql",
   "0031_quo_contact_sync.sql",
   "0032_customer_follow_up_guidance.sql",
-  "0033_user_preferences.sql"
+  "0033_user_preferences.sql",
+  "0034_customer_email_ingestion.sql"
 ] as const;
-export const LATEST_MIGRATION = "0033_user_preferences.sql";
-export const MIGRATIONS_COUNT = 33;
+export const LATEST_MIGRATION = "0034_customer_email_ingestion.sql";
+export const MIGRATIONS_COUNT = 34;

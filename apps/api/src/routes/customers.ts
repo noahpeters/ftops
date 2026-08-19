@@ -869,6 +869,18 @@ async function loadDetail(env: Env, workspaceId: string, id: string) {
       workspaceId,
       id
     ),
+    emailNoteCandidates: await listRows(
+      env,
+      `SELECT c.*,i.original_sender_email,i.original_sender_name,i.subject AS email_subject,
+              i.sent_at AS email_sent_at,i.received_at AS email_received_at,
+              (SELECT COUNT(*) FROM customer_email_attachments a WHERE a.ingestion_id=i.id) AS attachment_count
+       FROM customer_email_note_candidates c
+       JOIN customer_email_ingestions i ON i.id=c.ingestion_id
+       WHERE c.workspace_id=? AND c.customer_id=? AND c.status='pending'
+       ORDER BY c.created_at DESC`,
+      workspaceId,
+      id
+    ),
     estimates: await listRows(
       env,
       `SELECT * FROM estimates WHERE workspace_id=? AND customer_id=? ORDER BY transaction_date DESC`,

@@ -5,6 +5,7 @@ export type Env = {
   };
   EVENT_QUEUE: Queue;
   R2_TASK_FILES_BUCKET: R2Bucket;
+  R2_CUSTOMER_EMAILS_BUCKET: R2Bucket;
   R2_TASK_FILES_BUCKET_NAME?: string;
   R2_TASK_FILES_PUBLIC_HOST?: string;
   R2_ACCOUNT_ID?: string;
@@ -24,6 +25,7 @@ export type Env = {
   DAILY_SUMMARY_EMAIL_API_URL?: string;
   APP_BASE_URL?: string;
   QUO_API_BASE_URL?: string;
+  EMAIL_INGESTION_SECRET?: string;
 };
 
 export type EventQueuePayload = {

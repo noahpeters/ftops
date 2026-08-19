@@ -47,7 +47,8 @@
   "type": "commonjs",
   "dependencies": {
     "@ftops/webhooks": "file:../../packages/webhooks",
-    "luxon": "^3.7.2"
+    "luxon": "^3.7.2",
+    "postal-mime": "^2.7.6"
   },
   "bugs": {
     "url": "https://github.com/noahpeters/ftops/issues"

@@ -1,0 +1,17 @@
+name = "ftops-email"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+workers_dev = false
+
+[[services]]
+binding = "API"
+service = "ftops"
+
+[observability]
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+# Configure Email Routing on the dedicated inbound subdomain to send the
+# workspace mailbox address to this Worker. EMAIL_INGESTION_SECRET must match
+# the secret on the FTOPS API Worker.

@@ -21,6 +21,7 @@ import {
   completeCustomerFileUpload,
   qboAction,
   qboSearch,
+  reviewEmailNoteCandidate,
   updateContact,
   updateCustomer,
   updateOpportunity,
@@ -323,6 +324,7 @@ export function CustomersPanel({
   const [editingOpportunityId, setEditingOpportunityId] = useState<string | null>(null);
   const [savingNote, setSavingNote] = useState(false);
   const [savingEditor, setSavingEditor] = useState(false);
+  const [reviewingEmailCandidateId, setReviewingEmailCandidateId] = useState<string | null>(null);
   const [analyzingFollowUp, setAnalyzingFollowUp] = useState(false);
   const [activeTab, setActiveTab] = useState<CustomerTab>("summary");
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -554,6 +556,15 @@ export function CustomersPanel({
     const loaded = await getCustomer(customerId);
     if (loaded.ok) setDetail(loaded.data);
     else setError(loaded.text);
+  }
+  async function reviewEmailCandidate(candidateId: string, action: "apply" | "dismiss") {
+    setReviewingEmailCandidateId(candidateId);
+    setError(null);
+    const result = await reviewEmailNoteCandidate(candidateId, action);
+    setReviewingEmailCandidateId(null);
+    if (!result.ok) return setError(result.text || "Could not review the email suggestion.");
+    await reloadDetail();
+    if (action === "apply") await refresh();
   }
   async function saveOpportunity(input: OpportunityInput, opportunityId?: string) {
     if (!customerId) return;
@@ -1010,6 +1021,57 @@ export function CustomersPanel({
               )}
               {activeTab === "summary" && (
                 <div className={stylex(styles.section)} role="tabpanel">
+                  {(detail.emailNoteCandidates?.length ?? 0) > 0 && (
+                    <section aria-label="Email note suggestions">
+                      <h4>
+                        Email note suggestions
+                        <span className={stylex(styles.tabBadge)}>
+                          {detail.emailNoteCandidates?.length ?? 0}
+                        </span>
+                      </h4>
+                      <p className={stylex(styles.muted)}>
+                        Review information extracted from forwarded customer emails before it is
+                        added to Notes.
+                      </p>
+                      {(detail.emailNoteCandidates ?? []).map((candidate) => (
+                        <article key={candidate.id} className={stylex(styles.note)}>
+                          <b>{candidate.proposed_subject}</b>
+                          <div className={stylex(styles.muted)}>
+                            {candidate.category} · {Math.round(candidate.confidence * 100)}%
+                            confidence
+                            {candidate.original_sender_email
+                              ? ` · from ${candidate.original_sender_name || candidate.original_sender_email}`
+                              : ""}
+                            {candidate.attachment_count
+                              ? ` · ${candidate.attachment_count} attachment${candidate.attachment_count === 1 ? "" : "s"}`
+                              : ""}
+                          </div>
+                          <div className={stylex(styles.markdown)}>
+                            <Markdown>{candidate.proposed_body}</Markdown>
+                          </div>
+                          {candidate.evidence && (
+                            <p className={stylex(styles.muted)}>Evidence: {candidate.evidence}</p>
+                          )}
+                          <div className={stylex(styles.actions)}>
+                            <button
+                              type="button"
+                              disabled={reviewingEmailCandidateId === candidate.id}
+                              onClick={() => void reviewEmailCandidate(candidate.id, "apply")}
+                            >
+                              Apply to notes
+                            </button>
+                            <button
+                              type="button"
+                              disabled={reviewingEmailCandidateId === candidate.id}
+                              onClick={() => void reviewEmailCandidate(candidate.id, "dismiss")}
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                    </section>
+                  )}
                   <div className={stylex(styles.actions)}>
                     <h4>Recent notes</h4>
                     {!creatingNote && <button onClick={openNoteEditor}>Add note</button>}

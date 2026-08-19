@@ -51,6 +51,7 @@ function makeEnv(data: {
     DB: db as D1Database,
     EVENT_QUEUE: {} as Queue,
     R2_TASK_FILES_BUCKET: {} as R2Bucket,
+    R2_CUSTOMER_EMAILS_BUCKET: {} as R2Bucket,
   };
 }
 

@@ -5,8 +5,15 @@ import { processQuickbooksWebhook } from "./quickbooksWebhook";
 import { processQuickbooksBootstrap } from "./quickbooksBootstrap";
 import { processQuoContactSync } from "../services/quo";
 import { processCustomerNoteFollowUpAnalysis } from "../services/customerFollowUp";
+import { processCustomerEmailIngestion } from "../services/customerEmailIngestion";
 
 export async function processEventMessage(msg: EventQueuePayload, env: Env): Promise<void> {
+  if (msg.source === "ftops" && msg.type === "customer.email.extract") {
+    const ingestionId = (msg.payload as { ingestionId?: string } | undefined)?.ingestionId;
+    if (!ingestionId) throw new Error("customer_email_ingestion_payload_invalid");
+    await processCustomerEmailIngestion(env, ingestionId);
+    return;
+  }
   if (msg.source === "ftops" && msg.type === "quo.contact.sync") {
     await processQuoContactSync(
       env,

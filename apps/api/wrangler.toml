@@ -41,6 +41,10 @@ queue = "events-shopify-ingest"
 binding = "R2_TASK_FILES_BUCKET"
 bucket_name = "ftops-task-files"
 
+[[r2_buckets]]
+binding = "R2_CUSTOMER_EMAILS_BUCKET"
+bucket_name = "ftops-customer-emails"
+
 [observability]
 [observability.logs]
 enabled = true
@@ -62,4 +66,5 @@ DAILY_SUMMARY_FROM_NAME = "FTOPS"
 APP_BASE_URL = "https://ops.from-trees.com"
 # INTEGRATIONS_MASTER_KEY should be set via `wrangler secret` or .dev.vars
 # QBO_CLIENT_ID, QBO_CLIENT_SECRET, QBO_OAUTH_STATE_SECRET, and RESEND_API_KEY must be Worker secrets.
+# EMAIL_INGESTION_SECRET must be the same Worker secret on the API and inbound email Worker.
 # Quo API keys are encrypted per-workspace integration secrets. QUO_API_BASE_URL is test-only and defaults to https://api.quo.com/v1.

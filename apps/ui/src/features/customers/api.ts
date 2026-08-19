@@ -48,6 +48,22 @@ export type CustomerDetail = {
   files: CustomerFile[];
   estimates: Array<Record<string, unknown>>;
   invoices: Array<Record<string, unknown>>;
+  emailNoteCandidates: EmailNoteCandidate[];
+};
+export type EmailNoteCandidate = {
+  id: string;
+  ingestion_id: string;
+  category: string;
+  proposed_subject: string;
+  proposed_body: string;
+  confidence: number;
+  evidence: string | null;
+  original_sender_email: string | null;
+  original_sender_name: string | null;
+  email_subject: string | null;
+  email_sent_at: string | null;
+  email_received_at: string;
+  attachment_count: number;
 };
 export type CustomerFile = {
   id: string;
@@ -206,6 +222,12 @@ export function addNote(id: string, input: Record<string, unknown>) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
+}
+export function reviewEmailNoteCandidate(candidateId: string, action: "apply" | "dismiss") {
+  return fetchJson<{ applied?: boolean; dismissed?: boolean; activityId?: string }>(
+    buildUrl(`/customer-emails/candidates/${candidateId}/${action}`),
+    { method: "POST" }
+  );
 }
 export function streamCustomerFollowUp(
   customerId: string,
