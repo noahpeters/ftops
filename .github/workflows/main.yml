@@ -95,6 +95,15 @@ jobs:
           node -e "if (!process.env.EMAIL_INGESTION_SECRET) throw new Error('EMAIL_INGESTION_SECRET is required'); require('node:fs').writeFileSync(process.env.RUNNER_TEMP + '/ftops-email-secrets.json', JSON.stringify({ EMAIL_INGESTION_SECRET: process.env.EMAIL_INGESTION_SECRET }))"
           npm --workspace apps/email exec -- wrangler secret bulk "$RUNNER_TEMP/ftops-email-secrets.json"
           node -e "require('node:fs').unlinkSync(process.env.RUNNER_TEMP + '/ftops-email-secrets.json')"
+      - name: Configure workspace email mailbox
+        run: npm --workspace apps/api exec -- wrangler d1 execute ftops-db --remote --file=production/email-routing.sql
+      - name: Configure Email Routing subdomain
+        run: node apps/email/scripts/configure-production-routing.mjs
+        env:
+          EMAIL_ROUTING_ZONE_ID: 982a2f6326b49667cacb772402329374
+          EMAIL_ROUTING_SUBDOMAIN: ops.fromtrees.studio
+          EMAIL_ROUTING_ADDRESS: notes@ops.fromtrees.studio
+          EMAIL_ROUTING_WORKER: ftops-email
 
   deploy-ui:
     runs-on: ubuntu-latest

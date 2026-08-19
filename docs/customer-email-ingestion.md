@@ -4,8 +4,8 @@ FTOPS receives forwarded customer mail through a dedicated Cloudflare Email Rout
 
 ## Flow
 
-1. Route a dedicated subdomain such as `in.fromtrees.studio` through Cloudflare Email Routing.
-2. Create one or more workspace mailbox addresses, such as `notes@in.fromtrees.studio`, and route them to the `ftops-email` Worker.
+1. Route the dedicated `ops.fromtrees.studio` subdomain through Cloudflare Email Routing.
+2. Route `notes@ops.fromtrees.studio` to the `ftops-email` Worker.
 3. The Email Worker buffers the raw MIME once and sends it through the `API` service binding with a timestamped HMAC signature and the SMTP envelope addresses.
 4. The API resolves the envelope recipient to one workspace, then authorizes the envelope sender inside that workspace. Header `From` values are never used for authorization.
 5. FTOPS archives the raw `.eml` and attachments in the private `ftops-customer-emails` R2 bucket, matches the original sender to a Contact in the same workspace, and queues AI extraction.
@@ -36,4 +36,4 @@ The application endpoints are:
 
 The Email Worker can receive a local RFC 822 message through Wrangler’s email-event endpoint. The API integration suite covers workspace isolation, Contact matching, AI candidates, provenance, and attachment application.
 
-Email Routing activation remains a one-time post-deployment operation because the routing rule cannot target `ftops-email` until that Worker exists. Keep normal company email MX records unchanged; enable routing only for the dedicated inbound subdomain.
+GitHub Actions configures the workspace mailbox and authorized workspace users after deploying `ftops-email`, then idempotently enables routing only for `ops.fromtrees.studio` and upserts the `notes@ops.fromtrees.studio` Worker rule. The apex `fromtrees.studio` iCloud MX records are never changed.
