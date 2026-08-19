@@ -46,3 +46,26 @@ WHERE workspace_id = 'default'
 ON CONFLICT(workspace_id, email) DO UPDATE SET
   enabled = 1,
   updated_at = excluded.updated_at;
+
+-- Shared operational mailboxes may forward on behalf of the default workspace
+-- without corresponding to an individual FTOPS user account.
+INSERT INTO email_ingestion_forwarders (
+  id,
+  workspace_id,
+  email,
+  enabled,
+  created_by,
+  created_at,
+  updated_at
+) VALUES (
+  'forwarder:default:furniture@from-trees.com',
+  'default',
+  'furniture@from-trees.com',
+  1,
+  'github-actions',
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+)
+ON CONFLICT(workspace_id, email) DO UPDATE SET
+  enabled = 1,
+  updated_at = excluded.updated_at;
