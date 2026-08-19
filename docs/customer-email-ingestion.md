@@ -17,9 +17,9 @@ No cross-workspace fallback is allowed. If a recipient mailbox is unknown, a for
 
 Before enabling a route in production:
 
-- Create the private R2 bucket `ftops-customer-emails`.
-- Set the same `EMAIL_INGESTION_SECRET` Worker secret on `ftops` and `ftops-email`.
-- Deploy the API migration and both Workers through the approved GitHub Actions release path.
+- The private R2 bucket `ftops-customer-emails` must exist before the first deployment. It was created as a private WNAM bucket on August 18, 2026.
+- GitHub Actions must have `EMAIL_INGESTION_SECRET`. The workflow applies the same masked value to `ftops` and `ftops-email` with Wrangler's supported bulk-secret command.
+- On a push to `main`, Actions verifies the monorepo, applies the API migration, deploys the API and its secret, and only then deploys the Email Worker and its copy of the secret.
 - Enable Email Routing for the dedicated inbound subdomain. Do not change the MX records for the company’s normal mail domain.
 - Create the desired address rule and bind it to `ftops-email`.
 - Register that exact recipient address as a workspace mailbox and register each employee envelope address as a forwarder for that workspace.
@@ -36,4 +36,4 @@ The application endpoints are:
 
 The Email Worker can receive a local RFC 822 message through Wrangler’s email-event endpoint. The API integration suite covers workspace isolation, Contact matching, AI candidates, provenance, and attachment application.
 
-Production deployment, automatic deployment wiring, and Email Routing activation are intentionally not included in this feature branch.
+Email Routing activation remains a one-time post-deployment operation because the routing rule cannot target `ftops-email` until that Worker exists. Keep normal company email MX records unchanged; enable routing only for the dedicated inbound subdomain.
