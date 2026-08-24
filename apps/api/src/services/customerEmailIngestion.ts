@@ -402,7 +402,7 @@ async function findOriginalMessage(
     }
   }
   const text = outer.text || stripHtml(outer.html || "");
-  const marker = text.match(/(?:^|\n)From:\s*(?:[^\n<]*<)?([^\s<>]+@[^\s<>]+)>?/i);
+  const marker = text.match(/(?:^|\n)(?:>\s*)*From:\s*(?:[^\n<]*<)?([^\s<>]+@[^\s<>]+)>?/i);
   if (!marker || normalizeEmail(marker[1]) === forwarder) return outer;
   return { ...outer, from: { name: "", address: marker[1] }, text };
 }
