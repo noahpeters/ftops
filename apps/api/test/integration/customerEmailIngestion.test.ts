@@ -12,23 +12,16 @@ describe("customer email ingestion", () => {
 
   it("preserves workspace isolation, extracts candidates, and attaches email files on apply", async () => {
     const queued: unknown[] = [];
+    const aiRun = vi.fn(async () => ({
+      response: {
+        subject: "Kitchen material decision",
+        summary: "- Customer selected white oak.\n- Target width is 84 inches.",
+        confidence: 0.97,
+      },
+    }));
     const context = await createTestEnv({
       env: {
-        AI: {
-          run: vi.fn(async () => ({
-            response: {
-              candidates: [
-                {
-                  category: "material",
-                  subject: "Material preference",
-                  body: "Customer selected white oak.",
-                  confidence: 0.97,
-                  evidence: "We have decided on white oak.",
-                },
-              ],
-            },
-          })),
-        },
+        AI: { run: aiRun },
         EVENT_QUEUE: { send: vi.fn(async (message: unknown) => queued.push(message)) },
       },
     });
@@ -101,7 +94,11 @@ describe("customer email ingestion", () => {
       status: "ready",
     });
     const candidate = await db
-      .prepare(`SELECT id,status FROM customer_email_note_candidates WHERE ingestion_id=?`)
+      .prepare(
+        `SELECT c.id,c.status FROM customer_email_note_candidates c
+         JOIN customer_email_messages m ON m.id=c.email_message_id
+         WHERE c.ingestion_id=? AND m.sender_email='client@example.com'`
+      )
       .bind(received.id)
       .first<{ id: string; status: string }>();
     expect(candidate?.status).toBe("pending");
@@ -134,6 +131,25 @@ describe("customer email ingestion", () => {
         )
         .first()
     ).toMatchObject({ original_filename: "dimensions.txt", activity_id: activity?.id });
+    const repeated = await receiveCustomerEmail(env, {
+      raw: forwardedMime("second-forward"),
+      forwardingEmail: "owner@example.com",
+      envelopeTo: "notes@in.example.com",
+    });
+    await processCustomerEmailIngestion(env, repeated.id);
+    expect(
+      await db.prepare(`SELECT COUNT(*) AS count FROM customer_email_messages`).first()
+    ).toMatchObject({ count: 3 });
+    expect(
+      await db
+        .prepare(`SELECT status FROM customer_email_ingestions WHERE id=?`)
+        .bind(repeated.id)
+        .first()
+    ).toMatchObject({ status: "ready" });
+    expect(
+      await db.prepare(`SELECT COUNT(*) AS count FROM customer_email_note_candidates`).first()
+    ).toMatchObject({ count: 3 });
+    expect(aiRun).toHaveBeenCalledTimes(3);
     expect(
       await db
         .prepare(
@@ -170,12 +186,13 @@ function apiRequest(env: Parameters<typeof route>[1], path: string, init: Reques
   return route(new Request(`http://localhost${path}`, init), env, {} as ExecutionContext);
 }
 
-function forwardedMime() {
+function forwardedMime(forwardId = "first-forward") {
   const boundary = "ftops-test-boundary";
   const raw = [
     "From: Owner <owner@example.com>",
     "To: notes@in.example.com",
     "Subject: Fwd: Kitchen material",
+    `X-Test-Forward: ${forwardId}`,
     `Content-Type: multipart/mixed; boundary=\"${boundary}\"`,
     "",
     `--${boundary}`,
@@ -187,6 +204,10 @@ function forwardedMime() {
     "> Subject: Kitchen material",
     "",
     "We have decided on white oak.",
+    "> On Mon, Aug 17, 2026 at 9:00 AM <owner@example.com> wrote:",
+    "> Earlier, the shop confirmed it could provide an 84-inch-wide cabinet.",
+    ">> On Sun, Aug 16, 2026 at 8:00 AM Client <client@example.com> wrote:",
+    ">>> The customer requested solid birch boxes and no particle board.",
     `--${boundary}`,
     'Content-Type: text/plain; name="dimensions.txt"',
     'Content-Disposition: attachment; filename="dimensions.txt"',

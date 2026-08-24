@@ -1037,13 +1037,18 @@ export function CustomersPanel({
                         <article key={candidate.id} className={stylex(styles.note)}>
                           <b>{candidate.proposed_subject}</b>
                           <div className={stylex(styles.muted)}>
-                            {candidate.category} · {Math.round(candidate.confidence * 100)}%
-                            confidence
+                            {candidate.category === "email_summary"
+                              ? "Complete email summary"
+                              : candidate.category}{" "}
+                            · {Math.round(candidate.confidence * 100)}% confidence
                             {candidate.original_sender_email
                               ? ` · from ${candidate.original_sender_name || candidate.original_sender_email}`
                               : ""}
                             {candidate.attachment_count
                               ? ` · ${candidate.attachment_count} attachment${candidate.attachment_count === 1 ? "" : "s"}`
+                              : ""}
+                            {candidate.email_sent_at
+                              ? ` · sent ${new Date(candidate.email_sent_at).toLocaleDateString()}`
                               : ""}
                           </div>
                           <div className={stylex(styles.markdown)}>

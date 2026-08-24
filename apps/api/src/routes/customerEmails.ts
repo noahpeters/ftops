@@ -93,10 +93,16 @@ export async function handleCustomerEmails(
   if (segments[0] === "candidates" && candidateId && (action === "apply" || action === "dismiss")) {
     if (request.method !== "POST") return methodNotAllowed(["POST"]);
     const candidate = await env.DB.prepare(
-      `SELECT workspace_id,customer_id,status,ingestion_id FROM customer_email_note_candidates WHERE id=?`
+      `SELECT workspace_id,customer_id,status,ingestion_id,email_message_id FROM customer_email_note_candidates WHERE id=?`
     )
       .bind(candidateId)
-      .first<{ workspace_id: string; customer_id: string; status: string; ingestion_id: string }>();
+      .first<{
+        workspace_id: string;
+        customer_id: string;
+        status: string;
+        ingestion_id: string;
+        email_message_id: string | null;
+      }>();
     if (!candidate) return notFound("Candidate not found");
     if (!canAccessWorkspace(actor, candidate.workspace_id)) return forbidden("forbidden");
     if (candidate.status !== "pending") return badRequest("candidate_already_reviewed");
@@ -114,6 +120,9 @@ export async function handleCustomerEmails(
       env.DB.prepare(
         `UPDATE customer_email_note_candidates SET status='dismissed',reviewed_at=?,reviewed_by=? WHERE id=? AND status='pending'`
       ).bind(now, actor.email, candidateId),
+      env.DB.prepare(
+        `UPDATE customer_email_messages SET status='dismissed',reviewed_at=?,reviewed_by=? WHERE id=? AND status='pending'`
+      ).bind(now, actor.email, candidate.email_message_id),
       env.DB.prepare(
         `UPDATE customer_email_ingestions SET status=CASE WHEN NOT EXISTS (
           SELECT 1 FROM customer_email_note_candidates WHERE ingestion_id=? AND status='pending' AND id!=?

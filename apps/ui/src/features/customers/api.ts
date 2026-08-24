@@ -53,6 +53,7 @@ export type CustomerDetail = {
 export type EmailNoteCandidate = {
   id: string;
   ingestion_id: string;
+  email_message_id: string | null;
   category: string;
   proposed_subject: string;
   proposed_body: string;

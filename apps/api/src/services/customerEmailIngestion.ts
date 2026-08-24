@@ -7,11 +7,23 @@ const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const MAX_RAW_BYTES = 25 * 1024 * 1024;
 
 type Candidate = {
-  category: string;
   subject: string;
   body: string;
   confidence: number;
-  evidence: string | null;
+};
+
+type ThreadMessage = {
+  sourceMessageId: string | null;
+  senderEmail: string;
+  senderName: string;
+  subject: string;
+  sentAt: string | null;
+  text: string;
+  attachments: Array<{
+    filename: string | null;
+    mimeType: string;
+    content: string | ArrayBuffer | Uint8Array;
+  }>;
 };
 
 export async function verifyInboundEmailRequest(request: Request, raw: ArrayBuffer, env: Env) {
@@ -123,48 +135,49 @@ export async function processCustomerEmailIngestion(env: Env, ingestionId: strin
     if (!object) throw new Error("email_source_not_found");
     const raw = await object.arrayBuffer();
     const outer = await PostalMime.parse(raw);
-    const original = await findOriginalMessage(outer, String(ingestion.forwarding_email));
-    await archiveAttachments(env, {
-      ingestionId,
-      workspaceId: String(ingestion.workspace_id),
-      attachments: original.attachments.filter(
-        (attachment) => attachment.mimeType.toLowerCase() !== "message/rfc822"
-      ),
-      now: nowISO(),
-    });
-    const senderEmail = normalizeEmail(original.from?.address);
-    const matches = senderEmail
-      ? await env.DB.prepare(
-          `SELECT id,customer_id FROM contacts WHERE workspace_id=? AND lower(email)=?`
-        )
-          .bind(ingestion.workspace_id, senderEmail)
-          .all<{ id: string; customer_id: string }>()
-      : { results: [] };
-    const uniqueMatches = matches.results ?? [];
+    const messages = await parseThreadMessages(outer, String(ingestion.forwarding_email));
+    if (messages.length === 0) throw new Error("email_thread_empty");
+    const uniqueMatches = new Map<string, { id: string; customer_id: string; email: string }>();
+    for (const senderEmail of new Set(messages.map((message) => message.senderEmail))) {
+      const matches = await env.DB.prepare(
+        `SELECT id,customer_id,lower(email) AS email FROM contacts WHERE workspace_id=? AND lower(email)=?`
+      )
+        .bind(ingestion.workspace_id, senderEmail)
+        .all<{ id: string; customer_id: string; email: string }>();
+      for (const match of matches.results ?? []) uniqueMatches.set(match.id, match);
+    }
+    const matchedContacts = [...uniqueMatches.values()];
     const contact = ingestion.customer_id
       ? {
           id: ingestion.contact_id ? String(ingestion.contact_id) : null,
           customer_id: String(ingestion.customer_id),
         }
-      : uniqueMatches.length === 1
-        ? uniqueMatches[0]
+      : matchedContacts.length === 1
+        ? matchedContacts[0]
         : null;
+    const primaryMessage = contact
+      ? messages.find((message) =>
+          matchedContacts.some(
+            (match) => match.id === contact.id && message.senderEmail === match.email
+          )
+        ) || messages[0]
+      : messages[0];
     const now = nowISO();
     await env.DB.prepare(
       `UPDATE customer_email_ingestions SET original_sender_email=?,original_sender_name=?,contact_id=?,customer_id=?,subject=?,message_id=?,sent_at=?,status=?,failure_reason=?,processed_at=?,updated_at=? WHERE id=?`
     )
       .bind(
-        senderEmail || null,
-        original.from?.name || null,
+        primaryMessage.senderEmail || null,
+        primaryMessage.senderName || null,
         contact?.id || null,
         contact?.customer_id || null,
-        original.subject || null,
-        original.messageId || null,
-        validDate(original.date),
+        primaryMessage.subject || null,
+        primaryMessage.sourceMessageId || null,
+        primaryMessage.sentAt,
         contact ? "processing" : "needs_match",
         contact
           ? null
-          : uniqueMatches.length > 1
+          : matchedContacts.length > 1
             ? "multiple_contact_matches"
             : "contact_not_found",
         now,
@@ -173,36 +186,63 @@ export async function processCustomerEmailIngestion(env: Env, ingestionId: strin
       )
       .run();
     if (!contact) return;
-    await env.DB.prepare(
-      `DELETE FROM customer_email_note_candidates WHERE ingestion_id=? AND status='pending'`
-    )
-      .bind(ingestionId)
-      .run();
-    const candidates = await extractCandidates(env, {
-      subject: original.subject || "Customer email",
-      text: original.text || stripHtml(original.html || ""),
-      senderEmail,
-      sentAt: validDate(original.date),
-    });
-    for (const candidate of candidates) {
-      await env.DB.prepare(
-        `INSERT INTO customer_email_note_candidates
-          (id,ingestion_id,workspace_id,customer_id,category,proposed_subject,proposed_body,confidence,evidence,status,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,'pending',?)`
+    for (const message of messages) {
+      const bodyHash = await sha256Hex(
+        new TextEncoder().encode(normalizeMessageText(message.text)).buffer
+      );
+      const fingerprint = await messageFingerprint(message, bodyHash);
+      const existing = await env.DB.prepare(
+        `SELECT id FROM customer_email_messages WHERE workspace_id=? AND message_fingerprint=?`
       )
-        .bind(
-          crypto.randomUUID(),
+        .bind(ingestion.workspace_id, fingerprint)
+        .first();
+      if (existing) continue;
+      const candidate = await summarizeMessage(env, message);
+      const emailMessageId = crypto.randomUUID();
+      const candidateId = crypto.randomUUID();
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO customer_email_messages
+            (id,ingestion_id,workspace_id,customer_id,contact_id,message_fingerprint,source_message_id,sender_email,sender_name,subject,sent_at,body_sha256,status,created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'pending',?)`
+        ).bind(
+          emailMessageId,
           ingestionId,
           ingestion.workspace_id,
           contact.customer_id,
-          candidate.category,
+          contact.id,
+          fingerprint,
+          message.sourceMessageId,
+          message.senderEmail,
+          message.senderName || null,
+          message.subject || null,
+          message.sentAt,
+          bodyHash,
+          now
+        ),
+        env.DB.prepare(
+          `INSERT INTO customer_email_note_candidates
+            (id,ingestion_id,workspace_id,customer_id,email_message_id,category,proposed_subject,proposed_body,confidence,evidence,status,created_at)
+           VALUES (?,?,?,?,?,'email_summary',?,?,?,NULL,'pending',?)`
+        ).bind(
+          candidateId,
+          ingestionId,
+          ingestion.workspace_id,
+          contact.customer_id,
+          emailMessageId,
           candidate.subject,
           candidate.body,
           candidate.confidence,
-          candidate.evidence,
           now
-        )
-        .run();
+        ),
+      ]);
+      await archiveAttachments(env, {
+        ingestionId,
+        emailMessageId,
+        workspaceId: String(ingestion.workspace_id),
+        attachments: message.attachments,
+        now,
+      });
     }
     await env.DB.prepare(
       `UPDATE customer_email_ingestions SET status='ready',failure_reason=NULL,updated_at=? WHERE id=?`
@@ -225,8 +265,11 @@ export async function applyEmailCandidate(
   input: { candidateId: string; workspaceId: string; customerId: string; actorEmail: string }
 ) {
   const candidate = await env.DB.prepare(
-    `SELECT c.*,i.original_sender_email,i.sent_at,i.subject AS email_subject,i.raw_storage_key
-     FROM customer_email_note_candidates c JOIN customer_email_ingestions i ON i.id=c.ingestion_id
+    `SELECT c.*,m.sender_email AS original_sender_email,m.sender_name AS original_sender_name,
+            m.sent_at,m.subject AS email_subject,i.raw_storage_key
+     FROM customer_email_note_candidates c
+     JOIN customer_email_ingestions i ON i.id=c.ingestion_id
+     LEFT JOIN customer_email_messages m ON m.id=c.email_message_id
      WHERE c.id=? AND c.workspace_id=? AND c.customer_id=?`
   )
     .bind(input.candidateId, input.workspaceId, input.customerId)
@@ -261,6 +304,9 @@ export async function applyEmailCandidate(
       `UPDATE customer_email_note_candidates SET status='applied',applied_activity_id=?,reviewed_at=?,reviewed_by=? WHERE id=? AND status='pending'`
     ).bind(activityId, now, input.actorEmail, input.candidateId),
     env.DB.prepare(
+      `UPDATE customer_email_messages SET status='applied',reviewed_at=?,reviewed_by=? WHERE id=? AND status='pending'`
+    ).bind(now, input.actorEmail, candidate.email_message_id),
+    env.DB.prepare(
       `UPDATE customer_email_ingestions SET status=CASE WHEN NOT EXISTS (
         SELECT 1 FROM customer_email_note_candidates WHERE ingestion_id=? AND status='pending' AND id!=?
        ) THEN 'applied' ELSE status END,reviewed_at=?,reviewed_by=?,updated_at=? WHERE id=?`
@@ -275,6 +321,7 @@ export async function applyEmailCandidate(
   ]);
   await attachEmailFilesToNote(env, {
     ingestionId: String(candidate.ingestion_id),
+    emailMessageId: candidate.email_message_id ? String(candidate.email_message_id) : null,
     workspaceId: input.workspaceId,
     customerId: input.customerId,
     activityId,
@@ -294,6 +341,7 @@ async function archiveAttachments(
   env: Env,
   input: {
     ingestionId: string;
+    emailMessageId: string;
     workspaceId: string;
     attachments: Array<{
       filename: string | null;
@@ -304,9 +352,9 @@ async function archiveAttachments(
   }
 ) {
   const existing = await env.DB.prepare(
-    `SELECT COUNT(*) AS count FROM customer_email_attachments WHERE ingestion_id=?`
+    `SELECT COUNT(*) AS count FROM customer_email_attachments WHERE ingestion_id=? AND email_message_id=?`
   )
-    .bind(input.ingestionId)
+    .bind(input.ingestionId, input.emailMessageId)
     .first<{ count: number }>();
   if (Number(existing?.count ?? 0) > 0) return;
   for (const [index, attachment] of input.attachments.entries()) {
@@ -322,12 +370,13 @@ async function archiveAttachments(
     });
     await env.DB.prepare(
       `INSERT INTO customer_email_attachments
-        (id,ingestion_id,workspace_id,original_filename,content_type,size_bytes,sha256,storage_key,created_at)
-       VALUES (?,?,?,?,?,?,?,?,?)`
+        (id,ingestion_id,email_message_id,workspace_id,original_filename,content_type,size_bytes,sha256,storage_key,created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`
     )
       .bind(
         id,
         input.ingestionId,
+        input.emailMessageId,
         input.workspaceId,
         filename,
         attachment.mimeType || "application/octet-stream",
@@ -344,6 +393,7 @@ async function attachEmailFilesToNote(
   env: Env,
   input: {
     ingestionId: string;
+    emailMessageId: string | null;
     workspaceId: string;
     customerId: string;
     activityId: string;
@@ -353,9 +403,10 @@ async function attachEmailFilesToNote(
 ) {
   const rows = await env.DB.prepare(
     `SELECT * FROM customer_email_attachments
-     WHERE ingestion_id=? AND workspace_id=? AND applied_activity_id IS NULL`
+     WHERE ingestion_id=? AND workspace_id=? AND applied_activity_id IS NULL
+       AND (? IS NULL OR email_message_id=?)`
   )
-    .bind(input.ingestionId, input.workspaceId)
+    .bind(input.ingestionId, input.workspaceId, input.emailMessageId, input.emailMessageId)
     .all<Record<string, unknown>>();
   for (const row of rows.results ?? []) {
     const object = await env.R2_CUSTOMER_EMAILS_BUCKET.get(String(row.storage_key));
@@ -391,77 +442,187 @@ async function attachEmailFilesToNote(
   }
 }
 
-async function findOriginalMessage(
+async function parseThreadMessages(
   outer: Awaited<ReturnType<typeof PostalMime.parse>>,
   forwarder: string
-) {
+): Promise<ThreadMessage[]> {
+  const nestedMessages: ThreadMessage[] = [];
   for (const attachment of outer.attachments) {
     if (attachment.mimeType.toLowerCase() === "message/rfc822") {
       const nested = await PostalMime.parse(attachment.content);
-      if (normalizeEmail(nested.from?.address) !== forwarder) return nested;
+      nestedMessages.push(...(await parseThreadMessages(nested, forwarder)));
     }
   }
+  if (nestedMessages.length > 0) return nestedMessages;
   const text = outer.text || stripHtml(outer.html || "");
-  const marker = text.match(/(?:^|\n)(?:>\s*)*From:\s*(?:[^\n<]*<)?([^\s<>]+@[^\s<>]+)>?/i);
-  if (!marker || normalizeEmail(marker[1]) === forwarder) return outer;
-  return { ...outer, from: { name: "", address: marker[1] }, text };
+  const parsed = parseQuotedThreadText(text, outer.subject || "Customer email");
+  if (parsed.length > 0) {
+    parsed[0].attachments = outer.attachments.filter(
+      (attachment) => attachment.mimeType.toLowerCase() !== "message/rfc822"
+    );
+    return parsed;
+  }
+  const senderEmail = normalizeEmail(outer.from?.address);
+  if (!senderEmail || senderEmail === normalizeEmail(forwarder)) return [];
+  return [
+    {
+      sourceMessageId: outer.messageId || null,
+      senderEmail,
+      senderName: outer.from?.name || "",
+      subject: outer.subject || "Customer email",
+      sentAt: validDate(outer.date),
+      text: normalizeMessageText(text),
+      attachments: outer.attachments.filter(
+        (attachment) => attachment.mimeType.toLowerCase() !== "message/rfc822"
+      ),
+    },
+  ];
 }
 
-async function extractCandidates(
-  env: Env,
-  email: { subject: string; text: string; senderEmail: string; sentAt: string | null }
-) {
+function parseQuotedThreadText(text: string, fallbackSubject: string): ThreadMessage[] {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const messages: ThreadMessage[] = [];
+  let current: ThreadMessage | null = null;
+  let readingHeaders = false;
+  let body: string[] = [];
+  const finish = () => {
+    if (!current) return;
+    current.text = normalizeMessageText(body.join("\n"));
+    if (current.senderEmail && current.text) messages.push(current);
+    current = null;
+    body = [];
+  };
+  for (const line of lines) {
+    const clean = line.replace(/^\s*>+\s?/, "").trimEnd();
+    const from = clean.match(/^From:\s*(.+)$/i);
+    if (!current && from) {
+      const address = parseAddress(from[1]);
+      if (!address.email) continue;
+      current = {
+        sourceMessageId: null,
+        senderEmail: address.email,
+        senderName: address.name,
+        subject: normalizeThreadSubject(fallbackSubject),
+        sentAt: null,
+        text: "",
+        attachments: [],
+      };
+      readingHeaders = true;
+      continue;
+    }
+    const reply = parseReplyMarker(clean);
+    if (reply) {
+      finish();
+      current = {
+        sourceMessageId: null,
+        senderEmail: reply.email,
+        senderName: reply.name,
+        subject: normalizeThreadSubject(fallbackSubject),
+        sentAt: reply.sentAt,
+        text: "",
+        attachments: [],
+      };
+      readingHeaders = false;
+      continue;
+    }
+    if (!current) continue;
+    if (readingHeaders) {
+      const subject = clean.match(/^Subject:\s*(.+)$/i);
+      if (subject) current.subject = normalizeThreadSubject(subject[1]);
+      const date = clean.match(/^Date:\s*(.+)$/i);
+      if (date) current.sentAt = validDate(date[1]);
+      if (!clean.trim()) readingHeaders = false;
+      continue;
+    }
+    body.push(clean);
+  }
+  finish();
+  return messages;
+}
+
+function parseReplyMarker(line: string) {
+  if (!/^On\s.+\swrote:$/i.test(line)) return null;
+  const address = line.match(/<([^<>\s]+@[^<>\s]+)>\s*wrote:$/i);
+  const plain = address ? null : line.match(/([^\s<>]+@[^\s<>]+)\s*wrote:$/i);
+  const email = normalizeEmail(address?.[1] || plain?.[1]);
+  if (!email) return null;
+  const beforeAddress = line
+    .slice(3, line.lastIndexOf(address ? address[0] : plain![0]))
+    .trim()
+    .replace(/,\s*$/, "");
+  return { email, name: "", sentAt: validDate(beforeAddress) };
+}
+
+function parseAddress(value: string) {
+  const bracketed = value.match(/^(.*?)\s*<([^<>]+@[^<>]+)>/);
+  if (bracketed)
+    return {
+      name: bracketed[1].trim().replace(/^['"]|['"]$/g, ""),
+      email: normalizeEmail(bracketed[2]),
+    };
+  const email = value.match(/[^\s<>]+@[^\s<>]+/i)?.[0] || "";
+  return { name: "", email: normalizeEmail(email) };
+}
+
+function normalizeThreadSubject(value: string) {
+  return value.replace(/^\s*(?:(?:fwd?|re):\s*)+/i, "").trim() || "Customer email";
+}
+
+function normalizeMessageText(value: string) {
+  return value
+    .replace(/^\s*>+\s?/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function messageFingerprint(message: ThreadMessage, bodyHash: string) {
+  if (message.sourceMessageId) return `message-id:${normalizeEmail(message.sourceMessageId)}`;
+  const identity = [
+    message.senderEmail,
+    message.sentAt || "",
+    normalizeThreadSubject(message.subject).toLowerCase(),
+    bodyHash,
+  ].join("\n");
+  return await sha256Hex(new TextEncoder().encode(identity).buffer);
+}
+
+async function summarizeMessage(env: Env, email: ThreadMessage) {
   if (!env.AI) throw new Error("email_ai_unavailable");
   const result = await env.AI.run(MODEL, {
     messages: [
       {
         role: "system",
         content:
-          "Extract only new, durable customer/project facts from this customer email. Ignore signatures, quoted history, greetings, and facts stated only by the forwarding employee. Never invent or overwrite facts. Return JSON only as {candidates:[{category,subject,body,confidence,evidence}]}. Categories may include preference,dimension,material,budget,timing,address,decision,constraint,concern,contact,other. Keep each note concise and independently reviewable. Return an empty candidates array when nothing useful is present.",
+          "Summarize this single email as one complete customer timeline note. Do not return sentence fragments and do not split it into multiple notes. Preserve every substantive project detail, especially exact dimensions and quantities; material, finish, color, construction, and hardware selections; decisions and changes; constraints and preferences; questions and concerns; budget, timing, location, contact information, and commitments. Clearly distinguish what the sender requested, decided, reported, asked, or promised. Ignore greetings, signatures, links used only for scheduling, and quoted history because other messages are summarized separately. Never invent details. Use concise Markdown bullets when the email contains multiple points. Return JSON only as {subject,summary,confidence}.",
       },
       {
         role: "user",
-        content: `Original sender: ${email.senderEmail}\nSent at: ${email.sentAt || "unknown"}\nSubject: ${email.subject}\n\n${email.text.slice(0, 60_000)}`,
+        content: `Sender: ${email.senderName ? `${email.senderName} <${email.senderEmail}>` : email.senderEmail}\nSent at: ${email.sentAt || "unknown"}\nSubject: ${email.subject}\n\n${email.text.slice(0, 60_000)}`,
       },
     ],
     response_format: { type: "json_object" },
-    max_tokens: 1200,
+    max_tokens: 1400,
     temperature: 0,
   });
   const response: unknown = typeof result === "string" ? result : result.response;
   if (!response) throw new Error("email_ai_empty_response");
-  const parsed = (typeof response === "string" ? JSON.parse(response) : response) as {
-    candidates?: unknown[];
-  };
-  return (parsed.candidates || [])
-    .map(normalizeCandidate)
-    .filter((x): x is Candidate => x !== null)
-    .slice(0, 20);
+  return normalizeCandidate(typeof response === "string" ? JSON.parse(response) : response);
 }
 
-function normalizeCandidate(value: unknown): Candidate | null {
-  if (!value || typeof value !== "object") return null;
+function normalizeCandidate(value: unknown): Candidate {
+  if (!value || typeof value !== "object") throw new Error("email_ai_response_invalid");
   const row = value as Record<string, unknown>;
   const subject = String(row.subject || "")
     .trim()
     .slice(0, 200);
-  const body = String(row.body || "")
+  const body = String(row.summary || row.body || "")
     .trim()
     .slice(0, 4000);
-  if (!subject || !body) return null;
+  if (!subject || !body) throw new Error("email_ai_response_invalid");
   return {
-    category:
-      String(row.category || "other")
-        .trim()
-        .toLowerCase()
-        .slice(0, 50) || "other",
     subject,
     body,
     confidence: Math.max(0, Math.min(1, Number(row.confidence) || 0)),
-    evidence:
-      String(row.evidence || "")
-        .trim()
-        .slice(0, 1000) || null,
   };
 }
 

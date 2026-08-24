@@ -871,11 +871,15 @@ async function loadDetail(env: Env, workspaceId: string, id: string) {
     ),
     emailNoteCandidates: await listRows(
       env,
-      `SELECT c.*,i.original_sender_email,i.original_sender_name,i.subject AS email_subject,
-              i.sent_at AS email_sent_at,i.received_at AS email_received_at,
-              (SELECT COUNT(*) FROM customer_email_attachments a WHERE a.ingestion_id=i.id) AS attachment_count
+      `SELECT c.*,COALESCE(m.sender_email,i.original_sender_email) AS original_sender_email,
+              COALESCE(m.sender_name,i.original_sender_name) AS original_sender_name,
+              COALESCE(m.subject,i.subject) AS email_subject,
+              COALESCE(m.sent_at,i.sent_at) AS email_sent_at,i.received_at AS email_received_at,
+              (SELECT COUNT(*) FROM customer_email_attachments a
+               WHERE a.ingestion_id=i.id AND (c.email_message_id IS NULL OR a.email_message_id=c.email_message_id)) AS attachment_count
        FROM customer_email_note_candidates c
        JOIN customer_email_ingestions i ON i.id=c.ingestion_id
+       LEFT JOIN customer_email_messages m ON m.id=c.email_message_id
        WHERE c.workspace_id=? AND c.customer_id=? AND c.status='pending'
        ORDER BY c.created_at DESC`,
       workspaceId,
