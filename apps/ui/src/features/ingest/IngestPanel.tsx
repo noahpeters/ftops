@@ -147,6 +147,9 @@ export function IngestPanel({
   const [retryingEmailIds, setRetryingEmailIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const workspaceMap = new Map(workspaces.map((ws) => [ws.id, ws.name]));
+  const latestRetryableEmail = emailIngestions.find(
+    (ingestion) => ingestion.status === "failed" && ingestion.customer_id
+  );
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -319,6 +322,20 @@ export function IngestPanel({
         <div className={stylex(styles.alert)}>
           {emailIngestions.length} email{emailIngestions.length === 1 ? "" : "s"} need attention.
           Select an email to inspect the recorded failure.
+          {latestRetryableEmail && (
+            <div className={stylex(styles.actions)}>
+              <button
+                type="button"
+                className={stylex(styles.replayButton)}
+                disabled={retryingEmailIds.has(latestRetryableEmail.id)}
+                onClick={(event) => handleEmailRetry(event, latestRetryableEmail)}
+              >
+                {retryingEmailIds.has(latestRetryableEmail.id)
+                  ? "Retrying latest email..."
+                  : `Retry latest failed email: ${latestRetryableEmail.subject || "No subject"}`}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -343,6 +360,7 @@ export function IngestPanel({
                 <tr>
                   <th>received</th>
                   <th>status</th>
+                  <th>actions</th>
                   <th>sender</th>
                   <th>customer</th>
                   <th>subject</th>
@@ -350,7 +368,6 @@ export function IngestPanel({
                   <th>notes</th>
                   <th>attachments</th>
                   <th>failure reason</th>
-                  <th>actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -358,17 +375,6 @@ export function IngestPanel({
                   <tr key={ingestion.id} onClick={() => setSelectedEmail(ingestion)}>
                     <td>{ingestion.received_at}</td>
                     <td className={stylex(styles.status)}>{ingestion.status.replace("_", " ")}</td>
-                    <td>{ingestion.original_sender_email ?? ingestion.forwarding_email}</td>
-                    <td>{ingestion.customer_display_name ?? "Not matched"}</td>
-                    <td>{ingestion.subject ?? "-"}</td>
-                    <td>{ingestion.message_count}</td>
-                    <td>
-                      {ingestion.applied_candidate_count}/{ingestion.candidate_count}
-                    </td>
-                    <td>{ingestion.attachment_count}</td>
-                    <td className={stylex(styles.failureReason)}>
-                      {ingestion.failure_reason ?? "-"}
-                    </td>
                     <td className={stylex(styles.actionsCell)}>
                       {ingestion.status === "failed" && ingestion.customer_id ? (
                         <button
@@ -384,6 +390,17 @@ export function IngestPanel({
                       ) : (
                         "-"
                       )}
+                    </td>
+                    <td>{ingestion.original_sender_email ?? ingestion.forwarding_email}</td>
+                    <td>{ingestion.customer_display_name ?? "Not matched"}</td>
+                    <td>{ingestion.subject ?? "-"}</td>
+                    <td>{ingestion.message_count}</td>
+                    <td>
+                      {ingestion.applied_candidate_count}/{ingestion.candidate_count}
+                    </td>
+                    <td>{ingestion.attachment_count}</td>
+                    <td className={stylex(styles.failureReason)}>
+                      {ingestion.failure_reason ?? "-"}
                     </td>
                   </tr>
                 ))}
@@ -401,6 +418,16 @@ export function IngestPanel({
             {selectedEmail ? (
               <>
                 <h3>Email processing detail</h3>
+                {selectedEmail.status === "failed" && selectedEmail.customer_id && (
+                  <button
+                    type="button"
+                    className={stylex(styles.replayButton)}
+                    disabled={retryingEmailIds.has(selectedEmail.id)}
+                    onClick={(event) => handleEmailRetry(event, selectedEmail)}
+                  >
+                    {retryingEmailIds.has(selectedEmail.id) ? "Retrying..." : "Retry processing"}
+                  </button>
+                )}
                 <pre>{JSON.stringify(selectedEmail, null, 2)}</pre>
               </>
             ) : (
