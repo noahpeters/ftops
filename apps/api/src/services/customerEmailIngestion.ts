@@ -616,7 +616,8 @@ function parseAIResponse(value: unknown): unknown {
   try {
     return JSON.parse(unfenced);
   } catch {
-    throw new Error("email_ai_response_invalid");
+    if (unfenced) return { summary: unfenced };
+    throw new Error("email_ai_response_invalid:empty_text_response");
   }
 }
 
@@ -625,17 +626,28 @@ function normalizeCandidate(value: unknown, fallbackSubject: string): Candidate 
   const subject = String(row.subject || row.title || row.note_title || fallbackSubject)
     .trim()
     .slice(0, 200);
-  const body = candidateBody(
-    row.summary || row.body || row.content || row.details || row.customer_note || row.note
-  )
+  const preferredBody =
+    row.summary || row.body || row.content || row.details || row.customer_note || row.note;
+  const body = candidateBody(preferredBody || candidateContentFields(row))
     .trim()
     .slice(0, 4000);
-  if (!subject || !body) throw new Error("email_ai_response_invalid");
+  if (!subject || !body) {
+    const keys = Object.keys(row).slice(0, 12).join(",") || "none";
+    throw new Error(`email_ai_response_invalid:missing_content:keys=${keys}`);
+  }
   return {
     subject,
     body,
     confidence: Math.max(0, Math.min(1, Number(row.confidence) || 0)),
   };
+}
+
+function candidateContentFields(row: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(row).filter(
+      ([key]) => !["subject", "title", "note_title", "confidence"].includes(key)
+    )
+  );
 }
 
 function candidateRecord(value: unknown): Record<string, unknown> {
