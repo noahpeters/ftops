@@ -606,16 +606,28 @@ async function summarizeMessage(env: Env, email: ThreadMessage) {
   });
   const response: unknown = typeof result === "string" ? result : result.response;
   if (!response) throw new Error("email_ai_empty_response");
-  return normalizeCandidate(typeof response === "string" ? JSON.parse(response) : response);
+  return normalizeCandidate(parseAIResponse(response), email.subject);
 }
 
-function normalizeCandidate(value: unknown): Candidate {
-  if (!value || typeof value !== "object") throw new Error("email_ai_response_invalid");
-  const row = value as Record<string, unknown>;
-  const subject = String(row.subject || "")
+function parseAIResponse(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  const unfenced = trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  try {
+    return JSON.parse(unfenced);
+  } catch {
+    throw new Error("email_ai_response_invalid");
+  }
+}
+
+function normalizeCandidate(value: unknown, fallbackSubject: string): Candidate {
+  const row = candidateRecord(value);
+  const subject = String(row.subject || row.title || row.note_title || fallbackSubject)
     .trim()
     .slice(0, 200);
-  const body = String(row.summary || row.body || "")
+  const body = candidateBody(
+    row.summary || row.body || row.content || row.details || row.customer_note || row.note
+  )
     .trim()
     .slice(0, 4000);
   if (!subject || !body) throw new Error("email_ai_response_invalid");
@@ -624,6 +636,34 @@ function normalizeCandidate(value: unknown): Candidate {
     body,
     confidence: Math.max(0, Math.min(1, Number(row.confidence) || 0)),
   };
+}
+
+function candidateRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object") throw new Error("email_ai_response_invalid");
+  if (Array.isArray(value)) return candidateRecord(value[0]);
+  const row = value as Record<string, unknown>;
+  for (const key of ["candidate", "result", "note"] as const) {
+    if (row[key] && typeof row[key] === "object") return candidateRecord(row[key]);
+  }
+  for (const key of ["candidates", "notes", "summaries"] as const) {
+    if (Array.isArray(row[key]) && row[key].length > 0) return candidateRecord(row[key][0]);
+  }
+  return row;
+}
+
+function candidateBody(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value))
+    return value
+      .map((item) => (typeof item === "string" ? `- ${item}` : candidateBody(item)))
+      .filter(Boolean)
+      .join("\n");
+  if (value && typeof value === "object")
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => `- ${key}: ${candidateBody(item)}`)
+      .filter((line) => !line.endsWith(": "))
+      .join("\n");
+  return "";
 }
 
 function stripHtml(html: string) {

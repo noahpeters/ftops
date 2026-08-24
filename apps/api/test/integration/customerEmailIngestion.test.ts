@@ -180,6 +180,59 @@ describe("customer email ingestion", () => {
     ).rejects.toThrow("email_forwarder_not_authorized");
     await mf.dispose();
   });
+
+  it("accepts fenced and nested AI note responses", async () => {
+    const aiRun = vi.fn(async () => ({
+      response:
+        '```json\n{"note":{"title":"Material selections","content":["White oak fronts","Solid birch boxes"],"confidence":0.91}}\n```',
+    }));
+    const context = await createTestEnv({ env: { AI: { run: aiRun } } });
+    if (!context) return;
+    const { env, db, mf } = context;
+    const now = new Date().toISOString();
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO email_ingestion_mailboxes (id,workspace_id,address,enabled,created_at,updated_at) VALUES ('mb3','default','notes@in.example.com',1,?,?)`
+        )
+        .bind(now, now),
+      db
+        .prepare(
+          `INSERT INTO email_ingestion_forwarders (id,workspace_id,email,enabled,created_at,updated_at) VALUES ('f3','default','owner@example.com',1,?,?)`
+        )
+        .bind(now, now),
+      db
+        .prepare(
+          `INSERT INTO customers (id,workspace_id,display_name,status,created_at,updated_at) VALUES ('customer-nested','default','Nested Customer','lead',?,?)`
+        )
+        .bind(now, now),
+      db
+        .prepare(
+          `INSERT INTO contacts (id,workspace_id,customer_id,display_name,email,is_primary,created_at,updated_at,status) VALUES ('contact-nested','default','customer-nested','Client','client@example.com',1,?,?, 'active')`
+        )
+        .bind(now, now),
+    ]);
+    const received = await receiveCustomerEmail(env, {
+      raw: forwardedMime("nested-response"),
+      forwardingEmail: "owner@example.com",
+      envelopeTo: "notes@in.example.com",
+    });
+
+    await processCustomerEmailIngestion(env, received.id);
+
+    expect(
+      await db
+        .prepare(
+          `SELECT proposed_subject,proposed_body FROM customer_email_note_candidates WHERE ingestion_id=? LIMIT 1`
+        )
+        .bind(received.id)
+        .first()
+    ).toMatchObject({
+      proposed_subject: "Material selections",
+      proposed_body: "- White oak fronts\n- Solid birch boxes",
+    });
+    await mf.dispose();
+  });
 });
 
 function apiRequest(env: Parameters<typeof route>[1], path: string, init: RequestInit = {}) {
