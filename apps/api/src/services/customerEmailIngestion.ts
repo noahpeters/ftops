@@ -428,9 +428,11 @@ async function extractCandidates(
     max_tokens: 1200,
     temperature: 0,
   });
-  const response = typeof result === "string" ? result : result.response;
+  const response: unknown = typeof result === "string" ? result : result.response;
   if (!response) throw new Error("email_ai_empty_response");
-  const parsed = JSON.parse(response) as { candidates?: unknown[] };
+  const parsed = (typeof response === "string" ? JSON.parse(response) : response) as {
+    candidates?: unknown[];
+  };
   return (parsed.candidates || [])
     .map(normalizeCandidate)
     .filter((x): x is Candidate => x !== null)

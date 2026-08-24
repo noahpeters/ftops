@@ -16,7 +16,7 @@ describe("customer email ingestion", () => {
       env: {
         AI: {
           run: vi.fn(async () => ({
-            response: JSON.stringify({
+            response: {
               candidates: [
                 {
                   category: "material",
@@ -26,7 +26,7 @@ describe("customer email ingestion", () => {
                   evidence: "We have decided on white oak.",
                 },
               ],
-            }),
+            },
           })),
         },
         EVENT_QUEUE: { send: vi.fn(async (message: unknown) => queued.push(message)) },
