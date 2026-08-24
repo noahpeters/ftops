@@ -27,15 +27,30 @@ export async function handleCustomerEmails(
     if (!workspaceId) return badRequest("missing_workspace_id");
     if (!canAccessWorkspace(actor, workspaceId)) return forbidden("forbidden");
     const status = url.searchParams.get("status")?.trim();
+    const attentionOnly = status === "attention";
     const result = await env.DB.prepare(
       `SELECT i.*,
+              customer.display_name AS customer_display_name,
+              contact.display_name AS contact_display_name,
               (SELECT COUNT(*) FROM customer_email_attachments a WHERE a.ingestion_id=i.id) AS attachment_count,
-              (SELECT COUNT(*) FROM customer_email_note_candidates c WHERE c.ingestion_id=i.id AND c.status='pending') AS pending_candidate_count
+              (SELECT COUNT(*) FROM customer_email_note_candidates c WHERE c.ingestion_id=i.id) AS candidate_count,
+              (SELECT COUNT(*) FROM customer_email_note_candidates c WHERE c.ingestion_id=i.id AND c.status='pending') AS pending_candidate_count,
+              (SELECT COUNT(*) FROM customer_email_note_candidates c WHERE c.ingestion_id=i.id AND c.status='applied') AS applied_candidate_count,
+              (SELECT COUNT(*) FROM customer_email_messages m WHERE m.ingestion_id=i.id) AS message_count
        FROM customer_email_ingestions i
-       WHERE i.workspace_id=? AND (? IS NULL OR i.status=?)
+       LEFT JOIN customers customer ON customer.id=i.customer_id AND customer.workspace_id=i.workspace_id
+       LEFT JOIN contacts contact ON contact.id=i.contact_id AND contact.workspace_id=i.workspace_id
+       WHERE i.workspace_id=?
+         AND (?=1 AND i.status IN ('failed','needs_match') OR ?=0 AND (? IS NULL OR i.status=?))
        ORDER BY i.received_at DESC LIMIT 100`
     )
-      .bind(workspaceId, status || null, status || null)
+      .bind(
+        workspaceId,
+        attentionOnly ? 1 : 0,
+        attentionOnly ? 1 : 0,
+        status && !attentionOnly ? status : null,
+        status && !attentionOnly ? status : null
+      )
       .all();
     return json(result.results ?? []);
   }

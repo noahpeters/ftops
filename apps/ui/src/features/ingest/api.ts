@@ -44,3 +44,44 @@ export async function replayIngestRequest(id: string) {
     }
   );
 }
+
+export type EmailIngestionSummary = {
+  id: string;
+  workspace_id: string;
+  forwarding_email: string;
+  envelope_to: string;
+  original_sender_email: string | null;
+  original_sender_name: string | null;
+  contact_id: string | null;
+  contact_display_name: string | null;
+  customer_id: string | null;
+  customer_display_name: string | null;
+  subject: string | null;
+  status: "queued" | "processing" | "needs_match" | "ready" | "applied" | "dismissed" | "failed";
+  failure_reason: string | null;
+  received_at: string;
+  processed_at: string | null;
+  updated_at: string;
+  attachment_count: number;
+  candidate_count: number;
+  pending_candidate_count: number;
+  applied_candidate_count: number;
+  message_count: number;
+};
+
+export async function listEmailIngestions(params: { workspaceId: string; status?: string }) {
+  return await fetchJson<EmailIngestionSummary[]>(buildUrl("/customer-emails", params));
+}
+
+export async function retryEmailIngestion(ingestion: EmailIngestionSummary) {
+  return await fetchJson<{ queued: boolean }>(
+    buildUrl(`/customer-emails/ingestions/${ingestion.id}/match`),
+    {
+      method: "POST",
+      body: JSON.stringify({
+        customerId: ingestion.customer_id,
+        contactId: ingestion.contact_id,
+      }),
+    }
+  );
+}

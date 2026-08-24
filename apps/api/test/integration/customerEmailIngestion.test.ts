@@ -150,6 +150,25 @@ describe("customer email ingestion", () => {
       await db.prepare(`SELECT COUNT(*) AS count FROM customer_email_note_candidates`).first()
     ).toMatchObject({ count: 3 });
     expect(aiRun).toHaveBeenCalledTimes(3);
+    const processingList = await apiRequest(
+      env,
+      "/customer-emails?workspaceId=ws-email&status=ready",
+      { headers: { "X-Debug-User-Email": "reviewer@example.com" } }
+    );
+    expect(processingList.status).toBe(200);
+    expect(await processingList.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: received.id,
+          workspace_id: "ws-email",
+          customer_display_name: "Customer One",
+          contact_display_name: "Client",
+          status: "ready",
+          candidate_count: 3,
+          message_count: 3,
+        }),
+      ])
+    );
     expect(
       await db
         .prepare(
