@@ -490,7 +490,7 @@ function parseAddress(value: string) {
   const withoutZip = zip
     ? cleaned
         .replace(zip, "")
-        .replace(/[,\.\s]+$/, "")
+        .replace(/[,.\s]+$/, "")
         .trim()
     : cleaned;
   const stateMatch = withoutZip.match(/\b(CA|California)\b/i);
@@ -498,7 +498,7 @@ function parseAddress(value: string) {
   const beforeState = stateMatch
     ? withoutZip
         .slice(0, stateMatch.index)
-        .replace(/[,\.\s]+$/, "")
+        .replace(/[,.\s]+$/, "")
         .trim()
     : withoutZip;
   const streetMatch = beforeState.match(
