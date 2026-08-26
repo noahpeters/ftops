@@ -24,6 +24,11 @@ type ContactMatch = {
   phone: string | null;
 };
 
+type CustomerMatchResult = {
+  contact: ContactMatch | null;
+  ambiguous: boolean;
+};
+
 export async function processDoodleCustomerEmailIngestion(
   env: Env,
   ingestionId: string
@@ -62,7 +67,19 @@ export async function processDoodleCustomerEmailIngestion(
   }
 
   const phone = normalizePhone(booking.phone);
-  const match = await findCustomerMatch(env, workspaceId, booking.inviteeName, phone);
+  const matchResult = await findCustomerMatch(env, workspaceId, booking.inviteeName, phone);
+  if (matchResult.ambiguous) {
+    await env.DB.prepare(
+      `UPDATE customer_email_ingestions
+       SET original_sender_email='mailer@doodle.com',original_sender_name='Doodle',subject=?,message_id=?,status='needs_match',failure_reason='multiple_contact_matches',processed_at=?,updated_at=?
+       WHERE id=?`
+    )
+      .bind(booking.subject, booking.sourceMessageId, now, now, ingestionId)
+      .run();
+    return true;
+  }
+
+  const match = matchResult.contact;
   const customerId = match?.customer_id || crypto.randomUUID();
   const contactId = match?.id || crypto.randomUUID();
   const names = splitName(booking.inviteeName);
@@ -105,17 +122,22 @@ export async function processDoodleCustomerEmailIngestion(
   }
 
   const opportunityDescription =
-    booking.projectDescription || booking.fields.Topic || booking.inviteTitle || "Doodle consultation";
+    booking.projectDescription ||
+    booking.fields.Topic ||
+    booking.inviteTitle ||
+    "Doodle consultation";
   const budgetCents = parseBudgetCents(booking.budgetText);
-  const opportunityType = classifyOpportunityType(opportunityDescription);
-  await upsertDoodleOpportunity(env, {
-    workspaceId,
-    customerId,
-    description: opportunityDescription,
-    opportunityType,
-    budgetCents,
-    now,
-  });
+  if (!isAdministrativeBooking(booking)) {
+    const opportunityType = classifyOpportunityType(opportunityDescription);
+    await upsertDoodleOpportunity(env, {
+      workspaceId,
+      customerId,
+      description: opportunityDescription,
+      opportunityType,
+      budgetCents,
+      now,
+    });
+  }
 
   const activityId = crypto.randomUUID();
   const body = formatDoodleNote(booking, budgetCents);
@@ -175,7 +197,12 @@ export async function parseDoodleBooking(raw: ArrayBuffer): Promise<DoodleBookin
   const bookedTime = extractBookedTime(html, text);
   const inviteUrl = extractInviteUrl(html);
   const phone = fieldValue(fields, ["Phone number", "Phone", "Mobile", "Telephone"]);
-  const address = fieldValue(fields, ["Home Address", "Address", "Project Address", "Project Site"]);
+  const address = fieldValue(fields, [
+    "Home Address",
+    "Address",
+    "Project Address",
+    "Project Site",
+  ]);
   const budgetText = fieldValue(fields, ["Your budget range", "Budget", "Budget range"]);
   const projectDescription = fieldValue(fields, [
     "Brief description of the project you'd like to discuss",
@@ -204,7 +231,7 @@ async function findCustomerMatch(
   workspaceId: string,
   inviteeName: string,
   phone: string | null
-): Promise<ContactMatch | null> {
+): Promise<CustomerMatchResult> {
   if (phone) {
     const contacts = await env.DB.prepare(
       `SELECT id,customer_id,display_name,phone FROM contacts
@@ -213,8 +240,8 @@ async function findCustomerMatch(
       .bind(workspaceId)
       .all<ContactMatch>();
     const matches = (contacts.results ?? []).filter((row) => normalizePhone(row.phone) === phone);
-    if (matches.length === 1) return matches[0];
-    if (matches.length > 1) return null;
+    if (matches.length === 1) return { contact: matches[0], ambiguous: false };
+    if (matches.length > 1) return { contact: null, ambiguous: true };
   }
   const contacts = await env.DB.prepare(
     `SELECT id,customer_id,display_name,phone FROM contacts
@@ -222,7 +249,17 @@ async function findCustomerMatch(
   )
     .bind(workspaceId, inviteeName)
     .all<ContactMatch>();
-  return contacts.results?.length === 1 ? contacts.results[0] : null;
+  if (contacts.results?.length === 1) {
+    return { contact: contacts.results[0], ambiguous: false };
+  }
+  return { contact: null, ambiguous: (contacts.results?.length ?? 0) > 1 };
+}
+
+export function isAdministrativeBooking(
+  booking: Pick<DoodleBooking, "projectDescription" | "fields">
+) {
+  const text = [booking.projectDescription, booking.fields.Topic].filter(Boolean).join(" ");
+  return /\breschedul(?:e|ed|ing)\b|\bprevious(?:ly)? scheduled\b/i.test(text);
 }
 
 async function upsertProjectAddress(
@@ -332,8 +369,18 @@ function extractInviteeFields(html: string, text: string) {
     for (let i = marker + 1; i + 1 < divs.length; i += 2) {
       const label = divs[i];
       const value = divs[i + 1];
-      if (!label || !value || /^Go to the invite$/i.test(label) || /^Go to the invite$/i.test(value)) break;
-      if (/^(Hi\s|Doodle|Aug\s|Sep\s|Oct\s|Nov\s|Dec\s|Jan\s|Feb\s|Mar\s|Apr\s|May\s|Jun\s|Jul\s)/i.test(label))
+      if (
+        !label ||
+        !value ||
+        /^Go to the invite$/i.test(label) ||
+        /^Go to the invite$/i.test(value)
+      )
+        break;
+      if (
+        /^(Hi\s|Doodle|Aug\s|Sep\s|Oct\s|Nov\s|Dec\s|Jan\s|Feb\s|Mar\s|Apr\s|May\s|Jun\s|Jul\s)/i.test(
+          label
+        )
+      )
         continue;
       fields[label] = value;
     }
@@ -389,7 +436,11 @@ export function parseBudgetCents(value: string | null | undefined) {
 
 export function classifyOpportunityType(description: string) {
   const value = normalizeText(description);
-  if (/cabinet|kitchen|vanity|bath|built in|built-in|bookcase|closet|wardrobe|mudroom|bar\b|library/.test(value))
+  if (
+    /cabinet|kitchen|vanity|bath|built in|built-in|bookcase|closet|wardrobe|mudroom|bar\b|library/.test(
+      value
+    )
+  )
     return "cabinets";
   if (/table|desk|chair|bench|bed\b|dresser|nightstand|coffee table|furniture/.test(value))
     return "furniture";
@@ -427,17 +478,28 @@ function formatDoodleNote(booking: DoodleBooking, budgetCents: number) {
     booking.inviteUrl ? `Doodle invite: ${booking.inviteUrl}` : null,
     booking.sourceMessageId ? `Source message: ${booking.sourceMessageId}` : null,
   ];
-  return lines.filter(Boolean).map((line) => `- ${line}`).join("\n");
+  return lines
+    .filter(Boolean)
+    .map((line) => `- ${line}`)
+    .join("\n");
 }
 
 function parseAddress(value: string) {
   const cleaned = value.replace(/\s+/g, " ").trim();
   const zip = cleaned.match(/\b(\d{5}(?:-\d{4})?)\b/)?.[1] || null;
-  const withoutZip = zip ? cleaned.replace(zip, "").replace(/[,.\s]+$/, "").trim() : cleaned;
+  const withoutZip = zip
+    ? cleaned
+        .replace(zip, "")
+        .replace(/[,\.\s]+$/, "")
+        .trim()
+    : cleaned;
   const stateMatch = withoutZip.match(/\b(CA|California)\b/i);
   const region = stateMatch ? "CA" : null;
   const beforeState = stateMatch
-    ? withoutZip.slice(0, stateMatch.index).replace(/[,.\s]+$/, "").trim()
+    ? withoutZip
+        .slice(0, stateMatch.index)
+        .replace(/[,\.\s]+$/, "")
+        .trim()
     : withoutZip;
   const streetMatch = beforeState.match(
     /^(.+?\b(?:st|street|ave|avenue|rd|road|dr|drive|ln|lane|way|blvd|boulevard|ct|court|pl|place)\.?)(?:\s+)(.+)$/i
@@ -464,16 +526,25 @@ function normalizePhone(value: string | null | undefined) {
   return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
 }
 function normalizeAddress(value: unknown) {
-  return normalizeText(String(value || "")).replace(/\busa?\b/g, "").trim();
+  return normalizeText(String(value || ""))
+    .replace(/\busa?\b/g, "")
+    .trim();
 }
 function normalizeText(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 function normalizeSubject(value: string) {
   return value.replace(/^\s*(?:(?:fwd?|re):\s*)+/i, "").trim();
 }
 function normalizeEmail(value: string | null | undefined) {
-  return String(value || "").trim().toLowerCase().replace(/^<|>$/g, "");
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^<|>$/g, "");
 }
 function normalizeMessageId(value: string | null | undefined) {
   const result = String(value || "").trim();
