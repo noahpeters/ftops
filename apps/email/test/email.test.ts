@@ -46,16 +46,22 @@ describe("inbound email worker", () => {
       "Doodle booking body",
     ].join("\r\n");
     const rawBuffer = new TextEncoder().encode(raw).buffer;
-    expect(isTrustedDoodleForward(rawBuffer, "doodle@ops.fromtrees.studio")).toBe(true);
+    expect(
+      isTrustedDoodleForward(rawBuffer, "doodle@ops.fromtrees.studio"),
+    ).toBe(true);
 
-    const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      expect(init?.headers).toMatchObject({
-        "x-ftops-envelope-from": "doodle@doodle.com",
-        "x-ftops-original-envelope-from": "srs0=forwarded@icloud.com",
-        "x-ftops-envelope-to": "doodle@ops.fromtrees.studio",
-      });
-      return new Response(JSON.stringify({ status: "queued" }), { status: 202 });
-    });
+    const fetch = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        expect(init?.headers).toMatchObject({
+          "x-ftops-envelope-from": "doodle@doodle.com",
+          "x-ftops-original-envelope-from": "srs0=forwarded@icloud.com",
+          "x-ftops-envelope-to": "doodle@ops.fromtrees.studio",
+        });
+        return new Response(JSON.stringify({ status: "queued" }), {
+          status: 202,
+        });
+      },
+    );
     const message = emailMessage(raw, {
       from: "SRS0=forwarded@icloud.com",
       to: "doodle@ops.fromtrees.studio",
@@ -80,7 +86,9 @@ describe("inbound email worker", () => {
         "test",
       ].join("\r\n"),
     ).buffer;
-    expect(isTrustedDoodleForward(raw, "notes@ops.fromtrees.studio")).toBe(false);
+    expect(
+      isTrustedDoodleForward(raw, "notes@ops.fromtrees.studio"),
+    ).toBe(false);
   });
 
   it("rejects unauthorized senders when FTOPS returns forbidden", async () => {
