@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyOpportunityType,
+  isAdministrativeBooking,
   parseBudgetCents,
   parseDoodleBooking,
 } from "../../src/services/doodleEmailIngestion";
@@ -59,6 +60,21 @@ describe("Doodle booking ingestion", () => {
     expect(classifyOpportunityType("Vanity for the master bath")).toBe("cabinets");
     expect(classifyOpportunityType("Built-in bookcase with arched openings")).toBe("cabinets");
     expect(classifyOpportunityType("White oak dining table")).toBe("furniture");
+  });
+
+  it("treats reschedule-only bookings as administrative activity", () => {
+    expect(
+      isAdministrativeBooking({
+        projectDescription: "This is the rescheduled call from August 25th.",
+        fields: { Topic: "This is the rescheduled call from August 25th." },
+      })
+    ).toBe(true);
+    expect(
+      isAdministrativeBooking({
+        projectDescription: "Build a home library with arched built-ins.",
+        fields: {},
+      })
+    ).toBe(false);
   });
 
   it("rejects a non-Doodle message even if its subject resembles a booking", async () => {
