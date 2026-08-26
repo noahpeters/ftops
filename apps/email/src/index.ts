@@ -4,6 +4,8 @@ export type EmailWorkerEnv = {
 };
 
 const MAX_RAW_BYTES = 25 * 1024 * 1024;
+const DOODLE_MAILBOX = "doodle@ops.fromtrees.studio";
+const DOODLE_AUTHORIZED_FORWARDER = "doodle@doodle.com";
 
 export default {
   async fetch(): Promise<Response> {
@@ -24,8 +26,11 @@ export default {
       throw new Error("email_ingestion_secret_missing");
     const raw = await new Response(message.raw).arrayBuffer();
     const timestamp = String(Date.now());
-    const envelopeFrom = normalizeEmail(message.from);
+    const originalEnvelopeFrom = normalizeEmail(message.from);
     const envelopeTo = normalizeEmail(message.to);
+    const envelopeFrom = isTrustedDoodleForward(raw, envelopeTo)
+      ? DOODLE_AUTHORIZED_FORWARDER
+      : originalEnvelopeFrom;
     const digest = await sha256Hex(raw);
     const signature = await sign(
       env.EMAIL_INGESTION_SECRET,
@@ -40,6 +45,7 @@ export default {
           "x-ftops-email-timestamp": timestamp,
           "x-ftops-email-signature": signature,
           "x-ftops-envelope-from": envelopeFrom,
+          "x-ftops-original-envelope-from": originalEnvelopeFrom,
           "x-ftops-envelope-to": envelopeTo,
         },
         body: raw,
@@ -50,7 +56,8 @@ export default {
       console.warn(
         JSON.stringify({
           event: "customer_email_rejected",
-          envelopeFrom,
+          envelopeFrom: originalEnvelopeFrom,
+          authorizedAs: envelopeFrom,
           envelopeTo,
           detail,
         }),
@@ -63,6 +70,40 @@ export default {
     }
   },
 } satisfies ExportedHandler<EmailWorkerEnv>;
+
+export function isTrustedDoodleForward(raw: ArrayBuffer, envelopeTo: string) {
+  if (normalizeEmail(envelopeTo) !== DOODLE_MAILBOX) return false;
+  const headersAndBody = new TextDecoder().decode(
+    raw.slice(0, Math.min(raw.byteLength, 256 * 1024)),
+  );
+  const fromDoodle =
+    /(?:^|\r?\n)From:\s*Doodle\s*<mailer@doodle\.com>/i.test(
+      headersAndBody,
+    );
+  const bookingTemplate =
+    /(?:^|\r?\n)X-Mailgun-Template-Name:\s*SE_PARTICIPATION_NOTIF_BOOKING_O\s*$/im.test(
+      headersAndBody,
+    );
+  const bookingSubject =
+    /(?:^|\r?\n)Subject:\s*(?:Fwd?:\s*)?New time booked for\s+/im.test(
+      headersAndBody,
+    );
+  const doodleDkim =
+    /(?:^|\r?\n)DKIM-Signature:[\s\S]{0,600}?\bd=doodle\.com\b/i.test(
+      headersAndBody,
+    );
+  const authenticatedDoodle =
+    /(?:Authentication-Results|ARC-Authentication-Results):[^\r\n]*(?:dmarc=pass[^\r\n]*header\.from=doodle\.com|dkim=pass[^\r\n]*header\.d=doodle\.com)/i.test(
+      headersAndBody,
+    );
+  return (
+    fromDoodle &&
+    bookingTemplate &&
+    bookingSubject &&
+    doodleDkim &&
+    authenticatedDoodle
+  );
+}
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase().replace(/^<|>$/g, "");
