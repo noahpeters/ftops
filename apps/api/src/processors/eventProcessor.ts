@@ -6,12 +6,14 @@ import { processQuickbooksBootstrap } from "./quickbooksBootstrap";
 import { processQuoContactSync } from "../services/quo";
 import { processCustomerNoteFollowUpAnalysis } from "../services/customerFollowUp";
 import { processCustomerEmailIngestion } from "../services/customerEmailIngestion";
+import { processDoodleCustomerEmailIngestion } from "../services/doodleEmailIngestion";
 
 export async function processEventMessage(msg: EventQueuePayload, env: Env): Promise<void> {
   if (msg.source === "ftops" && msg.type === "customer.email.extract") {
     const ingestionId = (msg.payload as { ingestionId?: string } | undefined)?.ingestionId;
     if (!ingestionId) throw new Error("customer_email_ingestion_payload_invalid");
-    await processCustomerEmailIngestion(env, ingestionId);
+    const handledByDoodle = await processDoodleCustomerEmailIngestion(env, ingestionId);
+    if (!handledByDoodle) await processCustomerEmailIngestion(env, ingestionId);
     return;
   }
   if (msg.source === "ftops" && msg.type === "quo.contact.sync") {
