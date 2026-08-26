@@ -20,20 +20,6 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci --workspaces
-      - name: Format Doodle changes for verification
-        run: npm run fmt
-      - name: Upload formatted Doodle sources
-        uses: actions/upload-artifact@v4
-        with:
-          name: doodle-formatted-sources
-          path: |
-            apps/api/src/services/doodleEmailIngestion.ts
-            apps/api/test/unit/doodleEmailIngestion.test.ts
-            apps/api/src/processors/eventProcessor.ts
-            apps/email/src/index.ts
-            apps/email/test/email.test.ts
-            apps/api/production/email-routing.sql
-            .github/workflows/main.yml
       - name: Verify
         run: npm run verify
 
