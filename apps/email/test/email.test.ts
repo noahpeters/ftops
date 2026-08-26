@@ -86,9 +86,9 @@ describe("inbound email worker", () => {
         "test",
       ].join("\r\n"),
     ).buffer;
-    expect(
-      isTrustedDoodleForward(raw, "notes@ops.fromtrees.studio"),
-    ).toBe(false);
+    expect(isTrustedDoodleForward(raw, "notes@ops.fromtrees.studio")).toBe(
+      false,
+    );
   });
 
   it("rejects unauthorized senders when FTOPS returns forbidden", async () => {
