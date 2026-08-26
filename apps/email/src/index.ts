@@ -73,22 +73,36 @@ export default {
 
 export function isTrustedDoodleForward(raw: ArrayBuffer, envelopeTo: string) {
   if (normalizeEmail(envelopeTo) !== DOODLE_MAILBOX) return false;
-  const headersAndBody = new TextDecoder().decode(raw.slice(0, Math.min(raw.byteLength, 256 * 1024)));
-  const fromDoodle = /(?:^|\r?\n)From:\s*Doodle\s*<mailer@doodle\.com>/i.test(headersAndBody);
-  const bookingTemplate = /(?:^|\r?\n)X-Mailgun-Template-Name:\s*SE_PARTICIPATION_NOTIF_BOOKING_O\s*$/im.test(
-    headersAndBody,
+  const headersAndBody = new TextDecoder().decode(
+    raw.slice(0, Math.min(raw.byteLength, 256 * 1024)),
   );
-  const bookingSubject = /(?:^|\r?\n)Subject:\s*(?:Fwd?:\s*)?New time booked for\s+/im.test(
-    headersAndBody,
-  );
-  const doodleDkim = /(?:^|\r?\n)DKIM-Signature:[\s\S]{0,600}?\bd=doodle\.com\b/i.test(
-    headersAndBody,
-  );
+  const fromDoodle =
+    /(?:^|\r?\n)From:\s*Doodle\s*<mailer@doodle\.com>/i.test(
+      headersAndBody,
+    );
+  const bookingTemplate =
+    /(?:^|\r?\n)X-Mailgun-Template-Name:\s*SE_PARTICIPATION_NOTIF_BOOKING_O\s*$/im.test(
+      headersAndBody,
+    );
+  const bookingSubject =
+    /(?:^|\r?\n)Subject:\s*(?:Fwd?:\s*)?New time booked for\s+/im.test(
+      headersAndBody,
+    );
+  const doodleDkim =
+    /(?:^|\r?\n)DKIM-Signature:[\s\S]{0,600}?\bd=doodle\.com\b/i.test(
+      headersAndBody,
+    );
   const authenticatedDoodle =
     /(?:Authentication-Results|ARC-Authentication-Results):[^\r\n]*(?:dmarc=pass[^\r\n]*header\.from=doodle\.com|dkim=pass[^\r\n]*header\.d=doodle\.com)/i.test(
       headersAndBody,
     );
-  return fromDoodle && bookingTemplate && bookingSubject && doodleDkim && authenticatedDoodle;
+  return (
+    fromDoodle &&
+    bookingTemplate &&
+    bookingSubject &&
+    doodleDkim &&
+    authenticatedDoodle
+  );
 }
 
 function normalizeEmail(value: string) {
