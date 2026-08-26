@@ -76,10 +76,9 @@ export function isTrustedDoodleForward(raw: ArrayBuffer, envelopeTo: string) {
   const headersAndBody = new TextDecoder().decode(
     raw.slice(0, Math.min(raw.byteLength, 256 * 1024)),
   );
-  const fromDoodle =
-    /(?:^|\r?\n)From:\s*Doodle\s*<mailer@doodle\.com>/i.test(
-      headersAndBody,
-    );
+  const fromDoodle = /(?:^|\r?\n)From:\s*Doodle\s*<mailer@doodle\.com>/i.test(
+    headersAndBody,
+  );
   const bookingTemplate =
     /(?:^|\r?\n)X-Mailgun-Template-Name:\s*SE_PARTICIPATION_NOTIF_BOOKING_O\s*$/im.test(
       headersAndBody,
