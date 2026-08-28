@@ -1,4 +1,4 @@
-export type WebhookSource = "quickbooks" | "shopify";
+export type WebhookSource = "quickbooks" | "shopify" | "quo";
 
 export type WebhookEnvelope = {
   id: string;
@@ -57,6 +57,10 @@ export async function buildWebhookEnvelopeId(args: {
       return eventId;
     }
   }
+  if (args.source === "quo") {
+    const eventId = extractQuoEventId(args.parsedBody);
+    if (eventId) return eventId;
+  }
 
   const stable = [
     args.source,
@@ -66,6 +70,12 @@ export async function buildWebhookEnvelopeId(args: {
     args.body,
   ].join("|");
   return await sha256Hex(stable);
+}
+
+export function extractQuoEventId(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const id = (payload as Record<string, unknown>).id;
+  return typeof id === "string" && id.trim() ? id.trim() : null;
 }
 
 export function extractQuickBooksEventId(payload: unknown): string | null {

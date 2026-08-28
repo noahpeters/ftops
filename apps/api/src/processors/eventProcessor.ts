@@ -7,6 +7,7 @@ import { processQuoContactSync } from "../services/quo";
 import { processCustomerNoteFollowUpAnalysis } from "../services/customerFollowUp";
 import { processCustomerEmailIngestion } from "../services/customerEmailIngestion";
 import { processDoodleCustomerEmailIngestion } from "../services/doodleEmailIngestion";
+import { processQuoCallWebhook } from "../services/quoCallWebhook";
 
 export async function processEventMessage(msg: EventQueuePayload, env: Env): Promise<void> {
   if (msg.source === "ftops" && msg.type === "customer.email.extract") {
@@ -28,6 +29,32 @@ export async function processEventMessage(msg: EventQueuePayload, env: Env): Pro
       env,
       (msg.payload ?? {}) as { workspaceId?: string; customerId?: string; noteId?: string }
     );
+    return;
+  }
+  if (msg.source === "quo" && msg.type === "quo.webhook") {
+    const ingestRequestId = (msg.payload as { ingestRequestId?: string } | undefined)
+      ?.ingestRequestId;
+    if (!ingestRequestId) throw new Error("quo_ingest_request_missing");
+    const ingest = await env.DB.prepare(
+      `SELECT workspace_id,integration_id,body_json,body_text,received_at
+       FROM ingest_requests WHERE id=? AND signature_verified=1`
+    )
+      .bind(ingestRequestId)
+      .first<{
+        workspace_id: string;
+        integration_id: string | null;
+        body_json: string | null;
+        body_text: string;
+        received_at: string;
+      }>();
+    if (!ingest) throw new Error("quo_ingest_request_not_found_or_unverified");
+    await processQuoCallWebhook(env, {
+      workspaceId: ingest.workspace_id,
+      integrationId: ingest.integration_id,
+      eventId: msg.externalId || ingestRequestId,
+      body: JSON.parse(ingest.body_json || ingest.body_text),
+      receivedAt: ingest.received_at,
+    });
     return;
   }
   const now = nowISO();

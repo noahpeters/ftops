@@ -299,6 +299,12 @@ function validateSecrets(provider: string, secrets: Record<string, unknown>) {
     if (typeof secrets.apiKey !== "string" || !secrets.apiKey.trim()) {
       return { ok: false, error: "missing_quo_api_key" };
     }
+    if (
+      secrets.webhookSigningSecret !== undefined &&
+      (typeof secrets.webhookSigningSecret !== "string" || !secrets.webhookSigningSecret.trim())
+    ) {
+      return { ok: false, error: "invalid_quo_webhook_signing_secret" };
+    }
   }
   return { ok: true as const };
 }

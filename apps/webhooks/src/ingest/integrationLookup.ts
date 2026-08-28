@@ -3,7 +3,7 @@ import type { Env } from "../lib/types";
 export async function findIntegration(
   env: Env,
   args: {
-    provider: "shopify" | "qbo";
+    provider: "shopify" | "qbo" | "quo";
     environment: "sandbox" | "production";
     externalAccountId: string;
   },
@@ -22,6 +22,26 @@ export async function findIntegration(
      LIMIT 1`,
   )
     .bind(provider, environment, accountHash, externalAccountId)
+    .first<{
+      id: string;
+      workspace_id: string;
+      provider: string;
+      environment: string;
+      external_account_id: string;
+      secrets_key_id: string;
+      secrets_ciphertext: string;
+      is_active: number;
+    }>();
+}
+
+export async function findIntegrationById(env: Env, integrationId: string) {
+  if (!integrationId) return null;
+  return await env.DB.prepare(
+    `SELECT id, workspace_id, provider, environment, external_account_id,
+            secrets_key_id, secrets_ciphertext, is_active
+     FROM integrations WHERE id = ? AND provider = 'quo' AND is_active = 1 LIMIT 1`,
+  )
+    .bind(integrationId)
     .first<{
       id: string;
       workspace_id: string;

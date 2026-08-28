@@ -37,3 +37,18 @@ export async function getQboVerifierToken(
   }
   return parsed.webhookVerifierToken;
 }
+
+export async function getQuoWebhookSigningSecret(
+  env: Env,
+  integration: IntegrationRow,
+) {
+  const decrypted = await decryptSecrets(
+    env,
+    integration.secrets_key_id,
+    integration.secrets_ciphertext,
+  );
+  const parsed = JSON.parse(decrypted) as { webhookSigningSecret?: string };
+  if (!parsed.webhookSigningSecret)
+    throw new Error("missing_quo_webhook_signing_secret");
+  return parsed.webhookSigningSecret;
+}

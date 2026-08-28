@@ -4,7 +4,8 @@ main = "src/index.ts"
 
 routes = [
   { pattern = "api.from-trees.com/ingest/shopify/webhook*", zone_name = "from-trees.com" },
-  { pattern = "api.from-trees.com/ingest/qbo/webhook*", zone_name = "from-trees.com" }
+  { pattern = "api.from-trees.com/ingest/qbo/webhook*", zone_name = "from-trees.com" },
+  { pattern = "api.from-trees.com/ingest/quo/*", zone_name = "from-trees.com" }
 ]
 
 [[d1_databases]]
@@ -19,6 +20,10 @@ queue = "events-qb-ingest"
 [[queues.producers]]
 binding = "SHOPIFY_INGEST_QUEUE"
 queue = "events-shopify-ingest"
+
+[[queues.producers]]
+binding = "QUO_INGEST_QUEUE"
+queue = "events-quo-ingest"
 
 [observability]
 [observability.logs]

@@ -2,10 +2,15 @@ import { json, methodNotAllowed, notFound } from "../lib/http";
 import type { Env } from "../lib/types";
 import { verifyShopifyHmac } from "../ingest/verifyShopify";
 import { verifyQboSignature } from "../ingest/verifyQbo";
-import { findIntegration } from "../ingest/integrationLookup";
+import { verifyQuoSignature } from "../ingest/verifyQuo";
+import {
+  findIntegration,
+  findIntegrationById,
+} from "../ingest/integrationLookup";
 import {
   getQboVerifierToken,
   getShopifyWebhookSecret,
+  getQuoWebhookSigningSecret,
 } from "../ingest/getIntegrationSecret";
 import { nowISO } from "../lib/utils";
 import {
@@ -13,7 +18,7 @@ import {
   type IngestQueueMessage,
 } from "@ftops/webhooks";
 
-const PROVIDERS = ["shopify", "qbo"] as const;
+const PROVIDERS = ["shopify", "qbo", "quo"] as const;
 const UNKNOWN_WORKSPACE_ID = "ws_unknown";
 const MAX_BODY_BYTES = 1_000_000;
 
@@ -28,9 +33,11 @@ export async function handleIngest(
     return notFound("Route not found");
   }
 
-  const [head, tail] = segments;
+  const [head, tail, final] = segments;
 
-  if (request.method !== "POST" || tail !== "webhook") {
+  const validPath =
+    head === "quo" ? Boolean(tail && final === "webhook") : tail === "webhook";
+  if (request.method !== "POST" || !validPath) {
     return methodNotAllowed(["POST"]);
   }
 
@@ -44,8 +51,87 @@ export async function handleIngest(
   if (head === "qbo") {
     return await handleQboWebhook(env, request, url);
   }
+  if (head === "quo") {
+    return await handleQuoWebhook(env, request, url, tail);
+  }
 
   return notFound("Route not found");
+}
+
+async function handleQuoWebhook(
+  env: Env,
+  request: Request,
+  url: URL,
+  integrationId: string,
+) {
+  const rawBody = await readBodyWithLimit(request);
+  if (!rawBody.ok) return rawBody.response;
+  const bodyText = decodeBody(rawBody.value);
+  const parsed = safeParseJson(bodyText);
+  const signatureHeader = request.headers.get("openphone-signature");
+  const integration = await findIntegrationById(env, integrationId);
+  if (!integration) return notFound("Route not found");
+
+  let verified = false;
+  let verifyError: string | null = parsed.ok ? null : "invalid_json_body";
+  if (parsed.ok) {
+    try {
+      const secret = await getQuoWebhookSigningSecret(env, integration);
+      const result = await verifyQuoSignature(
+        bodyText,
+        signatureHeader,
+        secret,
+      );
+      verified = result.ok;
+      verifyError = result.error;
+    } catch (error) {
+      verifyError = error instanceof Error ? error.message : "verify_failed";
+    }
+  }
+
+  if (!verified) {
+    console.warn(
+      JSON.stringify({
+        event: "quo_webhook_rejected",
+        integration_id: integration.id,
+        error: verifyError,
+      }),
+    );
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  const headers = pickHeaders(request.headers, [
+    "openphone-signature",
+    "content-type",
+    "user-agent",
+  ]);
+  const message = await buildIngestMessage({
+    source: "quo",
+    workspaceId: integration.workspace_id,
+    environment: integration.environment,
+    externalAccountId: integration.external_account_id,
+    integrationId: integration.id,
+    realmId: null,
+    request,
+    url,
+    headers,
+    bodyText,
+    parsedBody: parsed.value,
+    signatureHeader,
+    signatureVerified: true,
+    verifyError: null,
+    notes: null,
+  });
+  await env.QUO_INGEST_QUEUE.send(message);
+  console.log(
+    JSON.stringify({
+      event: "quo_webhook_accepted",
+      integration_id: integration.id,
+      workspace_id: integration.workspace_id,
+      webhook_event_id: message.id,
+    }),
+  );
+  return json({ ok: true });
 }
 
 async function handleShopifyWebhook(env: Env, request: Request, url: URL) {
@@ -232,7 +318,7 @@ async function handleQboWebhook(env: Env, request: Request, url: URL) {
 }
 
 async function buildIngestMessage(args: {
-  source: "quickbooks" | "shopify";
+  source: "quickbooks" | "shopify" | "quo";
   workspaceId: string;
   environment: string | null;
   externalAccountId: string | null;

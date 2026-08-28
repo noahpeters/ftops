@@ -204,4 +204,73 @@ describe("webhook ingress", () => {
 
     await mf.dispose();
   });
+
+  it("verifies and enqueues a Quo call event for the addressed integration", async () => {
+    const quoQueue = {
+      send: vi.fn().mockResolvedValue(undefined),
+    } as unknown as Queue;
+    const context = await createTestEnv({
+      env: {
+        INTEGRATIONS_MASTER_KEY: MASTER_KEY,
+        INTEGRATIONS_KEY_ID: "v1",
+        QUO_INGEST_QUEUE: quoQueue,
+      },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    const now = new Date().toISOString();
+    const signingKey = "quo-test-key";
+    const secrets = await encryptSecrets(
+      env,
+      JSON.stringify({
+        apiKey: "quo-api-key",
+        webhookSigningSecret: Buffer.from(signingKey).toString("base64"),
+      }),
+    );
+    await db
+      .prepare(
+        `INSERT INTO integrations
+        (id,workspace_id,provider,environment,external_account_id,display_name,secrets_key_id,secrets_ciphertext,is_active,created_at,updated_at)
+       VALUES ('quo_1','ws_default','quo','production','ws_default','Quo',?,?,1,?,?)`,
+      )
+      .bind(secrets.keyId, secrets.ciphertext, now, now)
+      .run();
+
+    const payload = JSON.stringify({
+      id: "EV_quo_1",
+      type: "call.completed",
+      data: { object: { id: "AC_1" } },
+    });
+    const timestamp = Date.now().toString();
+    const signature = crypto
+      .createHmac("sha256", signingKey)
+      .update(`${timestamp}.${payload}`)
+      .digest("base64");
+    const response = await worker.fetch(
+      new Request("http://localhost/ingest/quo/quo_1/webhook", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "openphone-signature": `hmac;1;${timestamp};${signature}`,
+        },
+        body: payload,
+      }),
+      env,
+      {} as ExecutionContext,
+    );
+
+    expect(response.status).toBe(200);
+    expect(quoQueue.send).toHaveBeenCalledTimes(1);
+    const message = (
+      quoQueue.send as unknown as { mock: { calls: [[IngestQueueMessage]] } }
+    ).mock.calls[0][0];
+    expect(message).toMatchObject({
+      id: "EV_quo_1",
+      source: "quo",
+      workspace_id: "ws_default",
+      integration_id: "quo_1",
+      signature_verified: true,
+    });
+    await mf.dispose();
+  });
 });

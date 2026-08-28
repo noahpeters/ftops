@@ -92,7 +92,9 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
   const [externalAccountId, setExternalAccountId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [secretValue, setSecretValue] = useState("");
+  const [quoWebhookSecret, setQuoWebhookSecret] = useState("");
   const [secretUpdate, setSecretUpdate] = useState<Record<string, string>>({});
+  const [quoWebhookSecretUpdate, setQuoWebhookSecretUpdate] = useState<Record<string, string>>({});
   const [qboConnections, setQboConnections] = useState<QboConnectionStatus[]>([]);
 
   const refresh = useCallback(async () => {
@@ -125,7 +127,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
         ? { webhookSecret: secretValue }
         : provider === "qbo"
           ? { webhookVerifierToken: secretValue }
-          : { apiKey: secretValue };
+          : { apiKey: secretValue, webhookSigningSecret: quoWebhookSecret };
     const result = await createIntegration({
       workspaceId,
       provider,
@@ -141,6 +143,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
     setExternalAccountId("");
     setDisplayName("");
     setSecretValue("");
+    setQuoWebhookSecret("");
     await refresh();
   }
 
@@ -154,19 +157,24 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
 
   async function saveSecrets(integration: IntegrationRow) {
     const next = secretUpdate[integration.id]?.trim();
-    if (!next) return;
+    const nextQuoWebhookSecret = quoWebhookSecretUpdate[integration.id]?.trim();
+    if (!next && !nextQuoWebhookSecret) return;
     const secrets =
       integration.provider === "shopify"
         ? { webhookSecret: next }
         : integration.provider === "qbo"
           ? { webhookVerifierToken: next }
-          : { apiKey: next };
+          : {
+              ...(next ? { apiKey: next } : {}),
+              ...(nextQuoWebhookSecret ? { webhookSigningSecret: nextQuoWebhookSecret } : {}),
+            };
     const result = await updateIntegration(integration.id, { secrets });
     if (!result.ok) {
       setError(result.text || "Failed to replace integration secret.");
       return;
     }
     setSecretUpdate((prev) => ({ ...prev, [integration.id]: "" }));
+    setQuoWebhookSecretUpdate((prev) => ({ ...prev, [integration.id]: "" }));
     await refresh();
   }
 
@@ -204,6 +212,8 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
         Shopify: <code>https://api.from-trees.com/ingest/shopify/webhook?env=production</code>
         <br />
         QBO: <code>https://api.from-trees.com/ingest/qbo/webhook?env=production</code>
+        <br />
+        Quo: shown per integration below (the URL includes its non-secret integration ID)
       </p>
 
       <div className={stylex(styles.panelSub)}>
@@ -275,6 +285,17 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
               ))}
             </select>
           </div>
+          {provider === "quo" && (
+            <div className={stylex(styles.formRow)}>
+              <label>Quo webhook signing secret</label>
+              <input
+                type="password"
+                value={quoWebhookSecret}
+                onChange={(event) => setQuoWebhookSecret(event.target.value)}
+                placeholder="Base64 signing secret from Quo"
+              />
+            </div>
+          )}
           <div className={stylex(styles.formRow)}>
             <label>Provider</label>
             <select
@@ -384,6 +405,26 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                         integration.provider === "quo" ? "Replace API key" : "Replace secret"
                       }
                     />
+                    {integration.provider === "quo" && (
+                      <>
+                        <br />
+                        <input
+                          type="password"
+                          value={quoWebhookSecretUpdate[integration.id] ?? ""}
+                          onChange={(event) =>
+                            setQuoWebhookSecretUpdate((prev) => ({
+                              ...prev,
+                              [integration.id]: event.target.value,
+                            }))
+                          }
+                          placeholder="Replace webhook signing secret"
+                        />
+                        <br />
+                        <small>
+                          <code>{`https://api.from-trees.com/ingest/quo/${integration.id}/webhook`}</code>
+                        </small>
+                      </>
+                    )}
                   </td>
                   <td>
                     <button type="button" onClick={() => saveSecrets(integration)}>
