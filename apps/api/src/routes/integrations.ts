@@ -168,7 +168,7 @@ export async function handleIntegrations(
     if (!canAdminWorkspace(actor, integration.workspace_id)) return forbidden("forbidden");
     if (integration.provider !== "quo") return badRequest("not_quo_integration");
     if (!integration.is_active) return badRequest("integration_inactive");
-    await syncQuoIntegrationConversations(env, integration);
+    await syncQuoIntegrationConversations(env, integration, new Date(), { forceBackfill: true });
     const state = await env.DB.prepare(
       `SELECT last_successful_sync_at,last_attempt_at,last_error
        FROM quo_conversation_sync_state WHERE integration_id=?`

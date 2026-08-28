@@ -3,10 +3,12 @@ import { decryptSecrets } from "../lib/crypto/secrets";
 import { sanitizeExternalError } from "../lib/security";
 import { nowISO } from "../lib/utils";
 import { normalizePhone } from "./quo";
+import { processQuoCallWebhook } from "./quoCallWebhook";
 
 const DEFAULT_BASE_URL = "https://api.quo.com/v1";
 const INITIAL_BACKFILL_DAYS = 90;
 const OVERLAP_MINUTES = 5;
+const CALL_TRANSCRIPT_LOOKBACK_HOURS = 24;
 const MAX_PAGES = 100;
 
 type JsonRecord = Record<string, unknown>;
@@ -30,6 +32,11 @@ type Message = {
   createdAt: string;
   updatedAt?: string;
   media?: Array<{ url?: string; type?: string }>;
+};
+type Call = {
+  id: string;
+  status: string;
+  createdAt: string;
 };
 type ContactMatch = { id: string; customer_id: string; phone: string | null };
 
@@ -57,7 +64,8 @@ export async function syncAllQuoConversations(env: Env, scheduledAt = new Date()
 export async function syncQuoIntegrationConversations(
   env: Env,
   integration: IntegrationRow,
-  scheduledAt = new Date()
+  scheduledAt = new Date(),
+  options: { forceBackfill?: boolean } = {}
 ) {
   const attemptedAt = scheduledAt.toISOString();
   const checkpoint = await env.DB.prepare(
@@ -65,11 +73,18 @@ export async function syncQuoIntegrationConversations(
   )
     .bind(integration.id)
     .first<{ last_successful_sync_at: string | null }>();
-  const windowStart = checkpoint?.last_successful_sync_at
-    ? new Date(
-        Date.parse(checkpoint.last_successful_sync_at) - OVERLAP_MINUTES * 60_000
-      ).toISOString()
-    : new Date(scheduledAt.getTime() - INITIAL_BACKFILL_DAYS * 86_400_000).toISOString();
+  const windowStart =
+    checkpoint?.last_successful_sync_at && !options.forceBackfill
+      ? new Date(
+          Date.parse(checkpoint.last_successful_sync_at) - OVERLAP_MINUTES * 60_000
+        ).toISOString()
+      : new Date(scheduledAt.getTime() - INITIAL_BACKFILL_DAYS * 86_400_000).toISOString();
+  const callWindowStart = new Date(
+    Math.min(
+      Date.parse(windowStart),
+      scheduledAt.getTime() - CALL_TRANSCRIPT_LOOKBACK_HOURS * 3_600_000
+    )
+  ).toISOString();
   const now = nowISO();
   await env.DB.prepare(
     `INSERT INTO quo_conversation_sync_state
@@ -85,7 +100,15 @@ export async function syncQuoIntegrationConversations(
     const config = await configForIntegration(env, integration);
     const conversations = await listConversations(config, windowStart, attemptedAt);
     for (const conversation of conversations) {
-      await syncConversation(env, integration, config, conversation, windowStart, attemptedAt);
+      await syncConversation(
+        env,
+        integration,
+        config,
+        conversation,
+        windowStart,
+        callWindowStart,
+        attemptedAt
+      );
     }
     await env.DB.prepare(
       `UPDATE quo_conversation_sync_state SET last_successful_sync_at=?,last_error=NULL,updated_at=?
@@ -120,9 +143,11 @@ async function syncConversation(
   config: { apiKey: string; baseUrl: string },
   conversation: Conversation,
   windowStart: string,
+  callWindowStart: string,
   windowEnd: string
 ) {
   if (!conversation.id || !conversation.phoneNumberId || !conversation.participants?.length) return;
+  await syncConversationCalls(env, integration, config, conversation, callWindowStart, windowEnd);
   const messages = await listMessages(config, conversation, windowStart, windowEnd);
   if (!messages.length) return;
   const externalPhone = singleExternalPhone(conversation.participants);
@@ -196,6 +221,65 @@ async function syncConversation(
   }
 }
 
+async function syncConversationCalls(
+  env: Env,
+  integration: IntegrationRow,
+  config: { apiKey: string; baseUrl: string },
+  conversation: Conversation,
+  createdAfter: string,
+  createdBefore: string
+) {
+  if (conversation.participants.length !== 1) return;
+  const calls = await listCalls(config, conversation, createdAfter, createdBefore);
+  for (const call of calls) {
+    if (!call.id || call.status !== "completed") continue;
+    const transcriptResponse = await quoGetOptional(
+      config,
+      `/call-transcripts/${encodeURIComponent(call.id)}`
+    );
+    if (!transcriptResponse) continue;
+    const transcript = asRecord(transcriptResponse.data);
+    if (!transcript) continue;
+    await processQuoCallWebhook(env, {
+      workspaceId: integration.workspace_id,
+      integrationId: integration.id,
+      eventId: `quo-transcript-sync:${call.id}`,
+      body: {
+        id: `quo-transcript-sync:${call.id}`,
+        type: "call.transcript.completed",
+        createdAt: string(transcript.createdAt) || call.createdAt,
+        data: { object: { ...transcript, callId: string(transcript.callId) || call.id } },
+      },
+      receivedAt: string(transcript.createdAt) || call.createdAt,
+    });
+  }
+}
+
+async function listCalls(
+  config: { apiKey: string; baseUrl: string },
+  conversation: Conversation,
+  createdAfter: string,
+  createdBefore: string
+) {
+  const results: Call[] = [];
+  let pageToken: string | null = null;
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const query = new URLSearchParams({
+      phoneNumberId: conversation.phoneNumberId,
+      createdAfter,
+      createdBefore,
+      maxResults: "100",
+    });
+    query.append("participants", conversation.participants[0]);
+    if (pageToken) query.set("pageToken", pageToken);
+    const body = await quoGet(config, `/calls?${query.toString()}`);
+    results.push(...array(body.data).map(toCall).filter(isPresent));
+    pageToken = string(body.nextPageToken) || null;
+    if (!pageToken) return results;
+  }
+  throw new Error("quo_call_pagination_limit");
+}
+
 async function listConversations(
   config: { apiKey: string; baseUrl: string },
   updatedAfter: string,
@@ -248,6 +332,15 @@ async function quoGet(config: { apiKey: string; baseUrl: string }, path: string)
   const response = await fetch(`${config.baseUrl}${path}`, {
     headers: { Authorization: config.apiKey },
   });
+  if (!response.ok) throw new Error(`quo_http_${response.status}`);
+  return asRecord(await response.json()) ?? {};
+}
+
+async function quoGetOptional(config: { apiKey: string; baseUrl: string }, path: string) {
+  const response = await fetch(`${config.baseUrl}${path}`, {
+    headers: { Authorization: config.apiKey },
+  });
+  if (response.status === 404) return null;
   if (!response.ok) throw new Error(`quo_http_${response.status}`);
   return asRecord(await response.json()) ?? {};
 }
@@ -540,6 +633,14 @@ function toMessage(value: unknown): Message | null {
       return { url: string(media?.url), type: string(media?.type) };
     }),
   };
+}
+
+function toCall(value: unknown): Call | null {
+  const row = asRecord(value);
+  const id = string(row?.id);
+  const createdAt = string(row?.createdAt);
+  if (!id || !createdAt) return null;
+  return { id, status: string(row?.status), createdAt };
 }
 
 function formatPhone(phone: string) {

@@ -70,6 +70,59 @@ describe("Quo conversation reconciliation", () => {
     await mf.dispose();
   });
 
+  it("backfills a completed call transcript into a named lead and summarized note", async () => {
+    const context = await createTestEnv({
+      env: {
+        INTEGRATIONS_MASTER_KEY: MASTER_KEY,
+        INTEGRATIONS_KEY_ID: "v1",
+        AI: {
+          run: vi.fn(async () => ({
+            response: JSON.stringify({
+              name: "Whitney Carter",
+              meaningful: true,
+              spam: false,
+              subject: "Built-in cabinet inquiry",
+              summary: "Whitney discussed a built-in cabinet project and requested next steps.",
+              nextSteps: ["Schedule a site visit"],
+              confidence: 0.98,
+            }),
+          })),
+        },
+      },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    const integration = await createQuoIntegration(env, db);
+    mockConversationApi([], null, {
+      id: "AC-whitney-call",
+      status: "completed",
+      direction: "incoming",
+      phoneNumberId: "PN-1",
+      participants: ["+14155550123"],
+      createdAt: "2026-08-27T18:00:00Z",
+      completedAt: "2026-08-27T18:12:00Z",
+    });
+
+    await syncQuoIntegrationConversations(env, integration, SYNC_TIME, { forceBackfill: true });
+
+    expect(
+      await db.prepare(`SELECT display_name,status,lead_source FROM customers`).first()
+    ).toMatchObject({ display_name: "Whitney Carter", status: "lead", lead_source: "quo" });
+    expect(await db.prepare(`SELECT display_name,phone FROM contacts`).first()).toMatchObject({
+      display_name: "Whitney Carter",
+      phone: "+14155550123",
+    });
+    const note = await db
+      .prepare(
+        `SELECT subject,body FROM customer_activities WHERE id='quo-call-transcript:AC-whitney-call'`
+      )
+      .first<{ subject: string; body: string }>();
+    expect(note?.subject).toBe("Built-in cabinet inquiry");
+    expect(note?.body).toContain("Whitney discussed a built-in cabinet project");
+    expect(note?.body).not.toContain("Hello, this is Whitney");
+    await mf.dispose();
+  });
+
   it("creates a lead for a meaningful unmatched inbound conversation and records both directions", async () => {
     const context = await createTestEnv({
       env: { INTEGRATIONS_MASTER_KEY: MASTER_KEY, INTEGRATIONS_KEY_ID: "v1" },
@@ -272,8 +325,13 @@ async function createQuoIntegration(env: Env, db: D1Database) {
   };
 }
 
-function mockConversationApi(messages: Record<string, unknown>[], name: string | null = null) {
-  vi.spyOn(globalThis, "fetch")
+function mockConversationApi(
+  messages: Record<string, unknown>[],
+  name: string | null = null,
+  call: Record<string, unknown> | null = null
+) {
+  const mock = vi
+    .spyOn(globalThis, "fetch")
     .mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -293,9 +351,39 @@ function mockConversationApi(messages: Record<string, unknown>[], name: string |
     )
     .mockResolvedValueOnce(
       new Response(
+        JSON.stringify({ data: call ? [call] : [], totalItems: call ? 1 : 0, nextPageToken: null })
+      )
+    );
+  if (call) {
+    mock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              callId: call.id,
+              createdAt: call.createdAt,
+              duration: 720,
+              dialogue: [
+                { identifier: "+14155550123", content: "Hello, this is Whitney Carter." },
+                { identifier: "US-ftops", content: "Tell me about your project." },
+              ],
+            },
+          })
+        )
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: call })))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ data: messages, totalItems: messages.length, nextPageToken: null })
+        )
+      );
+  } else {
+    mock.mockResolvedValueOnce(
+      new Response(
         JSON.stringify({ data: messages, totalItems: messages.length, nextPageToken: null })
       )
     );
+  }
 }
 
 function message(id: string, direction: string, text: string, time: string) {
