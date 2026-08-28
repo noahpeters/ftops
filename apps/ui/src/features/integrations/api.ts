@@ -11,6 +11,9 @@ export type IntegrationRow = {
   is_active: number;
   created_at: string;
   updated_at: string;
+  quo_conversations_last_synced_at?: string | null;
+  quo_conversations_last_attempt_at?: string | null;
+  quo_conversations_sync_error?: string | null;
 };
 
 export async function listIntegrations(workspaceId?: string | null) {
@@ -51,6 +54,12 @@ export async function updateIntegration(
 
 export async function deleteIntegration(id: string) {
   return await fetchJson(buildUrl(`/integrations/${id}`), { method: "DELETE" });
+}
+
+export async function syncQuoConversations(id: string) {
+  return await fetchJson<{ ok: boolean }>(buildUrl(`/integrations/${id}/sync`), {
+    method: "POST",
+  });
 }
 
 export type QboConnectionStatus = {

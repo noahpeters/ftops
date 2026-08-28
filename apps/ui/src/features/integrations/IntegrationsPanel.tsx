@@ -13,6 +13,7 @@ import {
   qboConnectUrl,
   qboDisconnect,
   qboStatus,
+  syncQuoConversations,
   type QboConnectionStatus,
 } from "./api";
 import type { WorkspaceRow } from "../workspaces/api";
@@ -96,6 +97,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
   const [secretUpdate, setSecretUpdate] = useState<Record<string, string>>({});
   const [quoWebhookSecretUpdate, setQuoWebhookSecretUpdate] = useState<Record<string, string>>({});
   const [qboConnections, setQboConnections] = useState<QboConnectionStatus[]>([]);
+  const [syncingQuoId, setSyncingQuoId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -200,6 +202,15 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
     if (!workspaceId) return;
     const result = await qboBootstrap(workspaceId, id);
     if (!result.ok) setError(result.text || "Failed to start bootstrap import.");
+    await refresh();
+  }
+
+  async function syncQuo(id: string) {
+    setSyncingQuoId(id);
+    setError(null);
+    const result = await syncQuoConversations(id);
+    if (!result.ok) setError(result.text || "Failed to sync Quo conversations.");
+    setSyncingQuoId(null);
     await refresh();
   }
 
@@ -423,6 +434,13 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                         <small>
                           <code>{`https://api.from-trees.com/ingest/quo/${integration.id}/webhook`}</code>
                         </small>
+                        <br />
+                        <small>
+                          Conversation sync:{" "}
+                          {integration.quo_conversations_sync_error
+                            ? `Error: ${integration.quo_conversations_sync_error}`
+                            : (integration.quo_conversations_last_synced_at ?? "Not run yet")}
+                        </small>
                       </>
                     )}
                   </td>
@@ -437,6 +455,16 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                     >
                       {integration.is_active ? "Disable" : "Enable"}
                     </button>
+                    {integration.provider === "quo" && (
+                      <button
+                        type="button"
+                        className={stylex(styles.secondaryButton)}
+                        disabled={!integration.is_active || syncingQuoId === integration.id}
+                        onClick={() => syncQuo(integration.id)}
+                      >
+                        {syncingQuoId === integration.id ? "Syncing…" : "Sync conversations"}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className={stylex(styles.dangerButton)}

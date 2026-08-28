@@ -8,6 +8,7 @@ import { processIngestQueueMessage } from "./processors/ingestQueue";
 import { noStore, sanitizeExternalError } from "./lib/security";
 import { sendDailySummaries } from "./services/dailySummary";
 import { enqueueDueQuoSyncs } from "./services/quo";
+import { syncAllQuoConversations } from "./services/quoConversationSync";
 import { enqueueMissingCustomerNoteFollowUps } from "./services/customerFollowUp";
 
 export default {
@@ -78,6 +79,7 @@ export default {
     await Promise.all([
       sendDailySummaries(env, new Date(controller.scheduledTime)),
       enqueueDueQuoSyncs(env),
+      syncAllQuoConversations(env, new Date(controller.scheduledTime)),
       enqueueMissingCustomerNoteFollowUps(env),
     ]);
   },

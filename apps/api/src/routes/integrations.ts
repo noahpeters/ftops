@@ -6,6 +6,7 @@ import { canAdminWorkspace, requireActor } from "../lib/access";
 import { handleQboIntegration } from "./qboIntegration";
 import { isTrustedMutationOrigin } from "../lib/security";
 import { enqueueWorkspaceQuoSync } from "../services/quo";
+import { syncQuoIntegrationConversations } from "../services/quoConversationSync";
 
 const PROVIDERS = ["shopify", "qbo", "quo"] as const;
 const ENVIRONMENTS = ["sandbox", "production"] as const;
@@ -43,16 +44,22 @@ export async function handleIntegrations(
       const filters: string[] = [];
       const bindings: string[] = [];
       if (workspaceId) {
-        filters.push("workspace_id = ?");
+        filters.push("integrations.workspace_id = ?");
         bindings.push(workspaceId);
       }
       const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
       const result = await env.DB.prepare(
-        `SELECT id, workspace_id, provider, environment, external_account_id,
-                display_name, secrets_key_id, is_active, created_at, updated_at
+        `SELECT integrations.id, integrations.workspace_id, integrations.provider,
+                integrations.environment, integrations.external_account_id,
+                integrations.display_name, integrations.secrets_key_id, integrations.is_active,
+                integrations.created_at, integrations.updated_at,
+                sync.last_successful_sync_at AS quo_conversations_last_synced_at,
+                sync.last_attempt_at AS quo_conversations_last_attempt_at,
+                sync.last_error AS quo_conversations_sync_error
          FROM integrations
+         LEFT JOIN quo_conversation_sync_state sync ON sync.integration_id=integrations.id
          ${where}
-         ORDER BY created_at DESC`
+         ORDER BY integrations.created_at DESC`
       )
         .bind(...bindings)
         .all();
@@ -141,6 +148,34 @@ export async function handleIntegrations(
     }
 
     return methodNotAllowed(["GET", "POST"]);
+  }
+
+  if (segments.length === 2 && segments[1] === "sync" && request.method === "POST") {
+    const integration = await env.DB.prepare(
+      `SELECT id,workspace_id,secrets_key_id,secrets_ciphertext,provider,is_active
+       FROM integrations WHERE id=?`
+    )
+      .bind(segments[0])
+      .first<{
+        id: string;
+        workspace_id: string;
+        secrets_key_id: string;
+        secrets_ciphertext: string;
+        provider: string;
+        is_active: number;
+      }>();
+    if (!integration) return notFound("Integration not found");
+    if (!canAdminWorkspace(actor, integration.workspace_id)) return forbidden("forbidden");
+    if (integration.provider !== "quo") return badRequest("not_quo_integration");
+    if (!integration.is_active) return badRequest("integration_inactive");
+    await syncQuoIntegrationConversations(env, integration);
+    const state = await env.DB.prepare(
+      `SELECT last_successful_sync_at,last_attempt_at,last_error
+       FROM quo_conversation_sync_state WHERE integration_id=?`
+    )
+      .bind(integration.id)
+      .first();
+    return json({ ok: true, state });
   }
 
   if (segments.length === 1) {
