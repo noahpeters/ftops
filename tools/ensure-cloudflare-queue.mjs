@@ -1,19 +1,20 @@
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 
 const queueName = process.argv[2];
 if (!queueName) throw new Error("queue name is required");
 
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const baseArgs = ["--workspace", "apps/webhooks", "exec", "--", "wrangler", "queues"];
-const output = execFileSync(npmCommand, [...baseArgs, "list", "--json"], {
+const result = spawnSync(npmCommand, [...baseArgs, "create", queueName], {
   encoding: "utf8",
-  stdio: ["ignore", "pipe", "inherit"],
 });
-const queues = JSON.parse(output);
-if (!Array.isArray(queues)) throw new Error("unexpected Cloudflare queue list response");
-
-if (queues.some((queue) => queue?.queue_name === queueName || queue?.name === queueName)) {
+const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+if (result.status === 0) {
+  process.stdout.write(output);
+} else if (/already exists|already_exists/i.test(output)) {
   console.log(`Queue ${queueName} already exists.`);
 } else {
-  execFileSync(npmCommand, [...baseArgs, "create", queueName], { stdio: "inherit" });
+  process.stdout.write(result.stdout || "");
+  process.stderr.write(result.stderr || "");
+  process.exit(result.status || 1);
 }
