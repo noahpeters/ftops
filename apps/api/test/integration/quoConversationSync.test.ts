@@ -165,7 +165,41 @@ describe("Quo conversation reconciliation", () => {
     await mf.dispose();
   });
 
-  it("does not create a lead for an unmatched trivial or outgoing-only conversation", async () => {
+  it("creates a lead for a meaningful named outgoing-only conversation", async () => {
+    const context = await createTestEnv({
+      env: { INTEGRATIONS_MASTER_KEY: MASTER_KEY, INTEGRATIONS_KEY_ID: "v1" },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    const integration = await createQuoIntegration(env, db);
+    mockConversationApi(
+      [
+        message(
+          "AC-whitney",
+          "outgoing",
+          "Hi Whitney, it was nice discussing your built-in project. Here are the next steps.",
+          "08:00:00"
+        ),
+      ],
+      "Whitney"
+    );
+
+    await syncQuoIntegrationConversations(env, integration, SYNC_TIME);
+
+    expect(await db.prepare(`SELECT display_name,status FROM customers`).first()).toMatchObject({
+      display_name: "Whitney",
+      status: "lead",
+    });
+    expect(
+      await db.prepare(`SELECT outcome,reason FROM quo_message_ingestions`).first()
+    ).toMatchObject({
+      outcome: "lead_created",
+      reason: "meaningful_named_outgoing_conversation",
+    });
+    await mf.dispose();
+  });
+
+  it("does not create a lead for an unmatched trivial incoming conversation", async () => {
     const context = await createTestEnv({
       env: { INTEGRATIONS_MASTER_KEY: MASTER_KEY, INTEGRATIONS_KEY_ID: "v1" },
     });
@@ -182,6 +216,33 @@ describe("Quo conversation reconciliation", () => {
     expect(
       await db.prepare(`SELECT outcome,reason FROM quo_message_ingestions`).first()
     ).toMatchObject({ outcome: "ignored", reason: "low_information_conversation" });
+    await mf.dispose();
+  });
+
+  it("does not create a lead for a meaningful outgoing conversation without a useful name", async () => {
+    const context = await createTestEnv({
+      env: { INTEGRATIONS_MASTER_KEY: MASTER_KEY, INTEGRATIONS_KEY_ID: "v1" },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    const integration = await createQuoIntegration(env, db);
+    mockConversationApi([
+      message(
+        "AC-unnamed-outgoing",
+        "outgoing",
+        "It was nice discussing your built-in project. Here are the next steps.",
+        "08:00:00"
+      ),
+    ]);
+
+    await syncQuoIntegrationConversations(env, integration, SYNC_TIME);
+
+    expect(await db.prepare(`SELECT COUNT(*) count FROM customers`).first()).toMatchObject({
+      count: 0,
+    });
+    expect(
+      await db.prepare(`SELECT outcome,reason FROM quo_message_ingestions`).first()
+    ).toMatchObject({ outcome: "ignored", reason: "outgoing_only_conversation" });
     await mf.dispose();
   });
 });

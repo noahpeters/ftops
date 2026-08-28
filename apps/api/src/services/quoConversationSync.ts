@@ -142,8 +142,9 @@ async function syncConversation(
   let customerId = match?.customer_id ?? null;
   let contactId = match?.id ?? null;
   let leadCreated = false;
+  let leadReason = "meaningful_incoming_conversation";
   if (!customerId) {
-    const qualification = qualifyConversation(messages);
+    const qualification = qualifyConversation(conversation, messages, externalPhone);
     if (!qualification.ok) {
       await recordIgnoredMessages(
         env,
@@ -159,6 +160,7 @@ async function syncConversation(
     customerId = lead.customerId;
     contactId = lead.contactId;
     leadCreated = true;
+    leadReason = qualification.reason;
   } else if (contactId) {
     await improvePlaceholderLeadName(
       env,
@@ -186,7 +188,7 @@ async function syncConversation(
       message,
       externalPhone,
       outcome: leadCreated && inserted ? "lead_created" : "noted",
-      reason: match ? "matched_contact_phone" : "meaningful_incoming_conversation",
+      reason: match ? "matched_contact_phone" : leadReason,
       customerId,
       contactId,
       activityId,
@@ -272,14 +274,23 @@ async function findContactByPhone(env: Env, workspaceId: string, phone: string) 
   );
 }
 
-function qualifyConversation(messages: Message[]) {
+function qualifyConversation(conversation: Conversation, messages: Message[], phone: string) {
   const incoming = messages.filter((message) => message.direction === "incoming");
+  if (incoming.some(isMeaningfulMessage)) {
+    return { ok: true as const, reason: "meaningful_incoming_conversation" };
+  }
+  if (
+    !incoming.length &&
+    usefulConversationName(conversation.name, phone) &&
+    messages.some((message) => message.direction === "outgoing" && isMeaningfulMessage(message))
+  ) {
+    return { ok: true as const, reason: "meaningful_named_outgoing_conversation" };
+  }
   if (!incoming.length) return { ok: false as const, reason: "outgoing_only_conversation" };
-  if (incoming.some(isMeaningfulIncomingMessage)) return { ok: true as const };
   return { ok: false as const, reason: "low_information_conversation" };
 }
 
-function isMeaningfulIncomingMessage(message: Message) {
+function isMeaningfulMessage(message: Message) {
   if (message.media?.length) return true;
   const text = string(message.text).replace(/\s+/g, " ").trim();
   if (
@@ -469,10 +480,14 @@ async function recordMessage(
 ) {
   const now = nowISO();
   await env.DB.prepare(
-    `INSERT OR IGNORE INTO quo_message_ingestions
+    `INSERT INTO quo_message_ingestions
        (message_id,conversation_id,workspace_id,integration_id,direction,external_phone,
         outcome,reason,customer_id,contact_id,activity_id,message_created_at,processed_at,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(message_id) DO UPDATE SET
+       outcome=excluded.outcome,reason=excluded.reason,customer_id=excluded.customer_id,
+       contact_id=excluded.contact_id,activity_id=excluded.activity_id,
+       processed_at=excluded.processed_at`
   )
     .bind(
       args.message.id,
