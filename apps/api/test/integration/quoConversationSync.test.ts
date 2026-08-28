@@ -100,6 +100,71 @@ describe("Quo conversation reconciliation", () => {
     await mf.dispose();
   });
 
+  it("uses a sender's explicit self-introduction for a new lead name", async () => {
+    const context = await createTestEnv({
+      env: { INTEGRATIONS_MASTER_KEY: MASTER_KEY, INTEGRATIONS_KEY_ID: "v1" },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    const integration = await createQuoIntegration(env, db);
+    mockConversationApi([
+      message(
+        "AC-named-lead",
+        "incoming",
+        "Hello, Morgen. This is Daniel Arreola. I met you and your husband last week.",
+        "09:00:00"
+      ),
+    ]);
+
+    await syncQuoIntegrationConversations(env, integration, SYNC_TIME);
+
+    expect(await db.prepare(`SELECT display_name FROM customers`).first()).toMatchObject({
+      display_name: "Daniel Arreola",
+    });
+    expect(await db.prepare(`SELECT display_name FROM contacts`).first()).toMatchObject({
+      display_name: "Daniel Arreola",
+    });
+    await mf.dispose();
+  });
+
+  it("upgrades an existing Quo phone-number placeholder from a self-introduction", async () => {
+    const context = await createTestEnv({
+      env: { INTEGRATIONS_MASTER_KEY: MASTER_KEY, INTEGRATIONS_KEY_ID: "v1" },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    const integration = await createQuoIntegration(env, db);
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO customers
+           (id,workspace_id,display_name,customer_type,status,lead_source,created_at,updated_at)
+           VALUES ('quo-lead','default','Text (415) 555-0123','person','lead','quo',?,?)`
+        )
+        .bind(SYNC_TIME.toISOString(), SYNC_TIME.toISOString()),
+      db
+        .prepare(
+          `INSERT INTO contacts
+           (id,workspace_id,customer_id,display_name,phone,is_primary,status,created_at,updated_at)
+           VALUES ('quo-contact','default','quo-lead','Text (415) 555-0123','+14155550123',1,'active',?,?)`
+        )
+        .bind(SYNC_TIME.toISOString(), SYNC_TIME.toISOString()),
+    ]);
+    mockConversationApi([
+      message("AC-existing-name", "incoming", "Hello. This is Daniel Arreola.", "09:00:00"),
+    ]);
+
+    await syncQuoIntegrationConversations(env, integration, SYNC_TIME);
+
+    expect(await db.prepare(`SELECT display_name FROM customers`).first()).toMatchObject({
+      display_name: "Daniel Arreola",
+    });
+    expect(await db.prepare(`SELECT display_name FROM contacts`).first()).toMatchObject({
+      display_name: "Daniel Arreola",
+    });
+    await mf.dispose();
+  });
+
   it("does not create a lead for an unmatched trivial or outgoing-only conversation", async () => {
     const context = await createTestEnv({
       env: { INTEGRATIONS_MASTER_KEY: MASTER_KEY, INTEGRATIONS_KEY_ID: "v1" },

@@ -155,10 +155,18 @@ async function syncConversation(
       );
       return;
     }
-    const lead = await ensureLead(env, integration, conversation, externalPhone);
+    const lead = await ensureLead(env, integration, conversation, messages, externalPhone);
     customerId = lead.customerId;
     contactId = lead.contactId;
     leadCreated = true;
+  } else if (contactId) {
+    await improvePlaceholderLeadName(
+      env,
+      integration.workspace_id,
+      customerId,
+      contactId,
+      messages
+    );
   }
 
   for (const message of messages.sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
@@ -291,11 +299,15 @@ async function ensureLead(
   env: Env,
   integration: IntegrationRow,
   conversation: Conversation,
+  messages: Message[],
   phone: string
 ) {
   const customerId = `quo-conversation:${conversation.id}`;
   const contactId = `quo-conversation-contact:${conversation.id}`;
-  const name = string(conversation.name) || `Text ${formatPhone(phone)}`;
+  const name =
+    usefulConversationName(conversation.name, phone) ||
+    extractSenderName(messages) ||
+    `Text ${formatPhone(phone)}`;
   const now = nowISO();
   await env.DB.batch([
     env.DB.prepare(
@@ -314,6 +326,64 @@ async function ensureLead(
     ),
   ]);
   return { customerId, contactId };
+}
+
+async function improvePlaceholderLeadName(
+  env: Env,
+  workspaceId: string,
+  customerId: string,
+  contactId: string,
+  messages: Message[]
+) {
+  const name = extractSenderName(messages);
+  if (!name) return;
+  const customer = await env.DB.prepare(
+    `SELECT display_name,status,lead_source FROM customers WHERE id=? AND workspace_id=?`
+  )
+    .bind(customerId, workspaceId)
+    .first<{ display_name: string; status: string; lead_source: string | null }>();
+  if (
+    !customer ||
+    customer.status !== "lead" ||
+    customer.lead_source !== "quo" ||
+    !isPlaceholderName(customer.display_name)
+  ) {
+    return;
+  }
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE customers SET display_name=?,updated_at=? WHERE id=? AND workspace_id=?`
+    ).bind(name, nowISO(), customerId, workspaceId),
+    env.DB.prepare(
+      `UPDATE contacts SET display_name=?,updated_at=? WHERE id=? AND customer_id=? AND workspace_id=?`
+    ).bind(name, nowISO(), contactId, customerId, workspaceId),
+  ]);
+}
+
+function usefulConversationName(value: string | null | undefined, phone: string) {
+  const name = string(value);
+  if (!name || isPlaceholderName(name) || normalizePhone(name) === phone) return null;
+  return name;
+}
+
+function isPlaceholderName(value: string) {
+  return /^text\s+(?:\+?[\d(). -]{7,}|unknown)$/i.test(value.trim());
+}
+
+export function extractSenderName(messages: Message[]) {
+  const patterns = [
+    /\b(?:[Tt]his is|[Mm]y name is)\s+([A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3})(?=[,.!;]|\s+(?:and|from|with|i\b|we\b|calling\b|texting\b)|$)/,
+    /\bI(?:'m| am)\s+([A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3})(?=[,.!;]|\s+(?:and|from|with|i\b|we\b|calling\b|texting\b)|$)/,
+  ];
+  for (const message of messages) {
+    if (message.direction !== "incoming") continue;
+    const text = string(message.text).replace(/\s+/g, " ");
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match?.[1]) return match[1].trim();
+    }
+  }
+  return null;
 }
 
 async function insertMessageNote(
