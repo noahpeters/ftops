@@ -28,7 +28,7 @@ jobs:
 
   deploy-api:
     runs-on: ubuntu-latest
-    needs: verify
+    needs: provision-queues
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -54,7 +54,7 @@ jobs:
 
   deploy-webhooks:
     runs-on: ubuntu-latest
-    needs: verify
+    needs: provision-queues
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -69,6 +69,24 @@ jobs:
         run: npm ci --workspaces
       - name: Deploy Webhooks
         run: npm --workspace apps/webhooks run deploy:unsafe
+
+  provision-queues:
+    runs-on: ubuntu-latest
+    needs: verify
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SKIP_SIMPLE_GIT_HOOKS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci --workspaces
+      - name: Ensure Quo ingest queue
+        run: node tools/ensure-cloudflare-queue.mjs events-quo-ingest
 
   deploy-email:
     runs-on: ubuntu-latest
