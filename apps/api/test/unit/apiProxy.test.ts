@@ -96,6 +96,7 @@ describe("ops api proxy allowlist", () => {
     ["GET", "/api/integrations/qbo/status?workspaceId=ws_123"],
     ["POST", "/api/integrations/qbo/disconnect"],
     ["POST", "/api/integrations/qbo/bootstrap"],
+    ["POST", "/api/integrations/quo_1/sync"],
     ["POST", "/api/workspaces/ws_123/users/user_1/daily-summary"],
     ["GET", "/api/preferences"],
     ["PUT", "/api/preferences/customer_status_filters"],
