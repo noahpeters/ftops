@@ -93,6 +93,16 @@ describe("Quo conversation reconciliation", () => {
     if (!context) return;
     const { env, db, mf } = context;
     const integration = await createQuoIntegration(env, db);
+    await db
+      .prepare(
+        `INSERT INTO quo_call_ingestions
+         (event_id,workspace_id,integration_id,call_id,outcome,reason,received_at,processed_at,created_at,updated_at)
+         VALUES ('quo-transcript-sync:AC-whitney-call','default',?,'AC-whitney-call','ignored',
+                 'transcript_call_unresolvable','2026-08-27T18:00:00Z','2026-08-27T18:01:00Z',
+                 '2026-08-27T18:01:00Z','2026-08-27T18:01:00Z')`
+      )
+      .bind(integration.id)
+      .run();
     mockConversationApi([], null, {
       id: "AC-whitney-call",
       status: "completed",
@@ -371,7 +381,6 @@ function mockConversationApi(
           })
         )
       )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: call })))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({ data: messages, totalItems: messages.length, nextPageToken: null })

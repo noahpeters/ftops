@@ -16,6 +16,9 @@ export async function processQuoCallWebhook(
     eventId: string;
     body: unknown;
     receivedAt?: string;
+    resolvedCall?: unknown;
+    externalPhone?: string;
+    retryUnresolvable?: boolean;
   }
 ) {
   const event = asRecord(args.body);
@@ -36,11 +39,24 @@ export async function processQuoCallWebhook(
     .run();
   if (!inserted.meta || inserted.meta.changes !== 1) {
     const existing = await env.DB.prepare(
-      `SELECT outcome FROM quo_call_ingestions WHERE event_id=?`
+      `SELECT outcome,reason FROM quo_call_ingestions WHERE event_id=?`
     )
       .bind(eventId)
-      .first<{ outcome: string }>();
-    if (!existing || existing.outcome !== "processing") return;
+      .first<{ outcome: string; reason: string | null }>();
+    if (
+      existing?.outcome === "ignored" &&
+      existing.reason === "transcript_call_unresolvable" &&
+      args.retryUnresolvable
+    ) {
+      await env.DB.prepare(
+        `UPDATE quo_call_ingestions SET outcome='processing',reason=NULL,processed_at=NULL,updated_at=?
+         WHERE event_id=?`
+      )
+        .bind(now, eventId)
+        .run();
+    } else if (!existing || existing.outcome !== "processing") {
+      return;
+    }
   }
 
   if (eventType === "call.transcript.completed" && call) {
@@ -139,7 +155,12 @@ export async function processQuoCallWebhook(
 
 async function processCallTranscript(
   env: Env,
-  args: { workspaceId: string; integrationId: string | null },
+  args: {
+    workspaceId: string;
+    integrationId: string | null;
+    resolvedCall?: unknown;
+    externalPhone?: string;
+  },
   eventId: string,
   transcript: JsonRecord,
   callId: string,
@@ -150,9 +171,11 @@ async function processCallTranscript(
     return;
   }
   const config = await quoConfig(env, args.integrationId, args.workspaceId);
-  const callResponse = await quoGet(config, `/calls/${encodeURIComponent(callId)}`);
-  const call = asRecord(callResponse.data);
-  const externalPhone = singleExternalPhone(array(call?.participants));
+  const call =
+    asRecord(args.resolvedCall) ||
+    asRecord((await quoGet(config, `/calls/${encodeURIComponent(callId)}`)).data);
+  const externalPhone =
+    normalizePhone(args.externalPhone ?? null) || singleExternalPhone(array(call?.participants));
   if (!call || !externalPhone) {
     await finish(env, eventId, "ignored", "transcript_call_unresolvable", null, null, null, null);
     return;

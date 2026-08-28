@@ -37,6 +37,7 @@ type Call = {
   id: string;
   status: string;
   createdAt: string;
+  raw: JsonRecord;
 };
 type ContactMatch = { id: string; customer_id: string; phone: string | null };
 
@@ -251,6 +252,9 @@ async function syncConversationCalls(
         data: { object: { ...transcript, callId: string(transcript.callId) || call.id } },
       },
       receivedAt: string(transcript.createdAt) || call.createdAt,
+      resolvedCall: call.raw,
+      externalPhone: conversation.participants[0],
+      retryUnresolvable: true,
     });
   }
 }
@@ -637,10 +641,11 @@ function toMessage(value: unknown): Message | null {
 
 function toCall(value: unknown): Call | null {
   const row = asRecord(value);
+  if (!row) return null;
   const id = string(row?.id);
   const createdAt = string(row?.createdAt);
   if (!id || !createdAt) return null;
-  return { id, status: string(row?.status), createdAt };
+  return { id, status: string(row?.status), createdAt, raw: row };
 }
 
 function formatPhone(phone: string) {
