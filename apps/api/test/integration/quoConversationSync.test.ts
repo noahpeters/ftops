@@ -77,7 +77,7 @@ describe("Quo conversation reconciliation", () => {
         INTEGRATIONS_KEY_ID: "v1",
         AI: {
           run: vi.fn(async () => ({
-            response: JSON.stringify({
+            response: {
               name: "Whitney Carter",
               meaningful: true,
               spam: false,
@@ -85,7 +85,7 @@ describe("Quo conversation reconciliation", () => {
               summary: "Whitney discussed a built-in cabinet project and requested next steps.",
               nextSteps: ["Schedule a site visit"],
               confidence: 0.98,
-            }),
+            },
           })),
         },
       },
@@ -98,7 +98,7 @@ describe("Quo conversation reconciliation", () => {
         `INSERT INTO quo_call_ingestions
          (event_id,workspace_id,integration_id,call_id,outcome,reason,received_at,processed_at,created_at,updated_at)
          VALUES ('quo-transcript-sync:AC-whitney-call','default',?,'AC-whitney-call','ignored',
-                 'transcript_call_unresolvable','2026-08-27T18:00:00Z','2026-08-27T18:01:00Z',
+                 'unqualified_call_transcript','2026-08-27T18:00:00Z','2026-08-27T18:01:00Z',
                  '2026-08-27T18:01:00Z','2026-08-27T18:01:00Z')`
       )
       .bind(integration.id)

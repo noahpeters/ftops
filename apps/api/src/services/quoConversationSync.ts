@@ -254,7 +254,7 @@ async function syncConversationCalls(
       receivedAt: string(transcript.createdAt) || call.createdAt,
       resolvedCall: call.raw,
       externalPhone: conversation.participants[0],
-      retryUnresolvable: true,
+      retryLegacyTranscriptFailure: true,
     });
   }
 }

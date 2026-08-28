@@ -18,7 +18,7 @@ export async function processQuoCallWebhook(
     receivedAt?: string;
     resolvedCall?: unknown;
     externalPhone?: string;
-    retryUnresolvable?: boolean;
+    retryLegacyTranscriptFailure?: boolean;
   }
 ) {
   const event = asRecord(args.body);
@@ -45,8 +45,9 @@ export async function processQuoCallWebhook(
       .first<{ outcome: string; reason: string | null }>();
     if (
       existing?.outcome === "ignored" &&
-      existing.reason === "transcript_call_unresolvable" &&
-      args.retryUnresolvable
+      (existing.reason === "transcript_call_unresolvable" ||
+        existing.reason === "unqualified_call_transcript") &&
+      args.retryLegacyTranscriptFailure
     ) {
       await env.DB.prepare(
         `UPDATE quo_call_ingestions SET outcome='processing',reason=NULL,processed_at=NULL,updated_at=?
@@ -200,7 +201,7 @@ async function processCallTranscript(
       env,
       eventId,
       "ignored",
-      analysis.spam ? "spam_call_transcript" : "unqualified_call_transcript",
+      analysis.spam ? "spam_call_transcript" : "unqualified_call_transcript_v2",
       null,
       null,
       null,
@@ -303,7 +304,7 @@ async function analyzeTranscript(env: Env, dialogue: JsonRecord[], externalPhone
     temperature: 0,
   });
   const raw = typeof result === "string" ? result : result.response;
-  const parsed = asRecord(parseJson(string(raw))) ?? {};
+  const parsed = asRecord(typeof raw === "string" ? parseJson(raw) : raw) ?? {};
   return {
     name: validPersonName(string(parsed.name)),
     meaningful: parsed.meaningful === true,

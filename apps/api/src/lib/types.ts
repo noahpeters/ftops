@@ -1,7 +1,7 @@
 export type Env = {
   DB: D1Database;
   AI?: {
-    run(model: string, input: Record<string, unknown>): Promise<{ response?: string } | string>;
+    run(model: string, input: Record<string, unknown>): Promise<{ response?: unknown } | string>;
   };
   EVENT_QUEUE: Queue;
   R2_TASK_FILES_BUCKET: R2Bucket;
