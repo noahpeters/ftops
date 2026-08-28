@@ -15,7 +15,7 @@ import {
 } from "./api";
 import type { WorkspaceRow } from "../workspaces/api";
 
-const PROVIDERS = ["shopify", "qbo"] as const;
+const PROVIDERS = ["shopify", "qbo", "quo"] as const;
 const ENVIRONMENTS = ["production", "sandbox"] as const;
 const EMAIL_STATUSES = [
   "attention",
@@ -448,7 +448,7 @@ export function IngestPanel({
                   <th>integration</th>
                   <th>routed</th>
                   <th>verified</th>
-                  <th>topic</th>
+                  <th>event</th>
                   <th>shop</th>
                   <th>webhook_id</th>
                   <th>error</th>
@@ -463,10 +463,10 @@ export function IngestPanel({
                     <td>{request.integration_display_name ?? "-"}</td>
                     <td>{request.integration_id ? "yes" : "no"}</td>
                     <td>{request.signature_verified ? "yes" : "no"}</td>
-                    <td>{request.topic ?? "-"}</td>
+                    <td>{request.event_type ?? request.topic ?? "-"}</td>
                     <td>{request.shop_domain ?? "-"}</td>
                     <td>{request.webhook_id ?? "-"}</td>
-                    <td>{request.verify_error ?? "-"}</td>
+                    <td>{request.verify_error ?? request.emit_error ?? "-"}</td>
                     <td className={stylex(styles.actionsCell)}>
                       <button
                         type="button"

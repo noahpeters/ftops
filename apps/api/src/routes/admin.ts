@@ -72,9 +72,16 @@ export async function handleAdmin(
 }
 
 function ingestRowToMessage(row: Record<string, unknown>): IngestQueueMessage {
+  const provider = String(row.provider ?? "");
+  const source =
+    provider === "quickbooks" || provider === "qbo"
+      ? "quickbooks"
+      : provider === "quo"
+        ? "quo"
+        : "shopify";
   return {
     id: String(row.id),
-    source: row.provider === "shopify" ? "shopify" : "quickbooks",
+    source,
     workspace_id: String(row.workspace_id ?? "default"),
     environment: (row.environment as string | null) ?? null,
     external_account_id: (row.external_account_id as string | null) ?? null,

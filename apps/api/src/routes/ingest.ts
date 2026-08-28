@@ -2,7 +2,7 @@ import { forbidden, json, methodNotAllowed, notFound } from "../lib/http";
 import type { Env } from "../lib/types";
 import { canAdminWorkspace, requireActor, type Actor } from "../lib/access";
 
-const PROVIDERS = ["shopify", "qbo"] as const;
+const PROVIDERS = ["shopify", "qbo", "quo"] as const;
 const ENVIRONMENTS = ["sandbox", "production"] as const;
 
 export async function handleIngest(
@@ -51,7 +51,7 @@ async function listIngestRequests(env: Env, url: URL, actor: Actor) {
 
   if (provider && PROVIDERS.includes(provider as (typeof PROVIDERS)[number])) {
     const source = provider === "qbo" ? "quickbooks" : provider;
-    filters.push("req.source = ?");
+    filters.push("req.provider = ?");
     bindings.push(source);
   }
   if (workspaceId) {
@@ -74,10 +74,11 @@ async function listIngestRequests(env: Env, url: URL, actor: Actor) {
 
   const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
   const result = await env.DB.prepare(
-    `SELECT req.id, req.source, req.received_at, req.signature_verified, req.verify_error,
+    `SELECT req.id, req.provider, req.received_at, req.signature_verified, req.verify_error,
             req.headers_json, req.workspace_id, req.environment, req.external_account_id,
-            req.integration_id, integ.display_name AS integration_display_name
-     FROM raw_events req
+            req.integration_id, req.body_json, req.emitted_event_id, req.emitted_at,
+            req.emit_error, integ.display_name AS integration_display_name
+     FROM ingest_requests req
      LEFT JOIN integrations integ ON integ.id = req.integration_id
      ${where}
      ORDER BY req.received_at DESC
@@ -93,7 +94,10 @@ async function listIngestRequests(env: Env, url: URL, actor: Actor) {
       headersParsed.ok && headersParsed.value
         ? (headersParsed.value as Record<string, unknown>)
         : {};
-    const providerLabel = row.source === "quickbooks" ? "qbo" : row.source;
+    const providerLabel = row.provider === "quickbooks" ? "qbo" : row.provider;
+    const bodyParsed = safeParseJson(String(row.body_json ?? ""));
+    const body =
+      bodyParsed.ok && bodyParsed.value ? (bodyParsed.value as Record<string, unknown>) : {};
     return {
       id: row.id,
       provider: providerLabel,
@@ -108,6 +112,10 @@ async function listIngestRequests(env: Env, url: URL, actor: Actor) {
       topic: headers["x-shopify-topic"],
       shop_domain: headers["x-shopify-shop-domain"],
       webhook_id: headers["x-shopify-webhook-id"],
+      event_type: typeof body.type === "string" ? body.type : null,
+      emitted_event_id: row.emitted_event_id,
+      emitted_at: row.emitted_at,
+      emit_error: row.emit_error,
     };
   });
 
@@ -115,7 +123,7 @@ async function listIngestRequests(env: Env, url: URL, actor: Actor) {
 }
 
 async function getIngestRequestById(env: Env, id: string, actor: Actor) {
-  const row = await env.DB.prepare(`SELECT * FROM raw_events WHERE id = ?`).bind(id).first();
+  const row = await env.DB.prepare(`SELECT * FROM ingest_requests WHERE id = ?`).bind(id).first();
 
   if (!row) {
     return notFound("Ingest request not found");

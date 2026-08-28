@@ -2,7 +2,7 @@ import { buildUrl, fetchJson } from "../../lib/api";
 
 export type IngestRequestSummary = {
   id: string;
-  provider: "shopify" | "qbo";
+  provider: "shopify" | "qbo" | "quo";
   received_at: string;
   signature_verified: number;
   verify_error: string | null;
@@ -14,6 +14,10 @@ export type IngestRequestSummary = {
   topic?: string | null;
   shop_domain?: string | null;
   webhook_id?: string | null;
+  event_type?: string | null;
+  emitted_event_id?: string | null;
+  emitted_at?: string | null;
+  emit_error?: string | null;
 };
 
 export type IngestListResponse = {
