@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTestEnv } from "../helpers/miniflare";
 import { processQuoCallWebhook } from "../../src/services/quoCallWebhook";
+import { encryptSecrets } from "../../src/lib/crypto/secrets";
+
+const MASTER_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 function callEvent(overrides: Record<string, unknown> = {}) {
   return {
@@ -24,6 +27,8 @@ function callEvent(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Quo call webhook processing", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("matches normalized Contact phone and creates one note across retries", async () => {
     const context = await createTestEnv();
     if (!context) return;
@@ -105,6 +110,26 @@ describe("Quo call webhook processing", () => {
     await mf.dispose();
   });
 
+  it("waits for a transcript instead of creating a phone-number-named lead", async () => {
+    const context = await createTestEnv();
+    if (!context) return;
+    const { env, db, mf } = context;
+    await processQuoCallWebhook(env, {
+      workspaceId: "ws_default",
+      integrationId: "quo_1",
+      eventId: "EV_call_1",
+      body: callEvent(),
+    });
+
+    expect(await db.prepare(`SELECT COUNT(*) count FROM customers`).first()).toMatchObject({
+      count: 0,
+    });
+    expect(
+      await db.prepare(`SELECT outcome,reason FROM quo_call_ingestions`).first()
+    ).toMatchObject({ outcome: "ignored", reason: "awaiting_named_call_transcript" });
+    await mf.dispose();
+  });
+
   it("ignores an unmatched short or spam-labeled call", async () => {
     const context = await createTestEnv();
     if (!context) return;
@@ -123,6 +148,101 @@ describe("Quo call webhook processing", () => {
       .prepare(`SELECT outcome,reason FROM quo_call_ingestions WHERE event_id='EV_call_1'`)
       .first();
     expect(ingestion).toMatchObject({ outcome: "ignored", reason: "spam_caller_label" });
+    await mf.dispose();
+  });
+
+  it("creates a named lead and summarized note from a meaningful call transcript", async () => {
+    const ai = {
+      run: vi.fn().mockResolvedValue({
+        response: JSON.stringify({
+          name: "Whitney Carter",
+          meaningful: true,
+          spam: false,
+          subject: "Built-in cabinetry inquiry",
+          summary: "Whitney is interested in built-in cabinetry for her living room.",
+          nextSteps: ["Schedule an onsite consultation"],
+          confidence: 0.96,
+        }),
+      }),
+    };
+    const context = await createTestEnv({
+      env: {
+        AI: ai,
+        INTEGRATIONS_MASTER_KEY: MASTER_KEY,
+        INTEGRATIONS_KEY_ID: "v1",
+      },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    const secrets = await encryptSecrets(env, JSON.stringify({ apiKey: "quo-api-key" }));
+    const now = new Date().toISOString();
+    await db
+      .prepare(
+        `INSERT INTO integrations
+         (id,workspace_id,provider,environment,external_account_id,display_name,
+          secrets_key_id,secrets_ciphertext,is_active,created_at,updated_at)
+         VALUES ('quo_1','ws_default','quo','production','ws_default','Quo',?,?,1,?,?)`
+      )
+      .bind(secrets.keyId, secrets.ciphertext, now, now)
+      .run();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            id: "AC_call_1",
+            direction: "incoming",
+            participants: ["+14155550100"],
+            completedAt: "2026-08-27T18:02:00.000Z",
+          },
+        }),
+        { status: 200 }
+      )
+    );
+
+    await processQuoCallWebhook(env, {
+      workspaceId: "ws_default",
+      integrationId: "quo_1",
+      eventId: "EV_transcript_1",
+      body: {
+        id: "EV_transcript_1",
+        type: "call.transcript.completed",
+        createdAt: "2026-08-27T18:02:05.000Z",
+        data: {
+          object: {
+            callId: "AC_call_1",
+            createdAt: "2026-08-27T18:02:01.000Z",
+            duration: 120,
+            dialogue: [
+              {
+                identifier: "+14155550100",
+                content: "Hi, this is Whitney Carter. I am calling about living room built-ins.",
+              },
+              { identifier: "+13105550199", content: "Let's schedule a consultation." },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(await db.prepare(`SELECT display_name,status FROM customers`).first()).toMatchObject({
+      display_name: "Whitney Carter",
+      status: "lead",
+    });
+    const note = await db
+      .prepare(
+        `SELECT subject,body FROM customer_activities WHERE id='quo-call-transcript:AC_call_1'`
+      )
+      .first<{ subject: string; body: string }>();
+    expect(note).toMatchObject({ subject: "Built-in cabinetry inquiry" });
+    expect(note?.body).toContain("Whitney is interested in built-in cabinetry");
+    expect(note?.body).toContain("Schedule an onsite consultation");
+    expect(note?.body).not.toContain("Hi, this is Whitney Carter");
+    expect(
+      await db.prepare(`SELECT outcome,reason FROM quo_call_ingestions`).first()
+    ).toMatchObject({
+      outcome: "lead_created",
+      reason: "meaningful_named_call_transcript",
+    });
     await mf.dispose();
   });
 });
