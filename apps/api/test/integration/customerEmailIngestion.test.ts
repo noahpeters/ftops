@@ -179,6 +179,69 @@ describe("customer email ingestion", () => {
     await mf.dispose();
   });
 
+  it.each([
+    ["a forwarded sent message", sentForwardMime(), "owner@example.com"],
+    ["a live message with the notes mailbox CC'd", liveCustomerMime("cc"), "client@example.com"],
+    ["a live message with the notes mailbox BCC'd", liveCustomerMime("bcc"), "client@example.com"],
+  ])("matches the customer for %s", async (_scenario, raw, envelopeFrom) => {
+    const aiRun = vi.fn(async () => ({
+      response: {
+        subject: "Project update",
+        summary: "- Confirmed project detail.",
+        confidence: 1,
+      },
+    }));
+    const context = await createTestEnv({ env: { AI: { run: aiRun } } });
+    if (!context) return;
+    const { env, db, mf } = context;
+    const now = new Date().toISOString();
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO email_ingestion_mailboxes (id,workspace_id,address,enabled,created_at,updated_at) VALUES ('matching-mb','default','notes@ops.from-trees.com',1,?,?)`
+        )
+        .bind(now, now),
+      db
+        .prepare(
+          `INSERT INTO email_ingestion_forwarders (id,workspace_id,email,enabled,created_at,updated_at) VALUES ('matching-forwarder','default','owner@example.com',1,?,?)`
+        )
+        .bind(now, now),
+      db
+        .prepare(
+          `INSERT INTO customers (id,workspace_id,display_name,status,created_at,updated_at) VALUES ('matching-customer','default','Matching Customer','lead',?,?)`
+        )
+        .bind(now, now),
+      db
+        .prepare(
+          `INSERT INTO contacts (id,workspace_id,customer_id,display_name,email,is_primary,created_at,updated_at,status) VALUES ('matching-contact','default','matching-customer','Client','client@example.com',1,?,?, 'active')`
+        )
+        .bind(now, now),
+    ]);
+
+    const received = await receiveCustomerEmail(env, {
+      raw,
+      forwardingEmail: envelopeFrom,
+      envelopeTo: "notes@ops.from-trees.com",
+    });
+    await processCustomerEmailIngestion(env, received.id);
+
+    expect(
+      await db
+        .prepare(
+          `SELECT customer_id,contact_id,status,failure_reason FROM customer_email_ingestions WHERE id=?`
+        )
+        .bind(received.id)
+        .first()
+    ).toMatchObject({
+      customer_id: "matching-customer",
+      contact_id: "matching-contact",
+      status: "ready",
+      failure_reason: null,
+    });
+    expect(aiRun).toHaveBeenCalled();
+    await mf.dispose();
+  });
+
   it("requires a mailbox-scoped forwarding authorization", async () => {
     const context = await createTestEnv();
     if (!context) return;
@@ -347,4 +410,39 @@ function forwardedMime(forwardId = "first-forward") {
     "",
   ].join("\r\n");
   return new TextEncoder().encode(raw).buffer;
+}
+
+function sentForwardMime() {
+  return textMime([
+    "From: Owner <owner@example.com>",
+    "To: notes@ops.from-trees.com",
+    "Subject: Fwd: Project update",
+    "",
+    "Begin forwarded message:",
+    "From: Owner <owner@example.com>",
+    "Date: Tue, 18 Aug 2026 10:00:00 -0500",
+    "Subject: Project update",
+    "To: Client <client@example.com>",
+    "",
+    "Here is the update I sent to the customer.",
+  ]);
+}
+
+function liveCustomerMime(mode: "cc" | "bcc") {
+  return textMime([
+    "From: Client <client@example.com>",
+    "To: Owner <owner@example.com>",
+    ...(mode === "cc" ? ["Cc: notes@ops.from-trees.com"] : []),
+    "Subject: Project update",
+    "",
+    "Here is a live customer update.",
+  ]);
+}
+
+function textMime(lines: string[]) {
+  return new TextEncoder().encode(
+    [...lines.slice(0, 3), "Content-Type: text/plain; charset=utf-8", ...lines.slice(3), ""].join(
+      "\r\n"
+    )
+  ).buffer;
 }

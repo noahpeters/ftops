@@ -72,7 +72,14 @@ export async function receiveCustomerEmail(
   )
     .bind(mailbox.workspace_id, forwardingEmail)
     .first();
-  if (!forwarder) throw new Error("email_forwarder_not_authorized");
+  if (!forwarder) {
+    const customerSender = await env.DB.prepare(
+      `SELECT 1 FROM contacts WHERE workspace_id=? AND lower(email)=? LIMIT 1`
+    )
+      .bind(mailbox.workspace_id, forwardingEmail)
+      .first();
+    if (!customerSender) throw new Error("email_forwarder_not_authorized");
+  }
 
   const hash = await sha256Hex(input.raw);
   const existing = await env.DB.prepare(
@@ -135,10 +142,14 @@ export async function processCustomerEmailIngestion(env: Env, ingestionId: strin
     if (!object) throw new Error("email_source_not_found");
     const raw = await object.arrayBuffer();
     const outer = await PostalMime.parse(raw);
-    const messages = await parseThreadMessages(outer, String(ingestion.forwarding_email));
+    const messages = await parseThreadMessages(outer);
     if (messages.length === 0) throw new Error("email_thread_empty");
+    const internalEmails = await workspaceInternalEmails(env, String(ingestion.workspace_id));
+    const candidateEmails = customerAddressCandidates(outer, messages).filter(
+      (email) => !internalEmails.has(email)
+    );
     const uniqueMatches = new Map<string, { id: string; customer_id: string; email: string }>();
-    for (const senderEmail of new Set(messages.map((message) => message.senderEmail))) {
+    for (const senderEmail of candidateEmails) {
       const matches = await env.DB.prepare(
         `SELECT id,customer_id,lower(email) AS email FROM contacts WHERE workspace_id=? AND lower(email)=?`
       )
@@ -258,6 +269,78 @@ export async function processCustomerEmailIngestion(env: Env, ingestionId: strin
       .run();
     throw error;
   }
+}
+
+async function workspaceInternalEmails(env: Env, workspaceId: string) {
+  const [mailboxes, forwarders] = await Promise.all([
+    env.DB.prepare(
+      `SELECT lower(address) AS email FROM email_ingestion_mailboxes WHERE workspace_id=?`
+    )
+      .bind(workspaceId)
+      .all<{ email: string }>(),
+    env.DB.prepare(
+      `SELECT lower(email) AS email FROM email_ingestion_forwarders WHERE workspace_id=?`
+    )
+      .bind(workspaceId)
+      .all<{ email: string }>(),
+  ]);
+  return new Set(
+    [...(mailboxes.results ?? []), ...(forwarders.results ?? [])]
+      .map((row) => normalizeEmail(row.email))
+      .filter(Boolean)
+  );
+}
+
+function customerAddressCandidates(
+  outer: Awaited<ReturnType<typeof PostalMime.parse>>,
+  messages: ThreadMessage[]
+) {
+  const candidates: string[] = [];
+  const add = (value: string | null | undefined) => {
+    const email = normalizeEmail(value);
+    if (email && !candidates.includes(email)) candidates.push(email);
+  };
+  add(mailboxAddress(outer.from));
+  for (const address of [...(outer.to ?? []), ...(outer.cc ?? []), ...(outer.bcc ?? [])]) {
+    for (const email of addressEmails(address)) add(email);
+  }
+  for (const email of forwardedHeaderEmails(outer.text || stripHtml(outer.html || ""))) add(email);
+  for (const message of messages) add(message.senderEmail);
+  return candidates;
+}
+
+function mailboxAddress(
+  address: { address?: string; group?: Array<{ address: string }> } | undefined
+) {
+  return address?.address || address?.group?.[0]?.address || "";
+}
+
+function addressEmails(address: { address?: string; group?: Array<{ address: string }> }) {
+  return address.address ? [address.address] : (address.group ?? []).map((item) => item.address);
+}
+
+function forwardedHeaderEmails(text: string) {
+  const emails: string[] = [];
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  let inForwardedHeaders = false;
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/^\s*>+\s?/, "").trimEnd();
+    if (/^(?:-{2,}\s*)?(?:begin\s+)?forwarded message(?:\s*-{2,})?:?$/i.test(line.trim())) {
+      inForwardedHeaders = true;
+      continue;
+    }
+    if (!inForwardedHeaders) continue;
+    if (!line.trim()) {
+      inForwardedHeaders = false;
+      continue;
+    }
+    const header = line.match(/^(?:from|to|cc|bcc):\s*(.+)$/i);
+    if (!header) continue;
+    for (const match of header[1].matchAll(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+/gi)) {
+      emails.push(normalizeEmail(match[0].replace(/[>,;]+$/, "")));
+    }
+  }
+  return emails;
 }
 
 export async function applyEmailCandidate(
@@ -443,14 +526,13 @@ async function attachEmailFilesToNote(
 }
 
 async function parseThreadMessages(
-  outer: Awaited<ReturnType<typeof PostalMime.parse>>,
-  forwarder: string
+  outer: Awaited<ReturnType<typeof PostalMime.parse>>
 ): Promise<ThreadMessage[]> {
   const nestedMessages: ThreadMessage[] = [];
   for (const attachment of outer.attachments) {
     if (attachment.mimeType.toLowerCase() === "message/rfc822") {
       const nested = await PostalMime.parse(attachment.content);
-      nestedMessages.push(...(await parseThreadMessages(nested, forwarder)));
+      nestedMessages.push(...(await parseThreadMessages(nested)));
     }
   }
   if (nestedMessages.length > 0) return nestedMessages;
@@ -463,7 +545,7 @@ async function parseThreadMessages(
     return parsed;
   }
   const senderEmail = normalizeEmail(outer.from?.address);
-  if (!senderEmail || senderEmail === normalizeEmail(forwarder)) return [];
+  if (!senderEmail) return [];
   return [
     {
       sourceMessageId: outer.messageId || null,
