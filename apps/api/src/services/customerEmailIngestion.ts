@@ -323,19 +323,22 @@ function forwardedHeaderEmails(text: string) {
   const emails: string[] = [];
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   let inForwardedHeaders = false;
+  let foundForwardedHeader = false;
   for (const rawLine of lines) {
     const line = rawLine.replace(/^\s*>+\s?/, "").trimEnd();
     if (/^(?:-{2,}\s*)?(?:begin\s+)?forwarded message(?:\s*-{2,})?:?$/i.test(line.trim())) {
       inForwardedHeaders = true;
+      foundForwardedHeader = false;
       continue;
     }
     if (!inForwardedHeaders) continue;
     if (!line.trim()) {
-      inForwardedHeaders = false;
+      if (foundForwardedHeader) inForwardedHeaders = false;
       continue;
     }
     const header = line.match(/^(?:from|to|cc|bcc):\s*(.+)$/i);
     if (!header) continue;
+    foundForwardedHeader = true;
     for (const match of header[1].matchAll(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+/gi)) {
       emails.push(normalizeEmail(match[0].replace(/[>,;]+$/, "")));
     }

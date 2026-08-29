@@ -419,6 +419,7 @@ function sentForwardMime() {
     "Subject: Fwd: Project update",
     "",
     "Begin forwarded message:",
+    "",
     "From: Owner <owner@example.com>",
     "Date: Tue, 18 Aug 2026 10:00:00 -0500",
     "Subject: Project update",
