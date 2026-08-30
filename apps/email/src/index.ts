@@ -24,17 +24,20 @@ export default {
     }
     if (!env.EMAIL_INGESTION_SECRET)
       throw new Error("email_ingestion_secret_missing");
-    const raw = await new Response(message.raw).arrayBuffer();
     const timestamp = String(Date.now());
     const originalEnvelopeFrom = normalizeEmail(message.from);
     const envelopeTo = normalizeEmail(message.to);
-    const envelopeFrom = isTrustedDoodleForward(raw, envelopeTo)
-      ? DOODLE_AUTHORIZED_FORWARDER
-      : originalEnvelopeFrom;
-    const digest = await sha256Hex(raw);
+    const doodleRaw =
+      envelopeTo === DOODLE_MAILBOX
+        ? await new Response(message.raw).arrayBuffer()
+        : null;
+    const envelopeFrom =
+      doodleRaw && isTrustedDoodleForward(doodleRaw, envelopeTo)
+        ? DOODLE_AUTHORIZED_FORWARDER
+        : originalEnvelopeFrom;
     const signature = await sign(
       env.EMAIL_INGESTION_SECRET,
-      `${timestamp}\n${envelopeFrom}\n${envelopeTo}\n${digest}`,
+      `v2\n${timestamp}\n${envelopeFrom}\n${envelopeTo}\n${message.rawSize}`,
     );
     const response = await env.API.fetch(
       "http://internal/customer-emails/inbound",
@@ -44,11 +47,13 @@ export default {
           "content-type": "message/rfc822",
           "x-ftops-email-timestamp": timestamp,
           "x-ftops-email-signature": signature,
+          "x-ftops-email-signature-version": "2",
+          "x-ftops-raw-size": String(message.rawSize),
           "x-ftops-envelope-from": envelopeFrom,
           "x-ftops-original-envelope-from": originalEnvelopeFrom,
           "x-ftops-envelope-to": envelopeTo,
         },
-        body: raw,
+        body: doodleRaw || message.raw,
       },
     );
     if (response.status === 403) {
@@ -106,10 +111,6 @@ export function isTrustedDoodleForward(raw: ArrayBuffer, envelopeTo: string) {
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase().replace(/^<|>$/g, "");
-}
-async function sha256Hex(raw: ArrayBuffer) {
-  const digest = await crypto.subtle.digest("SHA-256", raw);
-  return bytesToHex(new Uint8Array(digest));
 }
 async function sign(secret: string, value: string) {
   const key = await crypto.subtle.importKey(

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExecutionContext } from "@cloudflare/workers-types";
+import { createHash } from "node:crypto";
 import { createTestEnv } from "../helpers/miniflare";
 import { route } from "../../src/lib/router";
 import {
@@ -9,7 +10,10 @@ import {
 } from "../../src/services/customerEmailIngestion";
 
 describe("customer email ingestion", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it("preserves workspace isolation, extracts candidates, and attaches email files on apply", async () => {
     const queued: unknown[] = [];
@@ -376,6 +380,7 @@ describe("customer email ingestion", () => {
   });
 
   it("streams a 12 MiB attachment into R2 without buffering it in the parsed email", async () => {
+    installDigestStreamForNode();
     const aiRun = vi.fn(async () => ({
       response: {
         subject: "Large drawing",
@@ -383,7 +388,9 @@ describe("customer email ingestion", () => {
         confidence: 1,
       },
     }));
-    const context = await createTestEnv({ env: { AI: { run: aiRun } } });
+    const context = await createTestEnv({
+      env: { AI: { run: aiRun }, EMAIL_INGESTION_SECRET: "test-secret" },
+    });
     if (!context) return;
     const { env, db, mf } = context;
     const now = new Date().toISOString();
@@ -410,11 +417,30 @@ describe("customer email ingestion", () => {
         .bind(now, now),
     ]);
 
-    const received = await receiveCustomerEmail(env, {
-      raw: largeAttachmentMime(12 * 1024 * 1024),
-      forwardingEmail: "owner@example.com",
-      envelopeTo: "notes@in.example.com",
+    const raw = largeAttachmentMime(12 * 1024 * 1024);
+    const timestamp = String(Date.now());
+    const signature = await signInboundV2(
+      "test-secret",
+      timestamp,
+      "owner@example.com",
+      "notes@in.example.com",
+      raw.byteLength
+    );
+    const response = await apiRequest(env, "/customer-emails/inbound", {
+      method: "POST",
+      headers: {
+        "content-type": "message/rfc822",
+        "x-ftops-email-timestamp": timestamp,
+        "x-ftops-email-signature": signature,
+        "x-ftops-email-signature-version": "2",
+        "x-ftops-raw-size": String(raw.byteLength),
+        "x-ftops-envelope-from": "owner@example.com",
+        "x-ftops-envelope-to": "notes@in.example.com",
+      },
+      body: raw,
     });
+    expect(response.status, await response.clone().text()).toBe(202);
+    const received = (await response.json()) as { id: string };
     await processCustomerEmailIngestion(env, received.id);
 
     expect(
@@ -484,6 +510,56 @@ describe("customer email ingestion", () => {
 
 function apiRequest(env: Parameters<typeof route>[1], path: string, init: RequestInit = {}) {
   return route(new Request(`http://localhost${path}`, init), env, {} as ExecutionContext);
+}
+
+async function signInboundV2(
+  secret: string,
+  timestamp: string,
+  envelopeFrom: string,
+  envelopeTo: string,
+  rawSize: number
+) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signed = `v2\n${timestamp}\n${envelopeFrom}\n${envelopeTo}\n${rawSize}`;
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signed));
+  return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function installDigestStreamForNode() {
+  const subtle = crypto.subtle;
+  const randomUUID = crypto.randomUUID.bind(crypto);
+  class TestDigestStream extends WritableStream<Uint8Array> {
+    readonly digest: Promise<ArrayBuffer>;
+
+    constructor(_algorithm: string) {
+      const hash = createHash("sha256");
+      let resolveDigest!: (value: ArrayBuffer) => void;
+      const digest = new Promise<ArrayBuffer>((resolve) => {
+        resolveDigest = resolve;
+      });
+      super({
+        write(chunk) {
+          hash.update(chunk);
+        },
+        close() {
+          const value = hash.digest();
+          resolveDigest(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+        },
+      });
+      this.digest = digest;
+    }
+  }
+  vi.stubGlobal("crypto", {
+    subtle,
+    randomUUID,
+    DigestStream: TestDigestStream,
+  });
 }
 
 function forwardedMime(forwardId = "first-forward") {

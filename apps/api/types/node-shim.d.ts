@@ -6,6 +6,14 @@ declare const Buffer: {
   alloc: (...args: unknown[]) => Uint8Array & { toString: (encoding?: string) => string };
 };
 
+interface Crypto {
+  readonly DigestStream: {
+    new (algorithm: string): WritableStream<Uint8Array> & {
+      readonly digest: Promise<ArrayBuffer>;
+    };
+  };
+}
+
 declare module "node:fs" {
   export const readFileSync: (...args: unknown[]) => string;
   export const readdirSync: (...args: unknown[]) => string[];

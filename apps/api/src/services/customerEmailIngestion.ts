@@ -1,7 +1,12 @@
 import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { enqueueCustomerNoteFollowUpAnalysis } from "./customerFollowUp";
-import { parseEmailFromR2, type StreamedAttachment, type StreamedEmail } from "./streamingMime";
+import {
+  parseEmailFromR2,
+  type StreamedAttachment,
+  type StreamedEmail,
+  uploadStreamToR2,
+} from "./streamingMime";
 
 const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const MAX_RAW_BYTES = 25 * 1024 * 1024;
@@ -41,6 +46,39 @@ export async function verifyInboundEmailRequest(request: Request, raw: ArrayBuff
   if (!envelopeFrom || !envelopeTo) return false;
   const digest = await sha256Hex(raw);
   const signed = `${timestamp}\n${envelopeFrom}\n${envelopeTo}\n${digest}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(env.EMAIL_INGESTION_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"]
+  );
+  return await crypto.subtle.verify(
+    "HMAC",
+    key,
+    hexBytes(signature),
+    new TextEncoder().encode(signed)
+  );
+}
+
+export async function verifyInboundEmailStreamRequest(request: Request, env: Env) {
+  if (!env.EMAIL_INGESTION_SECRET) return false;
+  const timestamp = request.headers.get("x-ftops-email-timestamp") || "";
+  const signature = request.headers.get("x-ftops-email-signature") || "";
+  const rawSize = Number(request.headers.get("x-ftops-raw-size"));
+  const parsedTimestamp = Number(timestamp);
+  if (
+    !Number.isFinite(parsedTimestamp) ||
+    Math.abs(Date.now() - parsedTimestamp) > 5 * 60_000 ||
+    !Number.isInteger(rawSize) ||
+    rawSize <= 0 ||
+    rawSize > MAX_RAW_BYTES
+  )
+    return false;
+  const envelopeFrom = normalizeEmail(request.headers.get("x-ftops-envelope-from"));
+  const envelopeTo = normalizeEmail(request.headers.get("x-ftops-envelope-to"));
+  if (!envelopeFrom || !envelopeTo) return false;
+  const signed = `v2\n${timestamp}\n${envelopeFrom}\n${envelopeTo}\n${rawSize}`;
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(env.EMAIL_INGESTION_SECRET),
@@ -112,6 +150,97 @@ export async function receiveCustomerEmail(
       storageKey,
       hash,
       input.raw.byteLength,
+      "queued",
+      now,
+      now,
+      now
+    )
+    .run();
+  await env.EVENT_QUEUE.send({
+    source: "ftops",
+    type: "customer.email.extract",
+    externalId: id,
+    idempotencyKey: `customer-email/${id}`,
+    payload: { ingestionId: id },
+    receivedAt: now,
+  });
+  return { id, status: "queued", duplicate: false };
+}
+
+export async function receiveCustomerEmailStream(
+  env: Env,
+  input: {
+    raw: ReadableStream<Uint8Array>;
+    rawSize: number;
+    forwardingEmail: string;
+    envelopeTo: string;
+  }
+) {
+  if (!Number.isInteger(input.rawSize) || input.rawSize <= 0 || input.rawSize > MAX_RAW_BYTES)
+    throw new Error("email_size_invalid");
+  const forwardingEmail = normalizeEmail(input.forwardingEmail);
+  const envelopeTo = normalizeEmail(input.envelopeTo);
+  const mailbox = await env.DB.prepare(
+    `SELECT workspace_id FROM email_ingestion_mailboxes WHERE address=? AND enabled=1`
+  )
+    .bind(envelopeTo)
+    .first<{ workspace_id: string }>();
+  if (!mailbox) throw new Error("email_mailbox_not_configured");
+  const forwarder = await env.DB.prepare(
+    `SELECT 1 FROM email_ingestion_forwarders WHERE workspace_id=? AND email=? AND enabled=1`
+  )
+    .bind(mailbox.workspace_id, forwardingEmail)
+    .first();
+  if (!forwarder) {
+    const customerSender = await env.DB.prepare(
+      `SELECT 1 FROM contacts WHERE workspace_id=? AND lower(email)=? LIMIT 1`
+    )
+      .bind(mailbox.workspace_id, forwardingEmail)
+      .first();
+    if (!customerSender) throw new Error("email_forwarder_not_authorized");
+  }
+
+  const id = crypto.randomUUID();
+  const storageKey = `customer-emails/${mailbox.workspace_id}/${id}.eml`;
+  let uploaded: Awaited<ReturnType<typeof uploadStreamToR2>>;
+  try {
+    uploaded = await uploadStreamToR2(env.R2_CUSTOMER_EMAILS_BUCKET, storageKey, input.raw, {
+      httpMetadata: { contentType: "message/rfc822" },
+      customMetadata: { forwardingEmail, envelopeTo },
+    });
+  } catch (error) {
+    await env.R2_CUSTOMER_EMAILS_BUCKET.delete(storageKey);
+    throw error;
+  }
+  if (uploaded.size !== input.rawSize || uploaded.object.size !== input.rawSize) {
+    await env.R2_CUSTOMER_EMAILS_BUCKET.delete(storageKey);
+    throw new Error("email_size_mismatch");
+  }
+  const hash = uploaded.sha256;
+  const existing = await env.DB.prepare(
+    `SELECT id,status FROM customer_email_ingestions WHERE workspace_id=? AND raw_sha256=?`
+  )
+    .bind(mailbox.workspace_id, hash)
+    .first<{ id: string; status: string }>();
+  if (existing) {
+    await env.R2_CUSTOMER_EMAILS_BUCKET.delete(storageKey);
+    return { ...existing, duplicate: true };
+  }
+
+  const now = nowISO();
+  await env.DB.prepare(
+    `INSERT INTO customer_email_ingestions
+      (id,workspace_id,forwarding_email,envelope_to,raw_storage_key,raw_sha256,raw_size_bytes,status,received_at,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+  )
+    .bind(
+      id,
+      mailbox.workspace_id,
+      forwardingEmail,
+      envelopeTo,
+      storageKey,
+      hash,
+      input.rawSize,
       "queued",
       now,
       now,
@@ -866,7 +995,10 @@ export function normalizeEmail(value: string | null | undefined) {
 }
 export async function sha256Hex(raw: ArrayBuffer) {
   const digest = await crypto.subtle.digest("SHA-256", raw);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return bytesToHex(new Uint8Array(digest));
+}
+function bytesToHex(bytes: Uint8Array) {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 function hexBytes(value: string) {
   if (!/^[0-9a-f]{64}$/i.test(value)) return new Uint8Array();

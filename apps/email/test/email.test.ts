@@ -10,6 +10,8 @@ describe("inbound email worker", () => {
         expect(init?.headers).toMatchObject({
           "x-ftops-envelope-from": "owner@example.com",
           "x-ftops-envelope-to": "notes@in.example.com",
+          "x-ftops-email-signature-version": "2",
+          "x-ftops-raw-size": String(new TextEncoder().encode(raw).byteLength),
         });
         expect(await new Response(init?.body).text()).toBe(raw);
         expect(

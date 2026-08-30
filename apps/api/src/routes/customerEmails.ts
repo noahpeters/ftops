@@ -7,7 +7,9 @@ import {
   customerEmailStaleBeforeISO,
   normalizeEmail,
   receiveCustomerEmail,
+  receiveCustomerEmailStream,
   verifyInboundEmailRequest,
+  verifyInboundEmailStreamRequest,
 } from "../services/customerEmailIngestion";
 
 export async function handleCustomerEmails(
@@ -197,6 +199,22 @@ export async function handleCustomerEmails(
 
 async function receiveInbound(request: Request, env: Env) {
   if (request.method !== "POST") return methodNotAllowed(["POST"]);
+  if (request.headers.get("x-ftops-email-signature-version") === "2") {
+    if (!(await verifyInboundEmailStreamRequest(request, env)))
+      return forbidden("invalid_signature");
+    if (!request.body) return badRequest("email_size_invalid");
+    try {
+      const result = await receiveCustomerEmailStream(env, {
+        raw: request.body,
+        rawSize: Number(request.headers.get("x-ftops-raw-size")),
+        forwardingEmail: request.headers.get("x-ftops-envelope-from") || "",
+        envelopeTo: request.headers.get("x-ftops-envelope-to") || "",
+      });
+      return json(result, result.duplicate ? 200 : 202);
+    } catch (error) {
+      return inboundError(error);
+    }
+  }
   const raw = await request.arrayBuffer();
   if (!(await verifyInboundEmailRequest(request, raw, env))) return forbidden("invalid_signature");
   try {
@@ -207,12 +225,16 @@ async function receiveInbound(request: Request, env: Env) {
     });
     return json(result, result.duplicate ? 200 : 202);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "email_ingestion_failed";
-    if (message === "email_forwarder_not_authorized" || message === "email_mailbox_not_configured")
-      return forbidden(message);
-    if (message === "email_size_invalid") return badRequest(message);
-    throw error;
+    return inboundError(error);
   }
+}
+function inboundError(error: unknown) {
+  const message = error instanceof Error ? error.message : "email_ingestion_failed";
+  if (message === "email_forwarder_not_authorized" || message === "email_mailbox_not_configured")
+    return forbidden(message);
+  if (message === "email_size_invalid" || message === "email_size_mismatch")
+    return badRequest(message);
+  throw error;
 }
 async function readJson(request: Request) {
   try {

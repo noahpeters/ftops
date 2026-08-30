@@ -7,7 +7,7 @@ FTOPS receives forwarded customer mail through a dedicated Cloudflare Email Rout
 1. Route the dedicated `ops.fromtrees.studio` subdomain through Cloudflare Email Routing.
 2. Route `notes@ops.fromtrees.studio` to the `ftops-email` Worker for normal customer email notes.
 3. Route `doodle@ops.fromtrees.studio` to the same Worker for automated Doodle booking ingestion.
-4. The Email Worker buffers the raw MIME once and sends it through the `API` service binding with a timestamped HMAC signature and the SMTP envelope addresses.
+4. The Email Worker streams normal raw MIME through the `API` service binding with a timestamped HMAC signature, declared byte length, and the SMTP envelope addresses. The API writes that stream to bounded multipart R2 uploads while computing its SHA-256 digest.
 5. The API resolves the envelope recipient to one workspace, then authorizes the envelope sender inside that workspace. Normal customer email ingestion never trusts a header `From` value for authorization.
 6. FTOPS archives the raw `.eml` in the private `ftops-customer-emails` R2 bucket, parses MIME as a stream, and writes decoded attachments through bounded multipart R2 uploads rather than buffering them in Worker memory.
 7. Recognized Doodle booking notifications are handled deterministically before the generic email summarizer. Other messages continue through Contact matching and AI extraction as normal.
