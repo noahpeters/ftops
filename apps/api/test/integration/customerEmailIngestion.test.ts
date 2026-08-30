@@ -5,6 +5,7 @@ import { route } from "../../src/lib/router";
 import {
   processCustomerEmailIngestion,
   receiveCustomerEmail,
+  recoverStaleCustomerEmailIngestions,
 } from "../../src/services/customerEmailIngestion";
 
 describe("customer email ingestion", () => {
@@ -181,6 +182,7 @@ describe("customer email ingestion", () => {
 
   it.each([
     ["a forwarded sent message", sentForwardMime(), "owner@example.com"],
+    ["an attached RFC 822 message", attachedForwardMime(), "owner@example.com"],
     ["a live message with the notes mailbox CC'd", liveCustomerMime("cc"), "client@example.com"],
     ["a live message with the notes mailbox BCC'd", liveCustomerMime("bcc"), "client@example.com"],
   ])("matches the customer for %s", async (_scenario, raw, envelopeFrom) => {
@@ -372,6 +374,112 @@ describe("customer email ingestion", () => {
     expect(candidate?.proposed_body).toContain("Solid birch boxes");
     await mf.dispose();
   });
+
+  it("streams a 12 MiB attachment into R2 without buffering it in the parsed email", async () => {
+    const aiRun = vi.fn(async () => ({
+      response: {
+        subject: "Large drawing",
+        summary: "- Customer supplied a drawing.",
+        confidence: 1,
+      },
+    }));
+    const context = await createTestEnv({ env: { AI: { run: aiRun } } });
+    if (!context) return;
+    const { env, db, mf } = context;
+    const now = new Date().toISOString();
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO email_ingestion_mailboxes (id,workspace_id,address,enabled,created_at,updated_at) VALUES ('large-mb','default','notes@in.example.com',1,?,?)`
+        )
+        .bind(now, now),
+      db
+        .prepare(
+          `INSERT INTO email_ingestion_forwarders (id,workspace_id,email,enabled,created_at,updated_at) VALUES ('large-forwarder','default','owner@example.com',1,?,?)`
+        )
+        .bind(now, now),
+      db
+        .prepare(
+          `INSERT INTO customers (id,workspace_id,display_name,status,created_at,updated_at) VALUES ('large-customer','default','Large Customer','lead',?,?)`
+        )
+        .bind(now, now),
+      db
+        .prepare(
+          `INSERT INTO contacts (id,workspace_id,customer_id,display_name,email,is_primary,created_at,updated_at,status) VALUES ('large-contact','default','large-customer','Client','client@example.com',1,?,?, 'active')`
+        )
+        .bind(now, now),
+    ]);
+
+    const received = await receiveCustomerEmail(env, {
+      raw: largeAttachmentMime(12 * 1024 * 1024),
+      forwardingEmail: "owner@example.com",
+      envelopeTo: "notes@in.example.com",
+    });
+    await processCustomerEmailIngestion(env, received.id);
+
+    expect(
+      await db
+        .prepare(`SELECT status,failure_reason FROM customer_email_ingestions WHERE id=?`)
+        .bind(received.id)
+        .first()
+    ).toMatchObject({ status: "ready", failure_reason: null });
+    const attachment = await db
+      .prepare(
+        `SELECT size_bytes,sha256,storage_key FROM customer_email_attachments WHERE ingestion_id=?`
+      )
+      .bind(received.id)
+      .first<{ size_bytes: number; sha256: string; storage_key: string }>();
+    expect(attachment).toMatchObject({ size_bytes: 12 * 1024 * 1024 });
+    expect(attachment?.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect((await env.R2_CUSTOMER_EMAILS_BUCKET.head(attachment!.storage_key))?.size).toBe(
+      12 * 1024 * 1024
+    );
+    await mf.dispose();
+  }, 30_000);
+
+  it("surfaces and requeues stale processing records", async () => {
+    const queued: unknown[] = [];
+    const context = await createTestEnv({
+      env: { EVENT_QUEUE: { send: vi.fn(async (message: unknown) => queued.push(message)) } },
+    });
+    if (!context) return;
+    const { env, db, mf } = context;
+    const now = new Date("2026-08-30T20:00:00.000Z");
+    await db
+      .prepare(
+        `INSERT INTO customer_email_ingestions
+          (id,workspace_id,forwarding_email,envelope_to,raw_storage_key,raw_sha256,raw_size_bytes,status,received_at,created_at,updated_at)
+         VALUES ('stale-email','default','owner@example.com','notes@in.example.com','raw/stale','stale-hash',100,'processing',?,?,?)`
+      )
+      .bind(now.toISOString(), now.toISOString(), "2000-01-01T00:00:00.000Z")
+      .run();
+
+    const attention = await apiRequest(
+      env,
+      "/customer-emails?workspaceId=default&status=attention",
+      {
+        headers: { "X-Debug-User-Email": "reviewer@example.com" },
+      }
+    );
+    expect(await attention.json()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "stale-email", status: "processing" })])
+    );
+    expect(await recoverStaleCustomerEmailIngestions(env, now.getTime())).toBe(1);
+    expect(
+      await db
+        .prepare(
+          `SELECT status,failure_reason FROM customer_email_ingestions WHERE id='stale-email'`
+        )
+        .first()
+    ).toMatchObject({ status: "queued", failure_reason: "interrupted_processing_requeued" });
+    expect(queued).toEqual([
+      expect.objectContaining({
+        type: "customer.email.extract",
+        payload: { ingestionId: "stale-email" },
+      }),
+    ]);
+    await mf.dispose();
+  });
 });
 
 function apiRequest(env: Parameters<typeof route>[1], path: string, init: RequestInit = {}) {
@@ -427,6 +535,61 @@ function sentForwardMime() {
     "",
     "Here is the update I sent to the customer.",
   ]);
+}
+
+function attachedForwardMime() {
+  return textMime([
+    "From: Owner <owner@example.com>",
+    "To: notes@ops.from-trees.com",
+    "Subject: Fwd: Project update",
+    "MIME-Version: 1.0",
+    'Content-Type: multipart/mixed; boundary="attached-message"',
+    "",
+    "--attached-message",
+    "Content-Type: text/plain; charset=utf-8",
+    "",
+    "Forwarded customer message attached.",
+    "--attached-message",
+    'Content-Type: message/rfc822; name="original.eml"',
+    'Content-Disposition: attachment; filename="original.eml"',
+    "",
+    "From: Client <client@example.com>",
+    "To: Owner <owner@example.com>",
+    "Subject: Project update",
+    "",
+    "The attached customer message confirms the project detail.",
+    "--attached-message--",
+    "",
+  ]);
+}
+
+function largeAttachmentMime(size: number) {
+  const boundary = "ftops-large-boundary";
+  const encoded = Buffer.from(new Uint8Array(size).fill(65))
+    .toString("base64")
+    .replace(/.{76}/g, "$&\r\n");
+  return new TextEncoder().encode(
+    [
+      "From: Client <client@example.com>",
+      "To: notes@in.example.com",
+      "Subject: Large drawing",
+      "MIME-Version: 1.0",
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      "",
+      `--${boundary}`,
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      "Attached is the drawing.",
+      `--${boundary}`,
+      'Content-Type: application/octet-stream; name="drawing.bin"',
+      'Content-Disposition: attachment; filename="drawing.bin"',
+      "Content-Transfer-Encoding: base64",
+      "",
+      encoded,
+      `--${boundary}--`,
+      "",
+    ].join("\r\n")
+  ).buffer;
 }
 
 function liveCustomerMime(mode: "cc" | "bcc") {

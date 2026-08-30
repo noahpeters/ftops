@@ -4,6 +4,7 @@ import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import {
   applyEmailCandidate,
+  customerEmailStaleBeforeISO,
   normalizeEmail,
   receiveCustomerEmail,
   verifyInboundEmailRequest,
@@ -41,12 +42,14 @@ export async function handleCustomerEmails(
        LEFT JOIN customers customer ON customer.id=i.customer_id AND customer.workspace_id=i.workspace_id
        LEFT JOIN contacts contact ON contact.id=i.contact_id AND contact.workspace_id=i.workspace_id
        WHERE i.workspace_id=?
-         AND (?=1 AND i.status IN ('failed','needs_match') OR ?=0 AND (? IS NULL OR i.status=?))
+         AND (?=1 AND (i.status IN ('failed','needs_match') OR (i.status='processing' AND i.updated_at<=?))
+              OR ?=0 AND (? IS NULL OR i.status=?))
        ORDER BY i.received_at DESC LIMIT 100`
     )
       .bind(
         workspaceId,
         attentionOnly ? 1 : 0,
+        customerEmailStaleBeforeISO(),
         attentionOnly ? 1 : 0,
         status && !attentionOnly ? status : null,
         status && !attentionOnly ? status : null

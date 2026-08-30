@@ -3,6 +3,8 @@ import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { enqueueQuoContactSync } from "./quo";
 
+const DOODLE_MAILBOX = "doodle@ops.fromtrees.studio";
+
 type DoodleBooking = {
   sourceMessageId: string | null;
   subject: string;
@@ -38,6 +40,7 @@ export async function processDoodleCustomerEmailIngestion(
     .first<Record<string, unknown>>();
   if (!ingestion) throw new Error("email_ingestion_not_found");
   if (["applied", "dismissed"].includes(String(ingestion.status))) return true;
+  if (String(ingestion.envelope_to).trim().toLowerCase() !== DOODLE_MAILBOX) return false;
 
   const object = await env.R2_CUSTOMER_EMAILS_BUCKET.get(String(ingestion.raw_storage_key));
   if (!object) throw new Error("email_source_not_found");

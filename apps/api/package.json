@@ -48,6 +48,7 @@
   "dependencies": {
     "@ftops/webhooks": "file:../../packages/webhooks",
     "luxon": "^3.7.2",
+    "mailparser": "^3.9.17",
     "postal-mime": "^2.7.6"
   },
   "bugs": {
@@ -57,6 +58,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260116.0",
     "@types/luxon": "^3.7.1",
+    "@types/mailparser": "^3.4.6",
     "@typescript-eslint/eslint-plugin": "^8.53.0",
     "@typescript-eslint/parser": "^8.53.0",
     "eslint": "^9.39.2",

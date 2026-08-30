@@ -2,8 +2,8 @@ declare const __dirname: string;
 declare const require: (path: string) => any;
 declare const process: { cwd: () => string; env: Record<string, string | undefined> };
 declare const Buffer: {
-  from: (...args: unknown[]) => Uint8Array;
-  alloc: (...args: unknown[]) => Uint8Array;
+  from: (...args: unknown[]) => Uint8Array & { toString: (encoding?: string) => string };
+  alloc: (...args: unknown[]) => Uint8Array & { toString: (encoding?: string) => string };
 };
 
 declare module "node:fs" {

@@ -8,7 +8,7 @@
     "paths": {
       "@ftops/webhooks": ["../../packages/webhooks/src/index.ts"]
     },
-    "types": ["@cloudflare/workers-types"],
+    "types": ["@cloudflare/workers-types", "node"],
     "strict": true,
     "skipLibCheck": true
   }

@@ -9,11 +9,13 @@ FTOPS receives forwarded customer mail through a dedicated Cloudflare Email Rout
 3. Route `doodle@ops.fromtrees.studio` to the same Worker for automated Doodle booking ingestion.
 4. The Email Worker buffers the raw MIME once and sends it through the `API` service binding with a timestamped HMAC signature and the SMTP envelope addresses.
 5. The API resolves the envelope recipient to one workspace, then authorizes the envelope sender inside that workspace. Normal customer email ingestion never trusts a header `From` value for authorization.
-6. FTOPS archives the raw `.eml` and attachments in the private `ftops-customer-emails` R2 bucket.
+6. FTOPS archives the raw `.eml` in the private `ftops-customer-emails` R2 bucket, parses MIME as a stream, and writes decoded attachments through bounded multipart R2 uploads rather than buffering them in Worker memory.
 7. Recognized Doodle booking notifications are handled deterministically before the generic email summarizer. Other messages continue through Contact matching and AI extraction as normal.
 8. Generic candidate notes remain pending until a user applies or dismisses them. Applying a candidate creates a normal customer note with source provenance and copies every email attachment into the existing protected customer-note file store.
 
 No cross-workspace fallback is allowed. If a recipient mailbox is unknown, a forwarding user is not authorized for that workspace, or Contact matching is ambiguous, FTOPS rejects or holds the ingestion for review rather than searching another workspace.
+
+If processing is interrupted, records older than ten minutes remain visible in the **Needs attention** filter. The hourly maintenance job automatically requeues up to twenty stale records per run.
 
 ## Doodle bookings
 

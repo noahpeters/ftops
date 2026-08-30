@@ -1,10 +1,11 @@
-import PostalMime from "postal-mime";
 import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { enqueueCustomerNoteFollowUpAnalysis } from "./customerFollowUp";
+import { parseEmailFromR2, type StreamedAttachment, type StreamedEmail } from "./streamingMime";
 
 const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const MAX_RAW_BYTES = 25 * 1024 * 1024;
+const STALE_PROCESSING_MS = 10 * 60_000;
 
 type Candidate = {
   subject: string;
@@ -22,7 +23,9 @@ type ThreadMessage = {
   attachments: Array<{
     filename: string | null;
     mimeType: string;
-    content: string | ArrayBuffer | Uint8Array;
+    size: number;
+    sha256: string;
+    storageKey: string;
   }>;
 };
 
@@ -137,12 +140,19 @@ export async function processCustomerEmailIngestion(env: Env, ingestionId: strin
   )
     .bind(nowISO(), ingestionId)
     .run();
+  let uploadedAttachments: StreamedAttachment[] = [];
+  const recordedAttachmentKeys = new Set<string>();
   try {
-    const object = await env.R2_CUSTOMER_EMAILS_BUCKET.get(String(ingestion.raw_storage_key));
-    if (!object) throw new Error("email_source_not_found");
-    const raw = await object.arrayBuffer();
-    const outer = await PostalMime.parse(raw);
-    const messages = await parseThreadMessages(outer);
+    const outer = await parseEmailFromR2(
+      env.R2_CUSTOMER_EMAILS_BUCKET,
+      String(ingestion.raw_storage_key),
+      (attachment, index) => {
+        const filename = safeFilename(attachment.filename || `attachment-${index + 1}`);
+        return `customer-emails/${ingestion.workspace_id}/${ingestionId}/attachments/${String(index + 1).padStart(4, "0")}-${crypto.randomUUID()}-${filename}`;
+      }
+    );
+    uploadedAttachments = allStreamedAttachments(outer);
+    const messages = parseThreadMessages(outer);
     if (messages.length === 0) throw new Error("email_thread_empty");
     const internalEmails = await workspaceInternalEmails(env, String(ingestion.workspace_id));
     const candidateEmails = customerAddressCandidates(outer, messages).filter(
@@ -196,7 +206,11 @@ export async function processCustomerEmailIngestion(env: Env, ingestionId: strin
         ingestionId
       )
       .run();
-    if (!contact) return;
+    if (!contact) {
+      await deleteAttachments(env.R2_CUSTOMER_EMAILS_BUCKET, uploadedAttachments);
+      return;
+    }
+    let attachmentsRecorded = false;
     for (const message of messages) {
       const bodyHash = await sha256Hex(
         new TextEncoder().encode(normalizeMessageText(message.text)).buffer
@@ -247,20 +261,33 @@ export async function processCustomerEmailIngestion(env: Env, ingestionId: strin
           now
         ),
       ]);
-      await archiveAttachments(env, {
-        ingestionId,
-        emailMessageId,
-        workspaceId: String(ingestion.workspace_id),
-        attachments: message.attachments,
-        now,
-      });
+      if (!attachmentsRecorded && message.attachments.length > 0) {
+        await recordStreamedAttachments(env, {
+          ingestionId,
+          emailMessageId,
+          workspaceId: String(ingestion.workspace_id),
+          attachments: message.attachments,
+          now,
+        });
+        for (const attachment of message.attachments)
+          recordedAttachmentKeys.add(attachment.storageKey);
+        attachmentsRecorded = true;
+      }
     }
+    await deleteAttachments(
+      env.R2_CUSTOMER_EMAILS_BUCKET,
+      uploadedAttachments.filter((attachment) => !recordedAttachmentKeys.has(attachment.storageKey))
+    );
     await env.DB.prepare(
       `UPDATE customer_email_ingestions SET status='ready',failure_reason=NULL,updated_at=? WHERE id=?`
     )
       .bind(now, ingestionId)
       .run();
   } catch (error) {
+    await deleteAttachments(
+      env.R2_CUSTOMER_EMAILS_BUCKET,
+      uploadedAttachments.filter((attachment) => !recordedAttachmentKeys.has(attachment.storageKey))
+    );
     const reason = error instanceof Error ? error.message : "email_processing_failed";
     await env.DB.prepare(
       `UPDATE customer_email_ingestions SET status='failed',failure_reason=?,updated_at=? WHERE id=?`
@@ -269,6 +296,52 @@ export async function processCustomerEmailIngestion(env: Env, ingestionId: strin
       .run();
     throw error;
   }
+}
+
+export function customerEmailStaleBeforeISO(now = Date.now()) {
+  return new Date(now - STALE_PROCESSING_MS).toISOString();
+}
+
+export async function recoverStaleCustomerEmailIngestions(env: Env, now = Date.now()) {
+  const stale = await env.DB.prepare(
+    `SELECT id FROM customer_email_ingestions
+     WHERE status='processing' AND updated_at<=?
+     ORDER BY updated_at LIMIT 20`
+  )
+    .bind(customerEmailStaleBeforeISO(now))
+    .all<{ id: string }>();
+  let requeued = 0;
+  for (const row of stale.results ?? []) {
+    const updatedAt = new Date(now).toISOString();
+    const update = await env.DB.prepare(
+      `UPDATE customer_email_ingestions
+       SET status='queued',failure_reason='interrupted_processing_requeued',updated_at=?
+       WHERE id=? AND status='processing' AND updated_at<=?`
+    )
+      .bind(updatedAt, row.id, customerEmailStaleBeforeISO(now))
+      .run();
+    if (Number(update.meta.changes ?? 0) === 0) continue;
+    try {
+      await env.EVENT_QUEUE.send({
+        source: "ftops",
+        type: "customer.email.extract",
+        externalId: row.id,
+        idempotencyKey: `customer-email-recovery/${row.id}/${updatedAt}`,
+        payload: { ingestionId: row.id },
+        receivedAt: updatedAt,
+      });
+      requeued += 1;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "email_recovery_enqueue_failed";
+      await env.DB.prepare(
+        `UPDATE customer_email_ingestions
+         SET status='failed',failure_reason=?,updated_at=? WHERE id=? AND status='queued'`
+      )
+        .bind(`email_recovery_enqueue_failed:${reason}`.slice(0, 500), updatedAt, row.id)
+        .run();
+    }
+  }
+  return requeued;
 }
 
 async function workspaceInternalEmails(env: Env, workspaceId: string) {
@@ -291,32 +364,43 @@ async function workspaceInternalEmails(env: Env, workspaceId: string) {
   );
 }
 
-function customerAddressCandidates(
-  outer: Awaited<ReturnType<typeof PostalMime.parse>>,
-  messages: ThreadMessage[]
-) {
+function customerAddressCandidates(outer: StreamedEmail, messages: ThreadMessage[]) {
   const candidates: string[] = [];
   const add = (value: string | null | undefined) => {
     const email = normalizeEmail(value);
     if (email && !candidates.includes(email)) candidates.push(email);
   };
-  add(mailboxAddress(outer.from));
-  for (const address of [...(outer.to ?? []), ...(outer.cc ?? []), ...(outer.bcc ?? [])]) {
-    for (const email of addressEmails(address)) add(email);
-  }
+  add(firstAddress(outer.from));
+  for (const email of addressEmails(outer.to)) add(email);
+  for (const email of addressEmails(outer.cc)) add(email);
+  for (const email of addressEmails(outer.bcc)) add(email);
   for (const email of forwardedHeaderEmails(outer.text || stripHtml(outer.html || ""))) add(email);
   for (const message of messages) add(message.senderEmail);
   return candidates;
 }
 
-function mailboxAddress(
-  address: { address?: string; group?: Array<{ address: string }> } | undefined
-) {
-  return address?.address || address?.group?.[0]?.address || "";
+function firstAddress(value: unknown) {
+  return addressEmails(value)[0] || "";
 }
 
-function addressEmails(address: { address?: string; group?: Array<{ address: string }> }) {
-  return address.address ? [address.address] : (address.group ?? []).map((item) => item.address);
+function addressEmails(value: unknown): string[] {
+  if (!value || typeof value !== "object") return [];
+  const addresses = (value as { value?: unknown }).value;
+  if (!Array.isArray(addresses)) return [];
+  return addresses.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const row = entry as { address?: unknown; group?: unknown };
+    if (typeof row.address === "string") return [row.address];
+    return Array.isArray(row.group)
+      ? row.group.flatMap((member) =>
+          member &&
+          typeof member === "object" &&
+          typeof (member as { address?: unknown }).address === "string"
+            ? [String((member as { address: string }).address)]
+            : []
+        )
+      : [];
+  });
 }
 
 function forwardedHeaderEmails(text: string) {
@@ -423,17 +507,13 @@ export async function applyEmailCandidate(
   return activityId;
 }
 
-async function archiveAttachments(
+async function recordStreamedAttachments(
   env: Env,
   input: {
     ingestionId: string;
     emailMessageId: string;
     workspaceId: string;
-    attachments: Array<{
-      filename: string | null;
-      mimeType: string;
-      content: string | ArrayBuffer | Uint8Array;
-    }>;
+    attachments: StreamedAttachment[];
     now: string;
   }
 ) {
@@ -446,14 +526,6 @@ async function archiveAttachments(
   for (const [index, attachment] of input.attachments.entries()) {
     const id = crypto.randomUUID();
     const filename = safeFilename(attachment.filename || `attachment-${index + 1}`);
-    const bytes = toBytes(attachment.content);
-    const raw = bytes.slice().buffer;
-    const hash = await sha256Hex(raw);
-    const storageKey = `customer-emails/${input.workspaceId}/${input.ingestionId}/attachments/${id}-${filename}`;
-    await env.R2_CUSTOMER_EMAILS_BUCKET.put(storageKey, raw, {
-      httpMetadata: { contentType: attachment.mimeType || "application/octet-stream" },
-      customMetadata: { ingestionId: input.ingestionId, sha256: hash },
-    });
     await env.DB.prepare(
       `INSERT INTO customer_email_attachments
         (id,ingestion_id,email_message_id,workspace_id,original_filename,content_type,size_bytes,sha256,storage_key,created_at)
@@ -466,13 +538,18 @@ async function archiveAttachments(
         input.workspaceId,
         filename,
         attachment.mimeType || "application/octet-stream",
-        bytes.byteLength,
-        hash,
-        storageKey,
+        attachment.size,
+        attachment.sha256,
+        attachment.storageKey,
         input.now
       )
       .run();
   }
+}
+
+async function deleteAttachments(bucket: R2Bucket, attachments: StreamedAttachment[]) {
+  if (attachments.length === 0) return;
+  await bucket.delete(attachments.map((attachment) => attachment.storageKey));
 }
 
 async function attachEmailFilesToNote(
@@ -528,40 +605,43 @@ async function attachEmailFilesToNote(
   }
 }
 
-async function parseThreadMessages(
-  outer: Awaited<ReturnType<typeof PostalMime.parse>>
-): Promise<ThreadMessage[]> {
-  const nestedMessages: ThreadMessage[] = [];
-  for (const attachment of outer.attachments) {
-    if (attachment.mimeType.toLowerCase() === "message/rfc822") {
-      const nested = await PostalMime.parse(attachment.content);
-      nestedMessages.push(...(await parseThreadMessages(nested)));
-    }
-  }
+function parseThreadMessages(outer: StreamedEmail): ThreadMessage[] {
+  const nestedMessages = outer.nestedEmails.flatMap((nested) => parseThreadMessages(nested));
   if (nestedMessages.length > 0) return nestedMessages;
   const text = outer.text || stripHtml(outer.html || "");
   const parsed = parseQuotedThreadText(text, outer.subject || "Customer email");
   if (parsed.length > 0) {
-    parsed[0].attachments = outer.attachments.filter(
-      (attachment) => attachment.mimeType.toLowerCase() !== "message/rfc822"
-    );
+    parsed[0].attachments = outer.attachments;
     return parsed;
   }
-  const senderEmail = normalizeEmail(outer.from?.address);
+  const senderEmail = normalizeEmail(firstAddress(outer.from));
   if (!senderEmail) return [];
   return [
     {
-      sourceMessageId: outer.messageId || null,
+      sourceMessageId: outer.messageId,
       senderEmail,
-      senderName: outer.from?.name || "",
+      senderName: firstAddressName(outer.from),
       subject: outer.subject || "Customer email",
       sentAt: validDate(outer.date),
       text: normalizeMessageText(text),
-      attachments: outer.attachments.filter(
-        (attachment) => attachment.mimeType.toLowerCase() !== "message/rfc822"
-      ),
+      attachments: outer.attachments,
     },
   ];
+}
+
+function allStreamedAttachments(email: StreamedEmail): StreamedAttachment[] {
+  return [
+    ...email.attachments,
+    ...email.nestedEmails.flatMap((nested) => allStreamedAttachments(nested)),
+  ];
+}
+
+function firstAddressName(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  const addresses = (value as { value?: unknown }).value;
+  if (!Array.isArray(addresses) || !addresses[0] || typeof addresses[0] !== "object") return "";
+  const name = (addresses[0] as { name?: unknown }).name;
+  return typeof name === "string" ? name : "";
 }
 
 function parseQuotedThreadText(text: string, fallbackSubject: string): ThreadMessage[] {
@@ -773,11 +853,6 @@ function stripHtml(html: string) {
 }
 function safeFilename(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "attachment";
-}
-function toBytes(value: string | ArrayBuffer | Uint8Array) {
-  if (typeof value === "string") return new TextEncoder().encode(value);
-  if (value instanceof Uint8Array) return value;
-  return new Uint8Array(value);
 }
 function validDate(value: string | null | undefined) {
   if (!value || Number.isNaN(Date.parse(value))) return null;

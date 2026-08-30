@@ -2,6 +2,7 @@ import { applyCorsHeaders, corsPreflight, getCorsContext } from "./lib/cors";
 import { route } from "./lib/router";
 import type { Env, EventQueuePayload } from "./lib/types";
 import { processEventMessage } from "./processors/eventProcessor";
+import { recoverStaleCustomerEmailIngestions } from "./services/customerEmailIngestion";
 import { processWebhookEnvelope } from "./processors/webhookProcessor";
 import type { IngestQueueMessage, WebhookEnvelope } from "@ftops/webhooks";
 import { processIngestQueueMessage } from "./processors/ingestQueue";
@@ -81,6 +82,7 @@ export default {
       enqueueDueQuoSyncs(env),
       syncAllQuoConversations(env, new Date(controller.scheduledTime)),
       enqueueMissingCustomerNoteFollowUps(env),
+      recoverStaleCustomerEmailIngestions(env, controller.scheduledTime),
     ]);
   },
 };
