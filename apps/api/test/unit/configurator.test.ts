@@ -69,3 +69,30 @@ it("does not leak upstream errors or follow redirects", async () => {
   expect(response.status).toBe(503);
   expect(await response.text()).not.toContain("private-report-token");
 });
+
+it("uses the private service binding for reports and design previews", async () => {
+  admin(true);
+  const publicFetch = vi.fn();
+  vi.stubGlobal("fetch", publicFetch);
+  const serviceFetch = vi.fn().mockResolvedValue(Response.json({ ok: true }));
+  const boundEnv = { ...env, CABINET_ANALYTICS_SERVICE: { fetch: serviceFetch } } as unknown as Env;
+  expect((await handleConfigurator([], request(), boundEnv)).status).toBe(200);
+  expect(serviceFetch.mock.calls[0][0].toString()).toBe(
+    "https://rooms.example/admin/dashboard?days=7&page=2"
+  );
+  const previewRequest = new Request(
+    "https://ops.example/configurator/design?slug=room-1&token=untrusted",
+    {
+      headers: request().headers,
+    }
+  );
+  expect((await handleConfigurator(["design"], previewRequest, boundEnv)).status).toBe(200);
+  expect(serviceFetch.mock.calls[1][0].toString()).toBe(
+    "https://rooms.example/admin/design?slug=room-1"
+  );
+  expect(serviceFetch.mock.calls[1][1]).toMatchObject({
+    headers: { Authorization: "Bearer private-report-token" },
+    redirect: "error",
+  });
+  expect(publicFetch).not.toHaveBeenCalled();
+});
