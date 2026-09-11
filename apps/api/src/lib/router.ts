@@ -1,3 +1,4 @@
+import { handleConfigurator } from "../routes/configurator";
 import { notFound } from "./http";
 import type { Env } from "./types";
 import { handleEvents } from "../routes/events";
@@ -75,6 +76,7 @@ async function routesRoot(
     url,
     {
       health: handleHealth,
+      configurator: handleConfigurator,
       projects: handleProjects,
       events: handleEvents,
       plan: handlePlan,

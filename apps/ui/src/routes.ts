@@ -9,6 +9,7 @@ export default [
     index("routes/index.tsx"),
     route("plan-preview", "routes/plan-preview.tsx"),
     route("plan-preview/:recordUri", "routes/plan-preview-record.tsx"),
+    route("configurator", "routes/configurator.tsx"),
     route("events", "routes/events.tsx"),
     route("demo", "routes/demo.tsx"),
     route("templates", "routes/templates.tsx"),

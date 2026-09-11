@@ -1,4 +1,6 @@
 export type Env = {
+  CABINET_ANALYTICS_URL?: string;
+  CABINET_ANALYTICS_READ_TOKEN?: string;
   DB: D1Database;
   AI?: {
     run(model: string, input: Record<string, unknown>): Promise<{ response?: unknown } | string>;
