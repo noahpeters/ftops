@@ -34,7 +34,7 @@ export async function handleConfigurator(segments: string[], request: Request, e
     const response = await reportingFetch(target, {
       headers: { Authorization: `Bearer ${env.CABINET_ANALYTICS_READ_TOKEN}` },
       signal: AbortSignal.timeout(15000),
-      redirect: "error",
+      redirect: "manual",
     });
     if (!response.ok)
       return json(
