@@ -54,7 +54,7 @@ it("forwards only fixed paths and supported filters and never returns credential
   );
   expect(fetcher.mock.calls[0][1]).toMatchObject({
     headers: { Authorization: "Bearer private-report-token" },
-    redirect: "error",
+    redirect: "manual",
   });
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(await response.json()).toEqual({ totals: { visits: 3 } });
@@ -92,7 +92,7 @@ it("uses the private service binding for reports and design previews", async () 
   );
   expect(serviceFetch.mock.calls[1][1]).toMatchObject({
     headers: { Authorization: "Bearer private-report-token" },
-    redirect: "error",
+    redirect: "manual",
   });
   expect(publicFetch).not.toHaveBeenCalled();
 });
