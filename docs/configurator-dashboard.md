@@ -2,7 +2,7 @@
 
 `/configurator` is a read-only storefront report inside FTOPS. Both the page and API require the existing system-administrator role. It is storefront-wide, not scoped to the workspace selector. Cloudflare Access and the existing API identity path remain unchanged. No public storefront administration route is introduced.
 
-The FTOPS API connects to the H2 cabinet-rooms Worker's `/admin/dashboard` and `/admin/design` endpoints using a dedicated read-only credential. Browser responses never contain that credential, room edit keys, or edit hashes. There is no CRM import or outbound messaging in this feature. Customer consent and records stay in the cabinet database.
+The FTOPS API connects to the H2 cabinet-rooms Worker's `/admin/dashboard` and `/admin/design` endpoints through the `CABINET_ANALYTICS_SERVICE` service binding using a dedicated read-only credential. The binding avoids same-zone public fetch restrictions between Workers; the configured HTTPS origin still supplies the request URL. Environments without the binding retain the HTTPS fallback. Browser responses never contain that credential, room edit keys, or edit hashes. There is no CRM import or outbound messaging in this feature. Customer consent and records stay in the cabinet database.
 
 ## Connect through GitHub Actions
 

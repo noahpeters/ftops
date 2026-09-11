@@ -28,7 +28,10 @@ export async function handleConfigurator(segments: string[], request: Request, e
     if (value !== null) target.searchParams.set(key, value);
   }
   try {
-    const response = await fetch(target, {
+    const reportingFetch = env.CABINET_ANALYTICS_SERVICE
+      ? env.CABINET_ANALYTICS_SERVICE.fetch.bind(env.CABINET_ANALYTICS_SERVICE)
+      : fetch;
+    const response = await reportingFetch(target, {
       headers: { Authorization: `Bearer ${env.CABINET_ANALYTICS_READ_TOKEN}` },
       signal: AbortSignal.timeout(15000),
       redirect: "error",
