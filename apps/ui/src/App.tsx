@@ -30,6 +30,8 @@ import { UsersPanel } from "./features/users/UsersPanel";
 import { CustomersPanel } from "./features/customers/CustomersPanel";
 import { getPreferences, setPreference, type UserPreferences } from "./features/preferences/api";
 
+import { ConfiguratorPanel } from "./features/configurator/ConfiguratorPanel";
+
 const EXAMPLE_URIS = ["manual://proposal/demo", "shopify://order/example", "qbo://invoice/example"];
 
 const styles = stylex.create({
@@ -902,6 +904,9 @@ export default function App(): JSX.Element {
 
             <nav className={stylex(styles.tabs, railCollapsed && styles.tabsCollapsed)}>
               {isSystemAdmin && (
+                <AppNavLink to="/configurator" label="Configurator" collapsed={railCollapsed} />
+              )}
+              {isSystemAdmin && (
                 <AppNavLink to="/plan-preview" label="Plan Preview" collapsed={railCollapsed} />
               )}
               {isSystemAdmin && (
@@ -1632,4 +1637,11 @@ function NotAuthorized(): JSX.Element {
       <p className={stylex(styles.metaText)}>Ask an admin for access to this section.</p>
     </section>
   );
+}
+
+export function ConfiguratorRoute(): JSX.Element {
+  const { actor, actorLoading } = useAppState();
+  if (actorLoading) return <section className={stylex(styles.panel)}>Loading...</section>;
+  if (!actor?.isSystemAdmin) return <NotAuthorized />;
+  return <ConfiguratorPanel />;
 }
