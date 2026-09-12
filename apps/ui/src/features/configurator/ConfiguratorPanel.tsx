@@ -258,7 +258,7 @@ export function ConfiguratorPanel() {
             {report.trackingStartedAt
               ? `Visit, new-design, and email acceptance tracking began ${date(report.trackingStartedAt)}. `
               : "Visit tracking coverage is unavailable. "}
-            Visits respect analytics consent and represent sessions, not unique people. Earlier
+            Visits represent sessions, not unique people. Earlier
             shares, price requests, and leads are included when available. *Email acceptance does
             not confirm inbox delivery.
           </p>
