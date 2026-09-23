@@ -26,15 +26,19 @@ export async function createIntegration(body: {
   workspaceId: string;
   provider: "shopify" | "qbo" | "quo" | "website";
   environment: "sandbox" | "production";
-  externalAccountId: string;
+  externalAccountId?: string;
+  sourceDomain?: string;
   displayName?: string;
-  secrets: Record<string, unknown>;
+  secrets?: Record<string, unknown>;
 }) {
-  return await fetchJson<IntegrationRow>(buildUrl("/integrations"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  return await fetchJson<IntegrationRow & { intakeCredential?: string }>(
+    buildUrl("/integrations"),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
 }
 
 export async function updateIntegration(
@@ -42,14 +46,19 @@ export async function updateIntegration(
   body: {
     displayName?: string | null;
     is_active?: number;
+    regenerateCredential?: boolean;
+    sourceDomain?: string;
     secrets?: Record<string, unknown>;
   }
 ) {
-  return await fetchJson<IntegrationRow>(buildUrl(`/integrations/${id}`), {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  return await fetchJson<IntegrationRow & { intakeCredential?: string }>(
+    buildUrl(`/integrations/${id}`),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
 }
 
 export async function deleteIntegration(id: string) {

@@ -81,39 +81,160 @@ describe("website intake", () => {
     }
   });
 
-  it("provisions and rotates encrypted website credentials through the administrator API", async () => {
+  it("assigns credentials, normalizes domains, and regenerates without exposing saved secrets", async () => {
     const { env, db, mf } = await setup();
     try {
       const create = await request(env, "/integrations", {
         workspaceId: "default",
         provider: "website",
         environment: "production",
-        externalAccountId: "new-site",
-        secrets: { intakeToken: token },
+        sourceDomain: "HTTPS://WWW.Example.COM/contact",
+        displayName: "Main site",
       });
       expect(create.status).toBe(201);
-      const row = (await create.json()) as { id: string };
+      expect(create.headers.get("Cache-Control")).toBe("no-store");
+      const row = (await create.json()) as {
+        id: string;
+        intakeCredential: string;
+        external_account_id: string;
+      };
+      expect(row.external_account_id).toBe("www.example.com");
+      expect(row.intakeCredential).toMatch(/^[a-f0-9]{64}$/);
       expect(row).not.toHaveProperty("secrets_ciphertext");
-      expect((await request(env, `/website-intake/${row.id}`, payload)).status).toBe(201);
+      const stored = await db
+        .prepare(`SELECT secrets_ciphertext FROM integrations WHERE id=?`)
+        .bind(row.id)
+        .first<{ secrets_ciphertext: string }>();
+      expect(stored!.secrets_ciphertext).not.toContain(row.intakeCredential);
+      expect(
+        (await request(env, `/website-intake/${row.id}`, payload, row.intakeCredential)).status
+      ).toBe(201);
+      const domainEdit = await request(
+        env,
+        `/integrations/${row.id}`,
+        { sourceDomain: "example.org." },
+        token,
+        "PATCH"
+      );
+      expect(await domainEdit.json()).toMatchObject({ external_account_id: "example.org" });
+      const rotate = await request(
+        env,
+        `/integrations/${row.id}`,
+        { regenerateCredential: true },
+        token,
+        "PATCH"
+      );
+      expect(rotate.status).toBe(200);
+      expect(rotate.headers.get("Cache-Control")).toBe("no-store");
+      const next = (await rotate.json()) as { intakeCredential: string };
+      expect(next.intakeCredential).toMatch(/^[a-f0-9]{64}$/);
+      expect(next.intakeCredential).not.toBe(row.intakeCredential);
+      expect(
+        (await request(env, `/website-intake/${row.id}`, payload, row.intakeCredential)).status
+      ).toBe(401);
+      expect(
+        (await request(env, `/website-intake/${row.id}`, payload, next.intakeCredential)).status
+      ).toBe(200);
+      for (const path of ["/integrations?workspaceId=default", `/integrations/${row.id}`]) {
+        const read = await request(env, path, undefined, token, "GET");
+        const text = await read.text();
+        expect(text).not.toContain(next.intakeCredential);
+        expect(text).not.toContain("intakeCredential");
+        expect(text).not.toContain("secrets_ciphertext");
+      }
       expect(
         (
           await request(
             env,
             `/integrations/${row.id}`,
-            { secrets: { intakeToken: token + "_rotated" } },
+            { secrets: { intakeToken: token } },
             token,
             "PATCH"
           )
         ).status
-      ).toBe(200);
-      expect((await request(env, `/website-intake/${row.id}`, payload)).status).toBe(401);
-      expect(
-        (await request(env, `/website-intake/${row.id}`, payload, token + "_rotated")).status
-      ).toBe(200);
+      ).toBe(400);
       await db.prepare(`UPDATE integrations SET provider='quo' WHERE id=?`).bind(row.id).run();
       expect(
-        (await request(env, `/website-intake/${row.id}`, payload, token + "_rotated")).status
+        (
+          await request(
+            env,
+            `/integrations/${row.id}`,
+            { regenerateCredential: true },
+            token,
+            "PATCH"
+          )
+        ).status
+      ).toBe(400);
+      expect(
+        (await request(env, `/website-intake/${row.id}`, payload, next.intakeCredential)).status
       ).toBe(401);
+    } finally {
+      await mf.dispose();
+    }
+  });
+
+  it("rejects invalid or duplicate source domains and unauthorized regeneration", async () => {
+    const { env, db, mf } = await setup();
+    try {
+      const base = { workspaceId: "default", provider: "website", environment: "production" };
+      for (const sourceDomain of [
+        "",
+        "new-site",
+        "localhost",
+        "127.0.0.1",
+        "https://user:password@example.com",
+        "https://example.com:8080",
+        "ftp://example.com",
+        "-bad.example.com",
+        "bad domain.com",
+      ]) {
+        expect((await request(env, "/integrations", { ...base, sourceDomain })).status).toBe(400);
+      }
+      expect(
+        (
+          await request(env, "/integrations", {
+            ...base,
+            sourceDomain: "example.com",
+            secrets: { intakeToken: token },
+          })
+        ).status
+      ).toBe(400);
+      const results = await Promise.all(
+        [1, 2].map(() => request(env, "/integrations", { ...base, sourceDomain: "example.com" }))
+      );
+      expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+      const created = (await results.find((r) => r.status === 201)!.json()) as { id: string };
+      const withoutOrigin = await route(
+        new Request(`http://localhost/integrations/${created.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ regenerateCredential: true }),
+        }),
+        env,
+        {} as ExecutionContext
+      );
+      expect(withoutOrigin.status).toBe(403);
+      await db
+        .prepare(
+          `INSERT INTO users(workspace_id,user_id,name,email,workspace_admin,system_admin) VALUES ('ws_unknown','outsider','Outsider','outsider@example.com',1,0)`
+        )
+        .run();
+      for (const method of ["GET", "PATCH"]) {
+        const denied = await route(
+          new Request(`http://localhost/integrations/${created.id}`, {
+            method,
+            headers: {
+              "X-Debug-User-Email": "outsider@example.com",
+              Origin: "http://localhost:5173",
+              "content-type": "application/json",
+            },
+            ...(method === "PATCH" ? { body: JSON.stringify({ regenerateCredential: true }) } : {}),
+          }),
+          env,
+          {} as ExecutionContext
+        );
+        expect(denied.status).toBe(403);
+      }
     } finally {
       await mf.dispose();
     }

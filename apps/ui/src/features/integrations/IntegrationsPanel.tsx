@@ -50,6 +50,11 @@ const styles = stylex.create({
     flexDirection: "column",
     gap: "6px",
   },
+  credentialInput: {
+    width: "100%",
+    boxSizing: "border-box",
+    fontFamily: "monospace",
+  },
   actions: {
     display: "flex",
     flexWrap: "wrap",
@@ -87,6 +92,20 @@ const styles = stylex.create({
 export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanelProps) {
   const [integrations, setIntegrations] = useState<IntegrationRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [issuedCredential, setIssuedCredential] = useState<{
+    id: string;
+    domain: string;
+    value: string;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [rotatingId, setRotatingId] = useState<string | null>(null);
+  const [domainUpdate, setDomainUpdate] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setIssuedCredential(null);
+    setCopied(false);
+  }, [workspaceId]);
+
   const [error, setError] = useState<string | null>(null);
 
   const [provider, setProvider] = useState<"shopify" | "qbo" | "quo" | "website">("shopify");
@@ -131,24 +150,82 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
         : provider === "qbo"
           ? { webhookVerifierToken: secretValue }
           : provider === "website"
-            ? { intakeToken: secretValue }
+            ? undefined
             : { apiKey: secretValue, webhookSigningSecret: quoWebhookSecret };
-    const result = await createIntegration({
-      workspaceId,
-      provider,
-      environment: provider === "quo" ? "production" : environment,
-      externalAccountId: provider === "quo" ? workspaceId : externalAccountId,
-      displayName,
-      secrets,
-    });
+    setSaving(true);
+    setError(null);
+    let result;
+    try {
+      result = await createIntegration({
+        workspaceId,
+        provider,
+        environment: provider === "quo" ? "production" : environment,
+        ...(provider === "website"
+          ? { sourceDomain: externalAccountId }
+          : { externalAccountId: provider === "quo" ? workspaceId : externalAccountId }),
+        displayName,
+        secrets,
+      });
+    } catch {
+      setSaving(false);
+      setError("Could not save the integration. Try again.");
+      return;
+    }
+    setSaving(false);
     if (!result.ok) {
       setError(result.text || "Failed to create integration.");
       return;
+    }
+    if (result.data?.intakeCredential) {
+      setIssuedCredential({
+        id: result.data.id,
+        domain: result.data.external_account_id,
+        value: result.data.intakeCredential,
+      });
+      setCopied(false);
     }
     setExternalAccountId("");
     setDisplayName("");
     setSecretValue("");
     setQuoWebhookSecret("");
+    await refresh();
+  }
+
+  async function regenerateCredential(integration: IntegrationRow) {
+    setRotatingId(integration.id);
+    setIssuedCredential(null);
+    setError(null);
+    try {
+      const result = await updateIntegration(integration.id, { regenerateCredential: true });
+      if (!result.ok || !result.data?.intakeCredential) {
+        setError(result.text || "Could not generate a new credential.");
+        return;
+      }
+      setIssuedCredential({
+        id: integration.id,
+        domain: result.data.external_account_id,
+        value: result.data.intakeCredential,
+      });
+      setCopied(false);
+    } catch {
+      setError("Could not generate a new credential. Try again.");
+    } finally {
+      setRotatingId(null);
+    }
+  }
+  async function saveDomain(integration: IntegrationRow) {
+    const result = await updateIntegration(integration.id, {
+      sourceDomain: domainUpdate[integration.id],
+    });
+    if (!result.ok) {
+      setError(result.text || "Could not save the website domain.");
+      return;
+    }
+    setDomainUpdate((prev) => {
+      const next = { ...prev };
+      delete next[integration.id];
+      return next;
+    });
     await refresh();
   }
 
@@ -161,6 +238,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
   }
 
   async function saveSecrets(integration: IntegrationRow) {
+    if (integration.provider === "website") return;
     const next = secretUpdate[integration.id]?.trim();
     const nextQuoWebhookSecret = quoWebhookSecretUpdate[integration.id]?.trim();
     if (!next && !nextQuoWebhookSecret) return;
@@ -169,12 +247,10 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
         ? { webhookSecret: next }
         : integration.provider === "qbo"
           ? { webhookVerifierToken: next }
-          : integration.provider === "website"
-            ? { intakeToken: next }
-            : {
-                ...(next ? { apiKey: next } : {}),
-                ...(nextQuoWebhookSecret ? { webhookSigningSecret: nextQuoWebhookSecret } : {}),
-              };
+          : {
+              ...(next ? { apiKey: next } : {}),
+              ...(nextQuoWebhookSecret ? { webhookSigningSecret: nextQuoWebhookSecret } : {}),
+            };
     const result = await updateIntegration(integration.id, { secrets });
     if (!result.ok) {
       setError(result.text || "Failed to replace integration secret.");
@@ -345,15 +421,20 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                 </select>
               </div>
               <div className={stylex(styles.formRow)}>
-                <label>External account ID</label>
+                <label>
+                  {provider === "website" ? "Source website domain" : "External account ID"}
+                </label>
                 <input
+                  aria-label={
+                    provider === "website" ? "Source website domain" : "External account ID"
+                  }
                   value={externalAccountId}
                   onChange={(event) => setExternalAccountId(event.target.value)}
                   placeholder={
                     provider === "shopify"
                       ? "shop.myshopify.com"
                       : provider === "website"
-                        ? "Unique website identifier"
+                        ? "example.com"
                         : "realmId"
                   }
                 />
@@ -368,33 +449,73 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
               placeholder="Optional label"
             />
           </div>
-          <div className={stylex(styles.formRow)}>
-            <label>
-              {provider === "shopify"
-                ? "Webhook secret"
-                : provider === "qbo"
-                  ? "Webhook verifier token"
-                  : provider === "website"
-                    ? "Intake credential (32–256 URL-safe characters)"
+          {provider !== "website" && (
+            <div className={stylex(styles.formRow)}>
+              <label>
+                {provider === "shopify"
+                  ? "Webhook secret"
+                  : provider === "qbo"
+                    ? "Webhook verifier token"
                     : "Quo API key"}
-            </label>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={secretValue}
-              onChange={(event) => setSecretValue(event.target.value)}
-              placeholder={provider === "quo" ? "Quo API key" : "Secret"}
-            />
-          </div>
+              </label>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={secretValue}
+                onChange={(event) => setSecretValue(event.target.value)}
+                placeholder={provider === "quo" ? "Quo API key" : "Secret"}
+              />
+            </div>
+          )}
         </div>
         <div className={stylex(styles.actions)}>
-          <button type="button" onClick={submitIntegration}>
-            Save integration
+          <button
+            type="button"
+            onClick={submitIntegration}
+            disabled={saving || rotatingId !== null}
+          >
+            {saving ? "Saving…" : "Save integration"}
           </button>
         </div>
         {error && <div className={stylex(styles.error)}>{error}</div>}
       </div>
 
+      {issuedCredential && (
+        <section className={stylex(styles.panelSub)} aria-label="Website intake credential">
+          <h3>Credential for {issuedCredential.domain}</h3>
+          <p>
+            Copy this credential into your website’s server settings. It is shown only here; ftops
+            does not display it again after you leave this page.
+          </p>
+          <input
+            className={stylex(styles.credentialInput)}
+            aria-label="Generated intake credential"
+            readOnly
+            value={issuedCredential.value}
+          />
+          <div className={stylex(styles.actions)}>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(issuedCredential.value);
+                  setCopied(true);
+                } catch {
+                  setError("Could not copy automatically. Select and copy the credential above.");
+                }
+              }}
+            >
+              {copied ? "Copied" : "Copy credential"}
+            </button>
+            <button type="button" onClick={() => setIssuedCredential(null)}>
+              Dismiss
+            </button>
+          </div>
+          <p>
+            Intake endpoint: <code>{`/website-intake/${issuedCredential.id}`}</code>
+          </p>
+        </section>
+      )}
       <div className={stylex(styles.panelSub)}>
         <h3>Existing Integrations</h3>
         {loading && <p className={stylex(styles.muted)}>Loading...</p>}
@@ -405,7 +526,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
               <tr>
                 <th>Provider</th>
                 <th>Env</th>
-                <th>Account</th>
+                <th>Account / website</th>
                 <th>Name</th>
                 <th>Active</th>
                 <th>Secrets</th>
@@ -417,22 +538,51 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                 <tr key={integration.id}>
                   <td>{integration.provider}</td>
                   <td>{integration.environment}</td>
-                  <td>{integration.external_account_id}</td>
+                  <td>
+                    {integration.provider === "website" ? (
+                      <>
+                        <input
+                          aria-label={`Source website domain for ${integration.external_account_id}`}
+                          value={domainUpdate[integration.id] ?? integration.external_account_id}
+                          onChange={(event) =>
+                            setDomainUpdate((prev) => ({
+                              ...prev,
+                              [integration.id]: event.target.value,
+                            }))
+                          }
+                        />
+                        <button
+                          type="button"
+                          disabled={
+                            domainUpdate[integration.id] === undefined ||
+                            domainUpdate[integration.id] === integration.external_account_id
+                          }
+                          onClick={() => saveDomain(integration)}
+                        >
+                          Save domain
+                        </button>
+                      </>
+                    ) : (
+                      integration.external_account_id
+                    )}
+                  </td>
                   <td>{integration.display_name ?? "-"}</td>
                   <td>{integration.is_active ? "yes" : "no"}</td>
                   <td>
-                    <input
-                      value={secretUpdate[integration.id] ?? ""}
-                      onChange={(event) =>
-                        setSecretUpdate((prev) => ({
-                          ...prev,
-                          [integration.id]: event.target.value,
-                        }))
-                      }
-                      placeholder={
-                        integration.provider === "quo" ? "Replace API key" : "Replace secret"
-                      }
-                    />
+                    {integration.provider !== "website" && (
+                      <input
+                        value={secretUpdate[integration.id] ?? ""}
+                        onChange={(event) =>
+                          setSecretUpdate((prev) => ({
+                            ...prev,
+                            [integration.id]: event.target.value,
+                          }))
+                        }
+                        placeholder={
+                          integration.provider === "quo" ? "Replace API key" : "Replace secret"
+                        }
+                      />
+                    )}
                     {integration.provider === "website" && (
                       <div>
                         <code>{`/website-intake/${integration.id}`}</code>
@@ -467,9 +617,27 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                     )}
                   </td>
                   <td>
-                    <button type="button" onClick={() => saveSecrets(integration)}>
-                      Save secret
-                    </button>
+                    {integration.provider === "website" ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={saving || rotatingId !== null}
+                          onClick={() => regenerateCredential(integration)}
+                        >
+                          {rotatingId === integration.id
+                            ? "Generating…"
+                            : "Generate new credential"}
+                        </button>
+                        <small>
+                          Replaces the current credential immediately. Update your website’s server
+                          settings afterward.
+                        </small>
+                      </>
+                    ) : (
+                      <button type="button" onClick={() => saveSecrets(integration)}>
+                        Save secret
+                      </button>
+                    )}
                     <button
                       type="button"
                       className={stylex(styles.secondaryButton)}
