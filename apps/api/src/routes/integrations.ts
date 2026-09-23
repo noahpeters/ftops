@@ -72,6 +72,7 @@ export async function handleIntegrations(
         provider?: string;
         environment?: string;
         externalAccountId?: string;
+        sourceDomain?: string;
         displayName?: string;
         secrets?: Record<string, unknown>;
       } = {};
@@ -84,7 +85,13 @@ export async function handleIntegrations(
       const workspaceId = body.workspaceId?.trim();
       const provider = body.provider?.trim();
       const environment = provider === "quo" ? "production" : body.environment?.trim();
-      const externalAccountId = provider === "quo" ? workspaceId : body.externalAccountId?.trim();
+      const externalAccountId =
+        provider === "quo"
+          ? workspaceId
+          : provider === "website"
+            ? normalizeWebsiteDomain(body.sourceDomain)
+            : body.externalAccountId?.trim();
+      if (provider === "website" && !externalAccountId) return badRequest("invalid_source_domain");
       if (!workspaceId || !provider || !environment || !externalAccountId) {
         return badRequest("missing_required_fields");
       }
@@ -98,7 +105,15 @@ export async function handleIntegrations(
         return badRequest("invalid_environment");
       }
 
-      const secrets = body.secrets ?? {};
+      if (provider === "website" && body.secrets !== undefined)
+        return badRequest("website_credential_is_generated");
+      const intakeCredential = provider === "website" ? generateIntakeCredential() : undefined;
+      const secrets = intakeCredential ? { intakeToken: intakeCredential } : (body.secrets ?? {});
+      if (
+        provider === "website" &&
+        (await websiteDomainExists(env, environment, externalAccountId))
+      )
+        return json({ error: "source_domain_already_configured" }, 409);
       const secretsValid = validateSecrets(provider, secrets);
       if (!secretsValid.ok) {
         return badRequest(secretsValid.error);
@@ -113,26 +128,36 @@ export async function handleIntegrations(
       }
       const now = nowISO();
       const id = crypto.randomUUID();
-      await env.DB.prepare(
-        `INSERT INTO integrations
+      try {
+        await env.DB.prepare(
+          `INSERT INTO integrations
           (id, workspace_id, provider, environment, external_account_id, display_name,
            secrets_key_id, secrets_ciphertext, is_active, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-        .bind(
-          id,
-          workspaceId,
-          provider,
-          environment,
-          externalAccountId,
-          body.displayName ?? null,
-          encrypted.keyId,
-          encrypted.ciphertext,
-          1,
-          now,
-          now
         )
-        .run();
+          .bind(
+            id,
+            workspaceId,
+            provider,
+            environment,
+            externalAccountId,
+            body.displayName ?? null,
+            encrypted.keyId,
+            encrypted.ciphertext,
+            1,
+            now,
+            now
+          )
+          .run();
+      } catch (error) {
+        if (
+          provider === "website" &&
+          error instanceof Error &&
+          error.message.includes("UNIQUE constraint failed: integrations.provider")
+        )
+          return json({ error: "source_domain_already_configured" }, 409);
+        throw error;
+      }
 
       const integration = await env.DB.prepare(
         `SELECT id, workspace_id, provider, environment, external_account_id,
@@ -144,7 +169,9 @@ export async function handleIntegrations(
 
       if (provider === "quo") await enqueueWorkspaceQuoSync(env, workspaceId);
 
-      return json(integration, 201);
+      return json({ ...integration, ...(intakeCredential ? { intakeCredential } : {}) }, 201, {
+        "Cache-Control": "no-store",
+      });
     }
 
     return methodNotAllowed(["GET", "POST"]);
@@ -185,6 +212,8 @@ export async function handleIntegrations(
       let body: {
         displayName?: string | null;
         is_active?: number;
+        regenerateCredential?: boolean;
+        sourceDomain?: string;
         secrets?: Record<string, unknown>;
       } = {};
       try {
@@ -203,9 +232,34 @@ export async function handleIntegrations(
         return forbidden("forbidden");
       }
 
+      const provider = (existing as { provider: string }).provider;
+      if (provider === "website" && body.secrets !== undefined)
+        return badRequest("website_credential_is_generated");
+      if (
+        body.regenerateCredential !== undefined &&
+        (provider !== "website" || body.regenerateCredential !== true)
+      )
+        return badRequest("invalid_credential_regeneration");
+      const intakeCredential = body.regenerateCredential ? generateIntakeCredential() : undefined;
       const updates: string[] = [];
       const bindings: unknown[] = [];
 
+      if (body.sourceDomain !== undefined) {
+        if (provider !== "website") return badRequest("source_domain_only_for_website");
+        const domain = normalizeWebsiteDomain(body.sourceDomain);
+        if (!domain) return badRequest("invalid_source_domain");
+        if (
+          await websiteDomainExists(
+            env,
+            (existing as { environment: string }).environment,
+            domain,
+            integrationId
+          )
+        )
+          return json({ error: "source_domain_already_configured" }, 409);
+        updates.push("external_account_id = ?");
+        bindings.push(domain);
+      }
       if (body.displayName !== undefined) {
         updates.push("display_name = ?");
         bindings.push(body.displayName);
@@ -214,21 +268,23 @@ export async function handleIntegrations(
         updates.push("is_active = ?");
         bindings.push(body.is_active ? 1 : 0);
       }
-      if (body.secrets) {
-        const provider = (existing as { provider: string }).provider;
-        let mergedSecrets = body.secrets;
-        try {
-          const previous = JSON.parse(
-            await decryptSecrets(
-              env,
-              (existing as { secrets_key_id: string }).secrets_key_id,
-              (existing as { secrets_ciphertext: string }).secrets_ciphertext
-            )
-          ) as Record<string, unknown>;
-          mergedSecrets = { ...previous, ...body.secrets };
-        } catch {
-          return serverError("secrets_decrypt_failed");
-        }
+      if (body.secrets || intakeCredential) {
+        let mergedSecrets: Record<string, unknown> = intakeCredential
+          ? { intakeToken: intakeCredential }
+          : body.secrets!;
+        if (!intakeCredential)
+          try {
+            const previous = JSON.parse(
+              await decryptSecrets(
+                env,
+                (existing as { secrets_key_id: string }).secrets_key_id,
+                (existing as { secrets_ciphertext: string }).secrets_ciphertext
+              )
+            ) as Record<string, unknown>;
+            mergedSecrets = { ...previous, ...body.secrets };
+          } catch {
+            return serverError("secrets_decrypt_failed");
+          }
         const secretsValid = validateSecrets(provider, mergedSecrets);
         if (!secretsValid.ok) {
           return badRequest(secretsValid.error);
@@ -253,13 +309,23 @@ export async function handleIntegrations(
 
       bindings.push(integrationId);
 
-      await env.DB.prepare(
-        `UPDATE integrations
+      try {
+        await env.DB.prepare(
+          `UPDATE integrations
          SET ${updates.join(", ")}
          WHERE id = ?`
-      )
-        .bind(...bindings)
-        .run();
+        )
+          .bind(...bindings)
+          .run();
+      } catch (error) {
+        if (
+          provider === "website" &&
+          error instanceof Error &&
+          error.message.includes("UNIQUE constraint failed: integrations.provider")
+        )
+          return json({ error: "source_domain_already_configured" }, 409);
+        throw error;
+      }
 
       const integration = await env.DB.prepare(
         `SELECT id, workspace_id, provider, environment, external_account_id,
@@ -273,7 +339,9 @@ export async function handleIntegrations(
         await enqueueWorkspaceQuoSync(env, (existing as { workspace_id: string }).workspace_id);
       }
 
-      return json(integration);
+      return json({ ...integration, ...(intakeCredential ? { intakeCredential } : {}) }, 200, {
+        "Cache-Control": "no-store",
+      });
     }
 
     if (request.method === "DELETE") {
@@ -309,6 +377,8 @@ export async function handleIntegrations(
       if (!integration) {
         return notFound("Integration not found");
       }
+      if (!canAdminWorkspace(actor, (integration as { workspace_id: string }).workspace_id))
+        return forbidden("forbidden");
       return json(integration);
     }
   }
@@ -349,4 +419,41 @@ function validateSecrets(provider: string, secrets: Record<string, unknown>) {
     }
   }
   return { ok: true as const };
+}
+
+function generateIntakeCredential() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+}
+function normalizeWebsiteDomain(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim() || /\s/.test(value.trim())) return null;
+  try {
+    const url = new URL(value.includes("://") ? value.trim() : `https://${value.trim()}`);
+    const domain = url.hostname.toLowerCase().replace(/\.$/, "");
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.port ||
+      domain.length > 253 ||
+      !domain.includes(".") ||
+      /^[\d.]+$/.test(domain)
+    )
+      return null;
+    if (!domain.split(".").every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)))
+      return null;
+    return domain;
+  } catch {
+    return null;
+  }
+}
+async function websiteDomainExists(env: Env, environment: string, domain: string, exceptId = "") {
+  return Boolean(
+    await env.DB.prepare(
+      `SELECT id FROM integrations WHERE provider='website' AND environment=? AND external_account_id=? AND id!=?`
+    )
+      .bind(environment, domain, exceptId)
+      .first()
+  );
 }

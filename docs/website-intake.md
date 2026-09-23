@@ -15,17 +15,33 @@ UI or the existing authenticated `POST /integrations` API (with its required tru
   "workspaceId": "workspace-owned-by-the-administrator",
   "provider": "website",
   "environment": "production",
-  "externalAccountId": "unique-site-identifier",
-  "displayName": "Main website",
-  "secrets": { "intakeToken": "GENERATE_A_RANDOM_32_BYTE_BASE64URL_SECRET" }
+  "sourceDomain": "example.com",
+  "displayName": "Main website"
 }
 ```
 
-Generate at least 32 random bytes and encode as base64url. The API accepts 32–256
-URL-safe characters. Credentials use the existing encrypted integration secret store
-(`INTEGRATIONS_MASTER_KEY` / `INTEGRATIONS_KEY_ID`) and are never returned by the API.
-Replace `secrets.intakeToken` through `PATCH /integrations/:id` to rotate immediately;
-set `is_active: 0` to revoke access. Never put this credential in browser code.
+ftops uses the normalized source website domain as the integration account ID. A pasted
+HTTP(S) website URL is reduced to its lowercase hostname; paths are ignored. Credentials,
+non-default ports, IP addresses, and invalid domain names are rejected. Subdomains remain distinct.
+Duplicate domains within the same environment return `409 source_domain_already_configured`.
+
+ftops generates a random 256-bit intake credential and stores it using the existing
+encrypted integration secret store (`INTEGRATIONS_MASTER_KEY` / `INTEGRATIONS_KEY_ID`).
+The creation response includes `intakeCredential` once, with `Cache-Control: no-store`.
+The UI offers a copy button. Credentials are never included in list/detail reads or
+ordinary edits; they are not saved to browser storage. Do not provide `secrets` when
+creating or updating a website integration.
+
+Use **Generate new credential** in Integrations, or send
+`{ "regenerateCredential": true }` to `PATCH /integrations/:id`, to replace it. The new
+credential is returned once in the response; the previous credential stops working
+immediately. Update the website server settings afterward. If you lose the response,
+generate another credential. Set `is_active: 0` to disable intake entirely.
+
+Existing integrations can update their source domain with `{ "sourceDomain": "example.com" }`
+without changing their integration ID, credential, workspace, or submission history.
+Previously assigned website credentials keep working until regenerated. Never put the
+intake credential in public website code.
 
 The workspace ID belongs only to administrator provisioning. Submission callers send:
 
