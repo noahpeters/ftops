@@ -99,6 +99,8 @@ export type Opportunity = {
   updated_at: string;
 };
 export type Contact = {
+  marketing_email_permission?: "allowed" | "not_allowed" | "unknown";
+  marketing_email_updated_at?: string | null;
   id: string;
   first_name: string | null;
   last_name: string | null;

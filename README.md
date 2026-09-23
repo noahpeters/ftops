@@ -71,3 +71,8 @@ terraform fmt -check -recursive
 terraform validate
 terraform plan -var "account_id=..."
 ```
+
+## Website intake
+
+See [Website intake](docs/website-intake.md) for integration provisioning, the submission
+contract, idempotency, reconciliation, and contact marketing email permissions.

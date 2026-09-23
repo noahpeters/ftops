@@ -1,3 +1,4 @@
+import { handleWebsiteIntake, handleWebsiteSubmissions } from "../routes/websiteIntake";
 import { handleConfigurator } from "../routes/configurator";
 import { notFound } from "./http";
 import type { Env } from "./types";
@@ -87,6 +88,8 @@ async function routesRoot(
       ingest: handleIngest,
       workspaces: handleWorkspaces,
       integrations: handleIntegrations,
+      "website-intake": handleWebsiteIntake,
+      "website-submissions": handleWebsiteSubmissions,
       admin: handleAdmin,
       me: handleMe,
       customers: handleCustomers,

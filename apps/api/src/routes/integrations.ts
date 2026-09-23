@@ -8,7 +8,7 @@ import { isTrustedMutationOrigin } from "../lib/security";
 import { enqueueWorkspaceQuoSync } from "../services/quo";
 import { syncQuoIntegrationConversations } from "../services/quoConversationSync";
 
-const PROVIDERS = ["shopify", "qbo", "quo"] as const;
+const PROVIDERS = ["shopify", "qbo", "quo", "website"] as const;
 const ENVIRONMENTS = ["sandbox", "production"] as const;
 
 export async function handleIntegrations(
@@ -317,6 +317,13 @@ export async function handleIntegrations(
 }
 
 function validateSecrets(provider: string, secrets: Record<string, unknown>) {
+  if (
+    provider === "website" &&
+    (typeof secrets.intakeToken !== "string" ||
+      !/^[A-Za-z0-9_-]{32,256}$/.test(secrets.intakeToken))
+  ) {
+    return { ok: false, error: "invalid_intake_token" };
+  }
   if (provider === "shopify") {
     if (typeof secrets.webhookSecret !== "string" || !secrets.webhookSecret.trim()) {
       return { ok: false, error: "missing_webhook_secret" };

@@ -839,6 +839,14 @@ export function CustomersPanel({
                         {contact.role || "Contact"} · {contact.status}
                       </div>
                       <div>
+                        Marketing email:{" "}
+                        {contact.marketing_email_permission === "allowed"
+                          ? "Allowed"
+                          : contact.marketing_email_permission === "not_allowed"
+                            ? "Not allowed"
+                            : "Unknown"}
+                      </div>
+                      <div>
                         {contact.email || "No email"} · <PhoneLink phone={contact.phone} />
                       </div>
                       <div className={stylex(styles.actions)}>
@@ -1666,6 +1674,7 @@ function followUpLabel(
   return `${prefix}: ${formatDateTime(value)}`;
 }
 type ContactInput = {
+  marketingEmailPermission?: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -1691,8 +1700,9 @@ function ContactForm({
   const [phone, setPhone] = useState(contact?.phone || "");
   const [role, setRole] = useState(contact?.role || "");
   const [status, setStatus] = useState<string>(contact?.status || "active");
+  const [permission, setPermission] = useState(contact?.marketing_email_permission || "unknown");
   const [isPrimary, setIsPrimary] = useState(Boolean(contact?.is_primary));
-  const hasName = Boolean(firstName.trim() || lastName.trim());
+  const hasName = Boolean(firstName.trim() || lastName.trim() || contact?.display_name);
   const hasChanges = contact
     ? firstName.trim() !== (contact.first_name || "") ||
       lastName.trim() !== (contact.last_name || "") ||
@@ -1700,6 +1710,7 @@ function ContactForm({
       phone.trim() !== (contact.phone || "") ||
       role.trim() !== (contact.role || "") ||
       status !== contact.status ||
+      permission !== (contact.marketing_email_permission || "unknown") ||
       isPrimary !== Boolean(contact.is_primary)
     : hasName;
   useEffect(() => onCanSaveChange(hasName && hasChanges), [hasChanges, hasName, onCanSaveChange]);
@@ -1710,6 +1721,9 @@ function ContactForm({
       onSubmit={(event) => {
         event.preventDefault();
         onSave({
+          ...(permission !== (contact?.marketing_email_permission || "unknown")
+            ? { marketingEmailPermission: permission }
+            : {}),
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.trim(),
@@ -1752,6 +1766,15 @@ function ContactForm({
         value={role}
         onChange={(e) => setRole(e.target.value)}
       />
+      <select
+        aria-label="Marketing email"
+        value={permission}
+        onChange={(e) => setPermission(e.target.value as typeof permission)}
+      >
+        <option value="unknown">Marketing email: Unknown</option>
+        <option value="allowed">Marketing email: Allowed</option>
+        <option value="not_allowed">Marketing email: Not allowed</option>
+      </select>
       <select
         aria-label="Contact status"
         value={status}

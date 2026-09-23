@@ -3,7 +3,7 @@ import { buildUrl, fetchJson } from "../../lib/api";
 export type IntegrationRow = {
   id: string;
   workspace_id: string;
-  provider: "shopify" | "qbo" | "quo";
+  provider: "shopify" | "qbo" | "quo" | "website";
   environment: "sandbox" | "production";
   external_account_id: string;
   display_name: string | null;
@@ -24,7 +24,7 @@ export async function listIntegrations(workspaceId?: string | null) {
 
 export async function createIntegration(body: {
   workspaceId: string;
-  provider: "shopify" | "qbo" | "quo";
+  provider: "shopify" | "qbo" | "quo" | "website";
   environment: "sandbox" | "production";
   externalAccountId: string;
   displayName?: string;

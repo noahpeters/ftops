@@ -279,6 +279,12 @@ export async function handleCustomers(
     const now = nowISO();
     const id = segments[2] || crypto.randomUUID();
     if (action === "contacts") {
+      const permission = body.marketingEmailPermission;
+      if (
+        permission !== undefined &&
+        !["allowed", "not_allowed", "unknown"].includes(permission as string)
+      )
+        return badRequest("invalid_marketing_email_permission");
       if (segments.length === 3) {
         const row = await env.DB.prepare(
           `SELECT * FROM contacts WHERE id=? AND customer_id=? AND workspace_id=?`
@@ -286,7 +292,14 @@ export async function handleCustomers(
           .bind(id, customerId, workspaceId)
           .first<Record<string, unknown>>();
         if (!row) return notFound("Contact not found");
-        if (request.method === "GET") return json(row);
+        if (request.method === "GET") {
+          const history = await env.DB.prepare(
+            `SELECT * FROM contact_marketing_events WHERE workspace_id=? AND contact_id=? ORDER BY captured_at DESC,recorded_at DESC`
+          )
+            .bind(workspaceId, id)
+            .all();
+          return json({ ...row, marketing_email_history: history.results ?? [] });
+        }
         if (request.method === "DELETE") {
           await archiveContact(env, workspaceId, customerId, id, now);
           await enqueueQuoContactSync(env, workspaceId, customerId, id);
@@ -357,6 +370,26 @@ export async function handleCustomers(
           )
           .run();
         if (bool(body.isPrimary)) await setPrimaryContact(env, workspaceId, customerId, id, now);
+      }
+      if (permission !== undefined) {
+        await env.DB.batch([
+          env.DB.prepare(
+            `INSERT INTO contact_marketing_events (id,workspace_id,contact_id,permission,source,captured_at,recorded_at,actor_email)
+            SELECT ?,workspace_id,id,?,'manual',?,?,? FROM contacts WHERE id=? AND workspace_id=? AND customer_id=?`
+          ).bind(
+            crypto.randomUUID(),
+            permission,
+            now,
+            now,
+            actor.email,
+            id,
+            workspaceId,
+            customerId
+          ),
+          env.DB.prepare(
+            `UPDATE contacts SET marketing_email_permission=?,marketing_email_updated_at=? WHERE id=? AND workspace_id=? AND customer_id=? AND (marketing_email_updated_at IS NULL OR marketing_email_updated_at<=?)`
+          ).bind(permission, now, id, workspaceId, customerId, now),
+        ]);
       }
       await enqueueQuoContactSync(env, workspaceId, customerId, id);
     } else {
