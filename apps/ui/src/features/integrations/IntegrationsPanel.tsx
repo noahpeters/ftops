@@ -27,6 +27,7 @@ const PROVIDERS = [
   { value: "shopify", label: "Shopify" },
   { value: "qbo", label: "QuickBooks" },
   { value: "quo", label: "Quo" },
+  { value: "website", label: "Website intake" },
 ];
 const ENVIRONMENTS = ["sandbox", "production"];
 
@@ -88,7 +89,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [provider, setProvider] = useState<"shopify" | "qbo" | "quo">("shopify");
+  const [provider, setProvider] = useState<"shopify" | "qbo" | "quo" | "website">("shopify");
   const [environment, setEnvironment] = useState<"sandbox" | "production">("production");
   const [externalAccountId, setExternalAccountId] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -129,7 +130,9 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
         ? { webhookSecret: secretValue }
         : provider === "qbo"
           ? { webhookVerifierToken: secretValue }
-          : { apiKey: secretValue, webhookSigningSecret: quoWebhookSecret };
+          : provider === "website"
+            ? { intakeToken: secretValue }
+            : { apiKey: secretValue, webhookSigningSecret: quoWebhookSecret };
     const result = await createIntegration({
       workspaceId,
       provider,
@@ -166,10 +169,12 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
         ? { webhookSecret: next }
         : integration.provider === "qbo"
           ? { webhookVerifierToken: next }
-          : {
-              ...(next ? { apiKey: next } : {}),
-              ...(nextQuoWebhookSecret ? { webhookSigningSecret: nextQuoWebhookSecret } : {}),
-            };
+          : integration.provider === "website"
+            ? { intakeToken: next }
+            : {
+                ...(next ? { apiKey: next } : {}),
+                ...(nextQuoWebhookSecret ? { webhookSigningSecret: nextQuoWebhookSecret } : {}),
+              };
     const result = await updateIntegration(integration.id, { secrets });
     if (!result.ok) {
       setError(result.text || "Failed to replace integration secret.");
@@ -311,7 +316,9 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
             <label>Provider</label>
             <select
               value={provider}
-              onChange={(event) => setProvider(event.target.value as "shopify" | "qbo" | "quo")}
+              onChange={(event) =>
+                setProvider(event.target.value as "shopify" | "qbo" | "quo" | "website")
+              }
             >
               {PROVIDERS.map((item) => (
                 <option key={item.value} value={item.value}>
@@ -342,7 +349,13 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                 <input
                   value={externalAccountId}
                   onChange={(event) => setExternalAccountId(event.target.value)}
-                  placeholder={provider === "shopify" ? "shop.myshopify.com" : "realmId"}
+                  placeholder={
+                    provider === "shopify"
+                      ? "shop.myshopify.com"
+                      : provider === "website"
+                        ? "Unique website identifier"
+                        : "realmId"
+                  }
                 />
               </div>
             </>
@@ -361,9 +374,13 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                 ? "Webhook secret"
                 : provider === "qbo"
                   ? "Webhook verifier token"
-                  : "Quo API key"}
+                  : provider === "website"
+                    ? "Intake credential (32–256 URL-safe characters)"
+                    : "Quo API key"}
             </label>
             <input
+              type="password"
+              autoComplete="new-password"
               value={secretValue}
               onChange={(event) => setSecretValue(event.target.value)}
               placeholder={provider === "quo" ? "Quo API key" : "Secret"}
@@ -416,6 +433,11 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                         integration.provider === "quo" ? "Replace API key" : "Replace secret"
                       }
                     />
+                    {integration.provider === "website" && (
+                      <div>
+                        <code>{`/website-intake/${integration.id}`}</code>
+                      </div>
+                    )}
                     {integration.provider === "quo" && (
                       <>
                         <br />

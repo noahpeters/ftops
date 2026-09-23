@@ -56,8 +56,10 @@ async function execSql(db: D1Database, sql: string) {
     .map((line) => line.replace(/--.*$/, ""))
     .join("\n");
 
-  const statements = cleaned
-    .split(";")
+  // Keep trigger bodies intact when applying the shared migrations.
+  const statements = (
+    cleaned.match(/\s*CREATE\s+TRIGGER\b[\s\S]*?END\s*;|[^;]+;/gi) ?? []
+  )
     .map((statement) => statement.trim())
     .filter((statement) => statement.length > 0);
 
