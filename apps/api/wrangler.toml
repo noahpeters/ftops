@@ -4,6 +4,12 @@ compatibility_flags = ["nodejs_compat"]
 main = "src/index.ts"
 workers_dev = false
 
+# Only integration-authenticated website intake is public. Staff API routes are
+# reached through the ftops-ui service binding, never a broad hostname route.
+routes = [
+  { pattern = "api.from-trees.com/website-intake/*", zone_name = "from-trees.com" }
+]
+
 [ai]
 binding = "AI"
 

@@ -512,7 +512,8 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
             </button>
           </div>
           <p>
-            Intake endpoint: <code>{`/website-intake/${issuedCredential.id}`}</code>
+            Intake endpoint:{" "}
+            <code>{`https://api.from-trees.com/website-intake/${issuedCredential.id}`}</code>
           </p>
         </section>
       )}
@@ -585,7 +586,7 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                     )}
                     {integration.provider === "website" && (
                       <div>
-                        <code>{`/website-intake/${integration.id}`}</code>
+                        <code>{`https://api.from-trees.com/website-intake/${integration.id}`}</code>
                       </div>
                     )}
                     {integration.provider === "quo" && (
