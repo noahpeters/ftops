@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTestEnv } from "../helpers/miniflare";
+import worker from "../../src/index";
 import { route } from "../../src/lib/router";
 import { encryptSecrets } from "../../src/lib/crypto/secrets";
 import type { Env } from "../../src/lib/types";
@@ -53,6 +54,37 @@ async function setup() {
 }
 
 describe("website intake", () => {
+  it("serves the public intake URL through the deployed Worker entry point", async () => {
+    const { env, mf } = await setup();
+    try {
+      const url = "https://api.from-trees.com/website-intake/site-a";
+      const unauthenticated = await worker.fetch(
+        new Request(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        }),
+        env,
+        {} as ExecutionContext
+      );
+      expect(unauthenticated.status).toBe(401);
+      expect(await unauthenticated.json()).toEqual({ error: "invalid_integration_credential" });
+      const accepted = await worker.fetch(
+        new Request(url, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        }),
+        env,
+        {} as ExecutionContext
+      );
+      expect(accepted.status).toBe(201);
+      expect(accepted.headers.get("Cache-Control")).toContain("no-store");
+    } finally {
+      await mf.dispose();
+    }
+  });
+
   it("rolls back a failed batch and safely retries distinct concurrent new events", async () => {
     const { env, db, mf } = await setup();
     try {

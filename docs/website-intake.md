@@ -46,17 +46,18 @@ intake credential in public website code.
 The workspace ID belongs only to administrator provisioning. Submission callers send:
 
 ```http
-POST /website-intake/INTEGRATION_ID
+POST https://api.from-trees.com/website-intake/INTEGRATION_ID
 Authorization: Bearer INTAKE_TOKEN
 Content-Type: application/json
 ```
 
 There are no workspace/customer/contact parameters, cookies, or user identity headers
 in the intake contract. The integration ID is a selector, not a credential. Its active
-provider and credential must match. Any edge Access protection must separately admit
-the server caller to this exact route; integration authentication still runs inside
-ftops. Deployment/Access configuration and credential provisioning are separate from
-this code change. Do not give website callers access to staff CRUD endpoints.
+provider and credential must match. The API Worker deployment installs only the public route
+`api.from-trees.com/website-intake/*`; integration authentication still runs inside
+ftops. Staff CRUD endpoints remain behind the UI service binding. Do not add a broad
+`api.from-trees.com/*` route to the API Worker. A POST without credentials should return
+`401 invalid_integration_credential`, not a routing 404.
 
 ## Submission contract
 
