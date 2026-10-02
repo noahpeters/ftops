@@ -21,7 +21,7 @@ it("loads reports in workerd and rejects upstream redirects without following th
             contents: `import { handleConfigurator } from './routes/configurator';
               export default { fetch(request, env) {
                 const leaf = new URL(request.url).pathname.split('/').pop();
-                const segments = ['design','export'].includes(leaf) ? [leaf] : [];
+                const segments = ['design','export','extension'].includes(leaf) ? [leaf] : [];
                 return handleConfigurator(segments, request, env);
               }};`,
           },
@@ -29,6 +29,11 @@ it("loads reports in workerd and rejects upstream redirects without following th
             type: "ESModule",
             path: "routes/configurator",
             contents: compile("src/routes/configurator.ts"),
+          },
+          {
+            type: "ESModule",
+            path: "assets/sketchupExtension",
+            contents: compile("src/assets/sketchupExtension.ts"),
           },
           { type: "ESModule", path: "lib/http", contents: compile("src/lib/http.ts") },
           {
@@ -72,6 +77,13 @@ it("loads reports in workerd and rejects upstream redirects without following th
     );
     expect(exported.status).toBe(200);
     expect(await exported.json()).toEqual({ path: "/admin/export" });
+    const installer = await mf.dispatchFetch("https://ops.example/configurator/extension", {
+      headers,
+    });
+    expect(installer.status).toBe(200);
+    const artifact = (await installer.json()) as any;
+    expect(artifact.filename).toMatch(/\.rbz$/);
+    expect(artifact.sourceRepository).toBe("https://github.com/noahpeters/from-trees-sketchup");
     const redirect = await mf.dispatchFetch(
       "https://ops.example/configurator/design?slug=redirect",
       { headers }

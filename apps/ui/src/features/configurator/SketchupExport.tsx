@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import {
+  sketchupContext,
+  importMessage,
+  matchingImportResult,
+  type SketchupHost,
+} from "./sketchupBridge";
 import { buildUrl, fetchJson } from "../../lib/api";
 import stylex from "~/lib/stylex";
 import { styles } from "./styles";
@@ -23,7 +29,6 @@ const SETTINGS = {
 type Setting = keyof typeof SETTINGS;
 type Bundle = {
   filename: string;
-  ruby: string;
   csv: string;
   manifest: { parts: unknown[]; assumptions: string[]; excluded: string[] };
   error?: string;
@@ -37,10 +42,36 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
       ) as Record<Setting, string>
   );
   const [bundle, setBundle] = useState<Bundle | null>(null);
+  const [bridge, setBridge] = useState<ReturnType<typeof sketchupContext>>(null);
+  const [importing, setImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState("");
+  const [installing, setInstalling] = useState(false);
+  const pending = useRef<{ nonce: string; requestId: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const controller = useRef<AbortController | null>(null);
-  useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => {
+    const host = (window as Window & { sketchup?: SketchupHost }).sketchup;
+    setBridge(sketchupContext(window.location.search, host));
+    const receive = (event: Event) => {
+      if (!pending.current) return;
+      const result = matchingImportResult(
+        (event as CustomEvent).detail,
+        pending.current.nonce,
+        pending.current.requestId
+      );
+      if (!result) return;
+      pending.current = null;
+      setImporting(false);
+      if (result.ok) setImportStatus(result.message);
+      else setErrors([result.message]);
+    };
+    window.addEventListener("from-trees:import-result", receive);
+    return () => {
+      controller.current?.abort();
+      window.removeEventListener("from-trees:import-result", receive);
+    };
+  }, []);
   const generate = async () => {
     controller.current?.abort();
     const current = new AbortController();
@@ -48,6 +79,7 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
     setBusy(true);
     setErrors([]);
     setBundle(null);
+    setImportStatus("");
     try {
       const result = await fetchJson<Bundle>(
         buildUrl("/configurator/export", { slug, revision, ...values }),
@@ -56,7 +88,6 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
       if (current.signal.aborted) return;
       if (
         !result.ok ||
-        !result.data?.ruby ||
         !result.data?.csv ||
         !/^From-Trees-[a-f0-9]{8}-r[1-9][0-9]*$/.test(result.data.filename)
       ) {
@@ -78,20 +109,65 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
       if (!current.signal.aborted) setBusy(false);
     }
   };
-  const download = (kind: "ruby" | "csv" | "manifest") => {
-    if (!bundle) return;
-    const extensions = { ruby: "rb", csv: "csv", manifest: "json" };
-    const content = kind === "manifest" ? JSON.stringify(bundle.manifest, null, 2) : bundle[kind];
-    const url = URL.createObjectURL(
-      new Blob([content], {
-        type: kind === "manifest" ? "application/json" : "text/plain;charset=utf-8",
-      })
-    );
+  const install = async () => {
+    setInstalling(true);
+    setErrors([]);
+    try {
+      const result = await fetchJson<{ filename: string; data: string; sha256: string }>(
+        buildUrl("/configurator/extension")
+      );
+      if (
+        !result.ok ||
+        !result.data ||
+        !/^from-trees-cabinet-designer-[0-9.]+\.rbz$/.test(result.data.filename)
+      )
+        throw new Error("Could not download the extension.");
+      const bytes = Uint8Array.from(atob(result.data.data), (c) => c.charCodeAt(0));
+      const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (v) =>
+        v.toString(16).padStart(2, "0")
+      ).join("");
+      if (hash !== result.data.sha256)
+        throw new Error("The extension download was incomplete. Try again.");
+      saveBlob(new Blob([bytes], { type: "application/zip" }), result.data.filename);
+    } catch (error) {
+      setErrors([error instanceof Error ? error.message : "Could not download the extension."]);
+    } finally {
+      setInstalling(false);
+    }
+  };
+  const importDesign = () => {
+    if (!bridge || !bundle || importing) return;
+    const requestId = crypto.randomUUID();
+    pending.current = { nonce: bridge.nonce, requestId };
+    setImporting(true);
+    setErrors([]);
+    setImportStatus("");
+    try {
+      bridge.send(importMessage(bridge.nonce, requestId, bundle.manifest));
+    } catch {
+      pending.current = null;
+      setImporting(false);
+      setErrors(["The SketchUp connection was lost. Reopen From Trees → Cabinet Designer."]);
+    }
+  };
+  const saveBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${bundle.filename}.${extensions[kind]}`;
+    link.download = filename;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const download = (kind: "csv" | "manifest") => {
+    if (!bundle) return;
+    const extensions = { csv: "csv", manifest: "json" };
+    const content = kind === "manifest" ? JSON.stringify(bundle.manifest, null, 2) : bundle[kind];
+    saveBlob(
+      new Blob([content], {
+        type: kind === "manifest" ? "application/json" : "text/csv;charset=utf-8",
+      }),
+      `${bundle.filename}.${extensions[kind]}`
+    );
   };
   return (
     <section aria-label="SketchUp export" className={stylex(styles.card)}>
@@ -101,6 +177,29 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
         and rabbets, 3/4″ carcasses and 5/8″ drawer boxes. Review the first-pass settings before
         cutting.
       </p>
+      {!bridge && (
+        <>
+          <button
+            type="button"
+            className={stylex(styles.button, styles.controlButton, styles.focus)}
+            onClick={() => void install()}
+            disabled={installing}
+          >
+            {installing ? "Downloading extension…" : "Download SketchUp extension (.rbz)"}
+          </button>
+          <p className={stylex(styles.footnote)}>
+            Install once using SketchUp’s Extension Manager. Then open Extensions → From Trees →
+            Cabinet Designer, sign into FTOPS and select a design. Requires SketchUp Desktop 2022 or
+            newer.
+          </p>
+        </>
+      )}
+      {bridge && (
+        <p className={stylex(styles.intro)}>
+          Connected to SketchUp. Import adds this design to your current model and can be undone.
+          Open a new model first if you want a separate cabinet file.
+        </p>
+      )}
       <details>
         <summary>Construction settings · inches</summary>
         <div className={stylex(styles.controls)}>
@@ -113,9 +212,10 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
                 max="12"
                 step="0.0625"
                 value={values[key]}
-                disabled={busy}
+                disabled={busy || importing}
                 onChange={(e) => {
                   setBundle(null);
+                  setImportStatus("");
                   setValues((v) => ({ ...v, [key]: e.target.value }));
                 }}
                 className={stylex(styles.formFont, styles.controlButton, styles.focus)}
@@ -128,10 +228,11 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
         type="button"
         className={stylex(styles.button, styles.controlButton, styles.focus)}
         onClick={() => void generate()}
-        disabled={busy}
+        disabled={busy || importing}
       >
         {busy ? "Preparing model…" : "Generate SketchUp export"}
       </button>
+      {importStatus && <p role="status">{importStatus}</p>}
       {errors.length > 0 && (
         <div role="alert">
           <ul>
@@ -150,9 +251,10 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
             <button
               type="button"
               className={stylex(styles.button, styles.controlButton, styles.focus)}
-              onClick={() => download("ruby")}
+              onClick={importDesign}
+              disabled={!bridge || importing}
             >
-              Download SketchUp script
+              {importing ? "Building components…" : "Import into SketchUp"}
             </button>
             <button
               type="button"
@@ -170,10 +272,9 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
             </button>
           </div>
           <p className={stylex(styles.footnote)}>
-            Open a new model in SketchUp Desktop 2022 or newer. In the Ruby Console, run{" "}
-            <code>{`load '/full/path/to/${bundle.filename}.rb'`}</code>. The script builds the model
-            and offers to save a .skp file. Existing model content is preserved; import can be
-            undone.
+            {bridge
+              ? "After importing, save your SketchUp model as .skp. Each stock part is a solid component with grain and machining data."
+              : "Direct import is available when you open this page from the From Trees extension inside SketchUp."}
           </p>
           <details>
             <summary>Assumptions and exclusions</summary>

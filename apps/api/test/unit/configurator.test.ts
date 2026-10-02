@@ -139,3 +139,23 @@ it("gates exports and forwards only construction settings over the private bindi
     issues: ["Unsupported curve"],
   });
 });
+
+it("serves the pinned installer only to authenticated system administrators", async () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  admin(false);
+  expect((await handleConfigurator(["extension"], request(), {} as Env)).status).toBe(403);
+  admin(true);
+  const response = await handleConfigurator(["extension"], request(), {} as Env);
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  const body = (await response.json()) as any;
+  expect(body.filename).toBe("from-trees-cabinet-designer-0.1.0.rbz");
+  expect(body.sourceRepository).toBe("https://github.com/noahpeters/from-trees-sketchup");
+  expect(body.sourceRevision).toMatch(/^[a-f0-9]{40}$/);
+  const { createHash } = await import("node:crypto");
+  expect(createHash("sha256").update(Buffer.from(body.data, "base64")).digest("hex")).toBe(
+    body.sha256
+  );
+  expect(fetcher).not.toHaveBeenCalled();
+});

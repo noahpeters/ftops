@@ -1,3 +1,4 @@
+import { SKETCHUP_EXTENSION } from "../assets/sketchupExtension";
 import { forbidden, json, methodNotAllowed, notFound } from "../lib/http";
 import { requireActor } from "../lib/access";
 import type { Env } from "../lib/types";
@@ -13,8 +14,15 @@ export async function handleConfigurator(segments: string[], request: Request, e
   if (!actor.ok) return actor.response;
   if (!actor.actor.isSystemAdmin) return forbidden("forbidden");
   if (request.method !== "GET") return methodNotAllowed(["GET"]);
-  if (segments.length > 1 || (segments[0] && !["design", "export"].includes(segments[0])))
+  if (
+    segments.length > 1 ||
+    (segments[0] && !["design", "export", "extension"].includes(segments[0]))
+  )
     return notFound("Route not found");
+  if (segments[0] === "extension")
+    return new Response(JSON.stringify(SKETCHUP_EXTENSION), {
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    });
   if (!env.CABINET_ANALYTICS_URL || !env.CABINET_ANALYTICS_READ_TOKEN)
     return json({ error: "configurator_not_connected" }, 503);
   const incoming = new URL(request.url);
