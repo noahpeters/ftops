@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { buildUrl, fetchJson } from "../../lib/api";
 import stylex from "~/lib/stylex";
 import { styles } from "./styles";
+import { SketchupExport } from "./SketchupExport";
 
 type Plan = {
   width: number;
@@ -485,6 +486,11 @@ export function ConfiguratorPanel() {
                 ? `${selected.preview.width}″ × ${selected.preview.depth}″ · ${selected.preview.elements.length} elements`
                 : "Preview unavailable"}
             </p>
+            <SketchupExport
+              key={`${selected.slug}:${selected.revision}`}
+              slug={selected.slug}
+              revision={selected.revision}
+            />
             <p className={stylex(styles.footnote)}>
               Read-only plan of the saved design. Upper cabinets appear lighter.
             </p>

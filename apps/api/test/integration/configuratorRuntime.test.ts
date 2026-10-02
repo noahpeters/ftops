@@ -20,7 +20,8 @@ it("loads reports in workerd and rejects upstream redirects without following th
             path: "index.js",
             contents: `import { handleConfigurator } from './routes/configurator';
               export default { fetch(request, env) {
-                const segments = new URL(request.url).pathname.endsWith('/design') ? ['design'] : [];
+                const leaf = new URL(request.url).pathname.split('/').pop();
+                const segments = ['design','export','extension'].includes(leaf) ? [leaf] : [];
                 return handleConfigurator(segments, request, env);
               }};`,
           },
@@ -28,6 +29,11 @@ it("loads reports in workerd and rejects upstream redirects without following th
             type: "ESModule",
             path: "routes/configurator",
             contents: compile("src/routes/configurator.ts"),
+          },
+          {
+            type: "ESModule",
+            path: "assets/sketchupExtension",
+            contents: compile("src/assets/sketchupExtension.ts"),
           },
           { type: "ESModule", path: "lib/http", contents: compile("src/lib/http.ts") },
           {
@@ -65,6 +71,19 @@ it("loads reports in workerd and rejects upstream redirects without following th
     });
     expect(preview.status).toBe(200);
     expect(await preview.json()).toEqual({ path: "/admin/design" });
+    const exported = await mf.dispatchFetch(
+      "https://ops.example/configurator/export?slug=room&revision=4&drawerThickness=0.625",
+      { headers }
+    );
+    expect(exported.status).toBe(200);
+    expect(await exported.json()).toEqual({ path: "/admin/export" });
+    const installer = await mf.dispatchFetch("https://ops.example/configurator/extension", {
+      headers,
+    });
+    expect(installer.status).toBe(200);
+    const artifact = (await installer.json()) as any;
+    expect(artifact.filename).toMatch(/\.rbz$/);
+    expect(artifact.sourceRepository).toBe("https://github.com/noahpeters/from-trees-sketchup");
     const redirect = await mf.dispatchFetch(
       "https://ops.example/configurator/design?slug=redirect",
       { headers }

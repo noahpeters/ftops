@@ -96,3 +96,66 @@ it("uses the private service binding for reports and design previews", async () 
   });
   expect(publicFetch).not.toHaveBeenCalled();
 });
+
+it("gates exports and forwards only construction settings over the private binding", async () => {
+  const serviceFetch = vi.fn().mockResolvedValue(
+    Response.json({
+      filename: "From-Trees-aaaaaaaa-r4",
+      ruby: "script",
+      csv: "parts",
+      manifest: { parts: [] },
+    })
+  );
+  const boundEnv = { ...env, CABINET_ANALYTICS_SERVICE: { fetch: serviceFetch } } as unknown as Env;
+  const exportRequest = new Request(
+    "https://ops.example/configurator/export?slug=aaaaaaaa&revision=4&drawerThickness=0.625&url=https://evil.example&token=secret",
+    { headers: request().headers }
+  );
+  admin(false);
+  expect((await handleConfigurator(["export"], exportRequest, boundEnv)).status).toBe(403);
+  expect(serviceFetch).not.toHaveBeenCalled();
+  admin(true);
+  const response = await handleConfigurator(["export"], exportRequest, boundEnv);
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(serviceFetch.mock.calls[0][0].toString()).toBe(
+    "https://rooms.example/admin/export?slug=aaaaaaaa&revision=4&drawerThickness=0.625"
+  );
+  expect(serviceFetch.mock.calls[0][1].headers).toEqual({
+    Authorization: "Bearer private-report-token",
+  });
+  serviceFetch.mockResolvedValue(
+    Response.json({ error: "design_revision_changed", issues: [] }, { status: 409 })
+  );
+  expect((await handleConfigurator(["export"], exportRequest, boundEnv)).status).toBe(409);
+  serviceFetch.mockResolvedValue(
+    Response.json(
+      { error: "fabrication_needs_review", issues: ["Unsupported curve"] },
+      { status: 422 }
+    )
+  );
+  expect(await (await handleConfigurator(["export"], exportRequest, boundEnv)).json()).toEqual({
+    error: "fabrication_needs_review",
+    issues: ["Unsupported curve"],
+  });
+});
+
+it("serves the pinned installer only to authenticated system administrators", async () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  admin(false);
+  expect((await handleConfigurator(["extension"], request(), {} as Env)).status).toBe(403);
+  admin(true);
+  const response = await handleConfigurator(["extension"], request(), {} as Env);
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  const body = (await response.json()) as any;
+  expect(body.filename).toBe("from-trees-cabinet-designer-0.1.0.rbz");
+  expect(body.sourceRepository).toBe("https://github.com/noahpeters/from-trees-sketchup");
+  expect(body.sourceRevision).toMatch(/^[a-f0-9]{40}$/);
+  const { createHash } = await import("node:crypto");
+  expect(createHash("sha256").update(Buffer.from(body.data, "base64")).digest("hex")).toBe(
+    body.sha256
+  );
+  expect(fetcher).not.toHaveBeenCalled();
+});
