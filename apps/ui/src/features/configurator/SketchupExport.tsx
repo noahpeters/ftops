@@ -43,6 +43,7 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
   );
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [bridge, setBridge] = useState<ReturnType<typeof sketchupContext>>(null);
+  const [needsUpgrade, setNeedsUpgrade] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [installing, setInstalling] = useState(false);
@@ -52,7 +53,12 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
   const controller = useRef<AbortController | null>(null);
   useEffect(() => {
     const host = (window as Window & { sketchup?: SketchupHost }).sketchup;
-    setBridge(sketchupContext(window.location.search, host));
+    const connection = sketchupContext(window.location.search, host);
+    setBridge(connection);
+    setNeedsUpgrade(
+      Boolean(connection) &&
+        new URLSearchParams(window.location.search).get("extension") !== "0.2.0"
+    );
     const receive = (event: Event) => {
       if (!pending.current) return;
       const result = matchingImportResult(
@@ -97,7 +103,7 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
             : result.status === 403
               ? "SketchUp export is available only to system administrators."
               : result.status === 422
-                ? "This design needs fabrication review before it can be exported."
+                ? "The model could not be prepared."
                 : "The export could not be generated. Check the construction settings and try again.";
         setErrors([message, ...(result.data?.issues ?? [])]);
         return;
@@ -171,13 +177,11 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
   };
   return (
     <section aria-label="SketchUp export" className={stylex(styles.card)}>
-      <h3 className={stylex(styles.cardTitle)}>SketchUp model and parts</h3>
+      <h3 className={stylex(styles.cardTitle)}>SketchUp model</h3>
       <p className={stylex(styles.intro)}>
-        Build this saved revision as individual solid components. From Trees construction uses dados
-        and rabbets, 3/4″ carcasses and 5/8″ drawer boxes. Review the first-pass settings before
-        cutting.
+        Import this design as editable components using From Trees construction.
       </p>
-      {!bridge && (
+      {(!bridge || needsUpgrade) && (
         <>
           <button
             type="button"
@@ -185,16 +189,22 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
             onClick={() => void install()}
             disabled={installing}
           >
-            {installing ? "Downloading extension…" : "Download SketchUp extension (.rbz)"}
+            {installing
+              ? "Downloading extension…"
+              : needsUpgrade
+                ? "Download extension update (.rbz)"
+                : "Download SketchUp extension (.rbz)"}
           </button>
           <p className={stylex(styles.footnote)}>
-            Install once using SketchUp’s Extension Manager. Then open Extensions → From Trees →
-            Cabinet Designer, sign into FTOPS and select a design. Requires SketchUp Desktop 2022 or
-            newer.
+            {needsUpgrade
+              ? "Install extension 0.2.0 to import shaped parts, then restart SketchUp."
+              : "Install once using SketchUp’s Extension Manager."}{" "}
+            Then open Extensions → From Trees → Cabinet Designer, sign into FTOPS and select a
+            design. Requires SketchUp Desktop 2022 or newer.
           </p>
         </>
       )}
-      {bridge && (
+      {bridge && !needsUpgrade && (
         <p className={stylex(styles.intro)}>
           Connected to SketchUp. Import adds this design to your current model and can be undone.
           Open a new model first if you want a separate cabinet file.
@@ -202,7 +212,7 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
       )}
       <details>
         <summary>Construction settings · inches</summary>
-        <div className={stylex(styles.controls)}>
+        <div className={stylex(styles.constructionGrid)}>
           {(Object.keys(SETTINGS) as Setting[]).map((key) => (
             <label key={key} className={stylex(styles.controlLabel)}>
               {SETTINGS[key].label}
@@ -218,7 +228,12 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
                   setImportStatus("");
                   setValues((v) => ({ ...v, [key]: e.target.value }));
                 }}
-                className={stylex(styles.formFont, styles.controlButton, styles.focus)}
+                className={stylex(
+                  styles.formFont,
+                  styles.controlButton,
+                  styles.constructionInput,
+                  styles.focus
+                )}
               />
             </label>
           ))}
@@ -230,7 +245,7 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
         onClick={() => void generate()}
         disabled={busy || importing}
       >
-        {busy ? "Preparing model…" : "Generate SketchUp export"}
+        {busy ? "Preparing model…" : "Prepare SketchUp model"}
       </button>
       {importStatus && <p role="status">{importStatus}</p>}
       {errors.length > 0 && (
@@ -247,12 +262,12 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
           <p role="status">
             {bundle.manifest.parts.length} solid parts prepared for revision {revision}.
           </p>
-          <div className={stylex(styles.controls)}>
+          <div className={stylex(styles.exportActions)}>
             <button
               type="button"
               className={stylex(styles.button, styles.controlButton, styles.focus)}
               onClick={importDesign}
-              disabled={!bridge || importing}
+              disabled={!bridge || needsUpgrade || importing}
             >
               {importing ? "Building components…" : "Import into SketchUp"}
             </button>
@@ -277,7 +292,7 @@ export function SketchupExport({ slug, revision }: { slug: string; revision: num
               : "Direct import is available when you open this page from the From Trees extension inside SketchUp."}
           </p>
           <details>
-            <summary>Assumptions and exclusions</summary>
+            <summary>Construction notes</summary>
             <ul>
               {[...bundle.manifest.assumptions, ...bundle.manifest.excluded].map((value) => (
                 <li key={value}>{value}</li>

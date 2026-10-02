@@ -49,6 +49,23 @@ export const styles = stylex.create({
     gap: "10px",
     alignItems: "end",
   },
+  constructionGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+    gap: "14px",
+    marginTop: "14px",
+    marginBottom: "18px",
+  },
+  constructionInput: {
+    width: "100%",
+    minWidth: "0",
+    boxSizing: "border-box",
+  },
+  exportActions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "10px",
+  },
   controlLabel: {
     display: "flex",
     flexDirection: "column",
