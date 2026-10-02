@@ -27,3 +27,13 @@ No local production deployment, database mutation, secret change, merge, or emai
 - Gallery: rooms updated during the period, with server-generated plan geometry and share snapshots excluded. Lead previews use the saved room referenced by the lead; ordinary rooms show their current saved revision, while share snapshots are immutable. Previewing is read-only and creates no new room.
 
 The gallery pages 12 designs at a time and the lead list pages 50 submissions at a time. Source breakdowns show the top 50 groups. The separate H2 database remains authoritative; FTOPS does not copy customer records or modify cabinet designs.
+
+## SketchUp fabrication export
+
+System administrators open a saved design preview and choose **Generate SketchUp export**. Construction settings default to 3/4-inch carcasses, dados/rabbets, 5/8-inch rabbeted drawer boxes, 3/8-inch drawer bottoms and separate Shaker rails/stiles/panels. Settings are editable in inches for each export. The exporter uses the exact displayed saved revision; reopen the design if it reports a revision conflict.
+
+Download the Ruby script, parts CSV and construction specification. Open a new model in SketchUp Desktop 2022 or newer, load the downloaded script in its Ruby Console and save the resulting native `.skp`. Each stock part is a solid component with grain/width/thickness axes and machined joints. The importer validates solids before committing and offers a save dialog. OpenCutList can generate parts lists; review material stock sizes and allowances before cutting.
+
+The first pass excludes hardware, appliances, fixtures and countertops. Dovetails, slide drilling, machining tolerances and toolpaths are deferred; drawer boxes use rabbets. Unsupported corners, curved/tambour/profiled parts, angled/floating shelves and legacy face-frame layouts return explicit review issues instead of approximate stock dimensions.
+
+The companion H2 export endpoint is `GET /admin/export`. FTOPS forwards `GET /configurator/export` through the existing private reporting binding and dedicated read token, after checking authenticated system-admin access. The browser receives only the export bundle, never credentials. Deploy the H2 companion before releasing this UI; no new secrets or migrations are required.
