@@ -150,7 +150,7 @@ it("serves the pinned installer only to authenticated system administrators", as
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toBe("no-store");
   const body = (await response.json()) as any;
-  expect(body.filename).toBe("from-trees-cabinet-designer-0.1.0.rbz");
+  expect(body.filename).toBe("from-trees-cabinet-designer-0.2.0.rbz");
   expect(body.sourceRepository).toBe("https://github.com/noahpeters/from-trees-sketchup");
   expect(body.sourceRevision).toMatch(/^[a-f0-9]{40}$/);
   const { createHash } = await import("node:crypto");
