@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createTestEnv } from "../helpers/miniflare";
 import worker from "../../src/index";
 import { route } from "../../src/lib/router";
@@ -54,6 +54,77 @@ async function setup() {
 }
 
 describe("website intake", () => {
+  it("accepts leads independently of background qualification and assesses the stored description", async () => {
+    const { env, db, mf } = await setup();
+    const tasks: Promise<unknown>[] = [];
+    const ctx = {
+      waitUntil: (task: Promise<unknown>) => tasks.push(task),
+    } as unknown as ExecutionContext;
+    const run = vi.fn().mockRejectedValue(new Error("unavailable"));
+    env.AI = { run };
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const post = (body: unknown) =>
+      route(
+        new Request("http://localhost/website-intake/site-a", {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+        }),
+        env,
+        ctx
+      );
+    try {
+      expect((await post(payload)).status).toBe(201);
+      await Promise.all(tasks);
+      expect(
+        await db.prepare("SELECT count(*) AS n FROM customer_qualification_assessments").first()
+      ).toEqual({ n: 0 });
+      expect((await post(payload)).status).toBe(200);
+      expect(run).toHaveBeenCalledTimes(1);
+      run.mockResolvedValue({
+        model: "jev-test",
+        answers: {
+          scope: {
+            choice: "qualified",
+            confidence: 0.95,
+            probabilities: { qualified: 0.95, not_qualified: 0.03, unclear: 0.02 },
+          },
+        },
+      });
+      expect(
+        (
+          await post({
+            ...payload,
+            externalEventId: "event-2",
+            message: JSON.stringify({
+              format: "h2-inquiry-v1",
+              message: "A custom walnut table",
+              utm_source: "example",
+              budget: "private",
+            }),
+          })
+        ).status
+      ).toBe(201);
+      await Promise.all(tasks);
+      expect(run.mock.calls[1][0]).toBe("typesafe/jev");
+      expect(run.mock.calls[1][1].state).toEqual({ project_description: "A custom walnut table" });
+      expect(
+        await db
+          .prepare(
+            "SELECT classification,source_type,input_snapshot FROM customer_qualification_assessments"
+          )
+          .first()
+      ).toMatchObject({
+        classification: "qualified",
+        source_type: "website_submission",
+        input_snapshot: "A custom walnut table",
+      });
+    } finally {
+      log.mockRestore();
+      await mf.dispose();
+    }
+  });
+
   it("persists optional Meta attribution with its original inquiry and rejects malformed metadata", async () => {
     const { env, db, mf } = await setup();
     try {

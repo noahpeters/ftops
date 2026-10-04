@@ -1,4 +1,5 @@
 "use client";
+import { CustomerQualification } from "./CustomerQualification";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import Markdown from "react-markdown";
@@ -699,6 +700,13 @@ export function CustomersPanel({
                     {followUpLabel(row.next_follow_up_at, row.follow_up_urgency)}
                   </div>
                   <div className={stylex(styles.muted)}>
+                    {row.qualification_classification === "qualified"
+                      ? "Qualified · "
+                      : row.qualification_classification === "not_qualified"
+                        ? "Not qualified · "
+                        : row.qualification_classification === "unclear"
+                          ? "Qualification unclear · "
+                          : "Not assessed · "}
                     {row.open_estimate_count} open estimates · $
                     {Number(row.open_invoice_balance || 0).toFixed(2)} due
                   </div>
@@ -720,6 +728,27 @@ export function CustomersPanel({
           ) : (
             <>
               <h3>{detail.customer.display_name}</h3>
+              <CustomerQualification
+                key={detail.customer.id}
+                customerId={detail.customer.id}
+                qualification={detail.qualification}
+                onChange={(next) => {
+                  setDetail((current) =>
+                    current?.customer.id === next.customer.id ? next : current
+                  );
+                  setRows((current) =>
+                    current.map((row) =>
+                      row.id === next.customer.id
+                        ? {
+                            ...row,
+                            qualification_classification:
+                              next.qualification?.current?.classification ?? null,
+                          }
+                        : row
+                    )
+                  );
+                }}
+              />
               <div
                 className={stylex(styles.detailTabs)}
                 role="tablist"
