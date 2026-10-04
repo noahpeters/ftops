@@ -1,6 +1,7 @@
 import { buildUrl, fetchJson } from "../../lib/api";
 
 export type CustomerSummary = {
+  qualification_classification?: QualificationClass | null;
   id: string;
   display_name: string;
   company_name: string | null;
@@ -27,7 +28,38 @@ export type CustomerPage = {
   offset: number;
   hasMore: boolean;
 };
+export type QualificationClass = "qualified" | "not_qualified" | "unclear";
+export type Qualification = {
+  current: QualificationAssessment | null;
+  assessments: QualificationAssessment[];
+  reviews: Array<{
+    id: string;
+    assessment_id: string;
+    verdict: "correct" | "incorrect";
+    expected_classification: QualificationClass;
+    reviewed_by: string;
+    reviewed_at: string;
+  }>;
+};
+export type QualificationAssessment = {
+  id: string;
+  classification: QualificationClass;
+  created_at: string;
+  confidence: number;
+  rules_version: string;
+  model: string;
+};
+export function getQualification(customerId: string) {
+  return fetchJson<Qualification>(buildUrl(`/customers/${customerId}/qualification`));
+}
+export function qualificationAction(customerId: string, body: Record<string, unknown>) {
+  return fetchJson<CustomerDetail>(buildUrl(`/customers/${customerId}/qualification`), {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
 export type CustomerDetail = {
+  qualification?: Qualification;
   customer: CustomerSummary & {
     notes?: string | null;
     lead_source?: string | null;

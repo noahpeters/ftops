@@ -1,3 +1,8 @@
+import {
+  classifyCustomer,
+  isQualificationClass,
+  loadQualification,
+} from "../services/customerQualification";
 import { canAccessWorkspace, requireActor } from "../lib/access";
 import { badRequest, forbidden, json, methodNotAllowed, notFound } from "../lib/http";
 import type { Env } from "../lib/types";
@@ -81,6 +86,7 @@ export async function handleCustomers(
       }
       const result = await env.DB.prepare(
         `SELECT c.id, c.display_name, c.company_name, c.status, c.lead_source, c.updated_at,
+                (SELECT classification FROM customer_qualification_assessments q WHERE q.workspace_id=c.workspace_id AND q.customer_id=c.id ORDER BY q.created_at DESC,q.rowid DESC LIMIT 1) AS qualification_classification,
                 pc.display_name AS primary_contact, pc.email, pc.phone,
                 COALESCE(ee.sync_status, 'not_linked') AS quickbooks_sync_status,
                 ee.last_synced_at, ee.last_error,
@@ -259,6 +265,60 @@ export async function handleCustomers(
   }
 
   const action = segments[1];
+  if (action === "qualification" && segments.length === 2) {
+    if (request.method === "GET")
+      return json(await loadQualification(env, workspaceId, customerId));
+    if (request.method !== "POST") return methodNotAllowed(["GET", "POST"]);
+    const body = await readBody(request);
+    if (body.action === "classify") {
+      try {
+        await classifyCustomer(env, workspaceId, customerId);
+      } catch {
+        return json(
+          {
+            error:
+              "Unable to classify this customer. Check that a project description and AI connection are available.",
+          },
+          503
+        );
+      }
+      return json(await loadDetail(env, workspaceId, customerId));
+    }
+    if (
+      body.action !== "review" ||
+      typeof body.assessmentId !== "string" ||
+      !["correct", "incorrect"].includes(String(body.verdict))
+    )
+      return badRequest("invalid_qualification_review");
+    const assessment = await env.DB.prepare(
+      "SELECT classification FROM customer_qualification_assessments WHERE id=? AND workspace_id=? AND customer_id=?"
+    )
+      .bind(body.assessmentId, workspaceId, customerId)
+      .first<{ classification: string }>();
+    if (!assessment) return notFound("Qualification assessment not found");
+    const expected =
+      body.verdict === "correct" ? assessment.classification : body.expectedClassification;
+    if (
+      !isQualificationClass(expected) ||
+      (body.verdict === "incorrect" && expected === assessment.classification)
+    )
+      return badRequest("invalid_expected_classification");
+    await env.DB.prepare(
+      "INSERT INTO customer_qualification_reviews (id,workspace_id,customer_id,assessment_id,verdict,expected_classification,reviewed_by,reviewed_at) VALUES (?,?,?,?,?,?,?,?)"
+    )
+      .bind(
+        crypto.randomUUID(),
+        workspaceId,
+        customerId,
+        body.assessmentId,
+        body.verdict,
+        expected,
+        actor.email,
+        nowISO()
+      )
+      .run();
+    return json(await loadDetail(env, workspaceId, customerId));
+  }
   if (action === "follow-up-stream" && request.method === "GET") {
     const noteId = url.searchParams.get("noteId")?.trim();
     if (!noteId) return badRequest("missing_note_id");
@@ -863,6 +923,7 @@ async function loadDetail(env: Env, workspaceId: string, id: string) {
   const customer = customerRow ? addComputedFollowUp(customerRow) : customerRow;
   return {
     customer,
+    qualification: await loadQualification(env, workspaceId, id),
     contacts: await listRows(
       env,
       `SELECT * FROM contacts WHERE workspace_id=? AND customer_id=? ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'inactive' THEN 1 ELSE 2 END,is_primary DESC,display_name`,

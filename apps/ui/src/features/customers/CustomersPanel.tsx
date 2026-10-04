@@ -1,4 +1,5 @@
 "use client";
+import { CustomerQualification } from "./CustomerQualification";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import Markdown from "react-markdown";
@@ -99,6 +100,15 @@ const styles = stylex.create({
     borderRadius: radius.sm,
     backgroundColor: colors.surfaceAlt,
     cursor: "pointer",
+  },
+  itemLink: {
+    display: "block",
+    width: "100%",
+    textAlign: "left",
+    border: "none",
+    backgroundColor: "transparent",
+    padding: 0,
+    color: "inherit",
   },
   active: { borderColor: colors.accent },
   glimmer: {
@@ -683,21 +693,46 @@ export function CustomersPanel({
             {listLoading && <CustomerListGlimmer />}
             {rows.map((row) => (
               <li key={row.id}>
-                <button
-                  data-button-layout="card"
-                  className={stylex(styles.item, row.id === customerId && styles.active)}
-                  onClick={() => navigate(`/customers/${row.id}`)}
-                >
-                  <strong>{row.display_name}</strong>
-                  <div>{row.company_name}</div>
-                  <div className={stylex(styles.muted)}>
-                    {row.primary_contact} · {row.email || formatPhoneNumber(row.phone)}
-                  </div>
-                  <span className={stylex(styles.badge)}>{row.status}</span>
-                  <span className={stylex(styles.badge)}>QBO: {row.quickbooks_sync_status}</span>
-                  <div className={stylex(styles.muted)}>
-                    {followUpLabel(row.next_follow_up_at, row.follow_up_urgency)}
-                  </div>
+                <div className={stylex(styles.item, row.id === customerId && styles.active)}>
+                  <button
+                    data-button-layout="card"
+                    className={stylex(styles.itemLink)}
+                    onClick={() => navigate(`/customers/${row.id}`)}
+                  >
+                    <strong>{row.display_name}</strong>
+                    <div>{row.company_name}</div>
+                    <div className={stylex(styles.muted)}>
+                      {row.primary_contact} · {row.email || formatPhoneNumber(row.phone)}
+                    </div>
+                    <span className={stylex(styles.badge)}>{row.status}</span>
+                    <span className={stylex(styles.badge)}>QBO: {row.quickbooks_sync_status}</span>
+                    <div className={stylex(styles.muted)}>
+                      {followUpLabel(row.next_follow_up_at, row.follow_up_urgency)}
+                    </div>
+                  </button>
+                  <CustomerQualification
+                    customerId={row.id}
+                    classification={row.qualification_classification}
+                    qualification={
+                      detail?.customer.id === row.id ? detail.qualification : undefined
+                    }
+                    onChange={(next) => {
+                      setDetail((current) =>
+                        current?.customer.id === next.customer.id ? next : current
+                      );
+                      setRows((current) =>
+                        current.map((item) =>
+                          item.id === next.customer.id
+                            ? {
+                                ...item,
+                                qualification_classification:
+                                  next.qualification?.current?.classification ?? null,
+                              }
+                            : item
+                        )
+                      );
+                    }}
+                  />
                   <div className={stylex(styles.muted)}>
                     {row.open_estimate_count} open estimates · $
                     {Number(row.open_invoice_balance || 0).toFixed(2)} due
@@ -705,7 +740,7 @@ export function CustomersPanel({
                   <div className={stylex(styles.muted)}>
                     {formatBudget(row.non_lost_opportunity_total_cents || 0)} opportunity value
                   </div>
-                </button>
+                </div>
               </li>
             ))}
             {loadingMore && <CustomerListGlimmer count={2} />}
@@ -794,6 +829,27 @@ export function CustomersPanel({
                             detail.customer.follow_up_urgency
                           )}
                     </p>
+                    <CustomerQualification
+                      key={detail.customer.id}
+                      customerId={detail.customer.id}
+                      qualification={detail.qualification}
+                      onChange={(next) => {
+                        setDetail((current) =>
+                          current?.customer.id === next.customer.id ? next : current
+                        );
+                        setRows((current) =>
+                          current.map((row) =>
+                            row.id === next.customer.id
+                              ? {
+                                  ...row,
+                                  qualification_classification:
+                                    next.qualification?.current?.classification ?? null,
+                                }
+                              : row
+                          )
+                        );
+                      }}
+                    />
                     {detail.customer.follow_up_reason && (
                       <p className={stylex(styles.muted)}>{detail.customer.follow_up_reason}</p>
                     )}

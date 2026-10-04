@@ -1,3 +1,4 @@
+import { classifyCustomer } from "../services/customerQualification";
 import { canAccessWorkspace, requireActor } from "../lib/access";
 import type { Env } from "../lib/types";
 import { badRequest, json, methodNotAllowed, notFound } from "../lib/http";
@@ -33,7 +34,12 @@ type Consent = {
   capturedAt?: string;
 };
 
-export async function handleWebsiteIntake(segments: string[], request: Request, env: Env) {
+export async function handleWebsiteIntake(
+  segments: string[],
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext
+) {
   if (segments.length !== 1) return notFound("Route not found");
   if (request.method !== "POST") return methodNotAllowed(["POST"]);
   const integration = await env.DB.prepare(
@@ -264,7 +270,22 @@ export async function handleWebsiteIntake(segments: string[], request: Request, 
     if (concurrent) return response(concurrent, true);
     throw error;
   }
-  return response((await replay())!, false);
+  const stored = (await replay())!;
+  if (env.AI && typeof ctx?.waitUntil === "function") {
+    ctx.waitUntil(
+      (async () => {
+        const linked = await env.DB.prepare(
+          "SELECT customer_id FROM website_submissions WHERE id=? AND workspace_id=?"
+        )
+          .bind(id, workspaceId)
+          .first<{ customer_id: string | null }>();
+        if (linked?.customer_id) await classifyCustomer(env, workspaceId, linked.customer_id, id);
+      })().catch(() => {
+        console.error("customer_qualification_failed", { submissionId: id });
+      })
+    );
+  }
+  return response(stored, false);
 }
 
 function validatePayload(value: unknown): {
