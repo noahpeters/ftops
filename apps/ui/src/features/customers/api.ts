@@ -49,6 +49,9 @@ export type QualificationAssessment = {
   rules_version: string;
   model: string;
 };
+export function getQualification(customerId: string) {
+  return fetchJson<Qualification>(buildUrl(`/customers/${customerId}/qualification`));
+}
 export function qualificationAction(customerId: string, body: Record<string, unknown>) {
   return fetchJson<CustomerDetail>(buildUrl(`/customers/${customerId}/qualification`), {
     method: "POST",
