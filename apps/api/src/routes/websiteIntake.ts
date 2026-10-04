@@ -19,6 +19,7 @@ const KEYS = [
   "sourcePath",
   "marketingConsent",
   "opportunity",
+  "metaAttribution",
 ];
 type Fields = Record<string, string> & { email: string; externalEventId: string };
 type Opportunity = {
@@ -85,7 +86,7 @@ export async function handleWebsiteIntake(segments: string[], request: Request, 
   }
   const validated = validatePayload(parsed);
   if (!validated) return badRequest("invalid_payload");
-  const { fields, consent, opportunity } = validated;
+  const { fields, consent, opportunity, metaAttribution } = validated;
   const { id: integrationId, workspace_id: workspaceId } = integration;
   const replay = async () =>
     await env.DB.prepare(
@@ -129,7 +130,12 @@ export async function handleWebsiteIntake(segments: string[], request: Request, 
       integrationId,
       fields.externalEventId,
       fields.email,
-      JSON.stringify({ ...fields, marketingConsent: consent, opportunity }),
+      JSON.stringify({
+        ...fields,
+        marketingConsent: consent,
+        opportunity,
+        ...(metaAttribution ? { metaAttribution } : {}),
+      }),
       raw,
       now,
       customerId,
@@ -261,12 +267,38 @@ export async function handleWebsiteIntake(segments: string[], request: Request, 
   return response((await replay())!, false);
 }
 
-function validatePayload(
-  value: unknown
-): { fields: Fields; consent: Consent; opportunity?: Opportunity } | null {
+function validatePayload(value: unknown): {
+  fields: Fields;
+  consent: Consent;
+  opportunity?: Opportunity;
+  metaAttribution?: Record<string, string>;
+} | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const input = value as Record<string, unknown>;
   if (Object.keys(input).some((key) => !KEYS.includes(key))) return null;
+  let metaAttribution: Record<string, string> | undefined;
+  if (input.metaAttribution !== undefined) {
+    const meta = input.metaAttribution;
+    if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null;
+    metaAttribution = {};
+    for (const [key, value] of Object.entries(meta)) {
+      if (
+        !["fbclid", "fbc", "fbp", "fbclidCapturedAt"].includes(key) ||
+        typeof value !== "string" ||
+        !value ||
+        value.length > 2000 ||
+        /\s/.test(value) ||
+        [...value].some((char) => char.charCodeAt(0) < 32)
+      )
+        return null;
+      if (
+        key === "fbclidCapturedAt" &&
+        (!/^\d{4}-\d{2}-\d{2}T.*Z$/.test(value) || !Number.isFinite(Date.parse(value)))
+      )
+        return null;
+      metaAttribution[key] = value;
+    }
+  }
   let opportunity: Opportunity | undefined;
   if (input.opportunity !== undefined) {
     const o = input.opportunity;
@@ -290,7 +322,7 @@ function validatePayload(
   }
   const fields = {} as Fields;
   for (const [key, val] of Object.entries(input)) {
-    if (key === "marketingConsent" || key === "opportunity") continue;
+    if (key === "marketingConsent" || key === "opportunity" || key === "metaAttribution") continue;
     if (typeof val !== "string" || val.length > (key === "message" ? 16000 : 2000)) return null;
     fields[key] = val.trim();
   }
@@ -332,6 +364,7 @@ function validatePayload(
   return {
     fields,
     opportunity,
+    metaAttribution,
     consent: {
       state: record.state as Consent["state"],
       ...(record.disclosureVersion

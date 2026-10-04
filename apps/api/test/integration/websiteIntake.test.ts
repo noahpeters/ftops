@@ -54,6 +54,59 @@ async function setup() {
 }
 
 describe("website intake", () => {
+  it("persists optional Meta attribution with its original inquiry and rejects malformed metadata", async () => {
+    const { env, db, mf } = await setup();
+    try {
+      const metaAttribution = {
+        fbclid: "click_123",
+        fbc: "fb.1.1791130000000.click_123",
+        fbp: "fb.1.1791130000000.123456",
+        fbclidCapturedAt: "2026-10-04T17:00:00.000Z",
+      };
+      const body = { ...payload, metaAttribution };
+      const accepted = await request(env, "/website-intake/site-a", body);
+      expect(accepted.status).toBe(201);
+      expect((await request(env, "/website-intake/site-a", body)).status).toBe(200);
+      const row = await db
+        .prepare(
+          "SELECT fields_json,raw_payload,external_event_id,contact_id FROM website_submissions"
+        )
+        .first<{
+          fields_json: string;
+          raw_payload: string;
+          external_event_id: string;
+          contact_id: string;
+        }>();
+      expect(JSON.parse(row!.fields_json).metaAttribution).toEqual(metaAttribution);
+      expect(JSON.parse(row!.raw_payload).metaAttribution).toEqual(metaAttribution);
+      expect(row!.external_event_id).toBe(payload.externalEventId);
+      expect(row!.contact_id).toBeTruthy();
+      for (const invalid of [
+        null,
+        [],
+        { fbp: 123 },
+        { extra: "value" },
+        { fbclid: "x".repeat(2001) },
+        { fbclidCapturedAt: "invalid" },
+      ]) {
+        expect(
+          (
+            await request(env, "/website-intake/site-a", {
+              ...payload,
+              externalEventId: "invalid",
+              metaAttribution: invalid,
+            })
+          ).status
+        ).toBe(400);
+      }
+      expect(await db.prepare("SELECT count(*) AS n FROM website_submissions").first()).toEqual({
+        n: 1,
+      });
+    } finally {
+      await mf.dispose();
+    }
+  });
+
   it("serves the public intake URL through the deployed Worker entry point", async () => {
     const { env, mf } = await setup();
     try {
