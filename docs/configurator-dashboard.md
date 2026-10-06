@@ -43,3 +43,29 @@ FTOPS serves the pinned `.rbz` through admin-only `GET /configurator/extension`,
 The hosted page sends only construction JSON through SketchUp’s callback. The random per-window bridge value survives the login return URL and correlates import results; it is not an authentication credential. Normal browser visits show installation instructions, while direct import is enabled only when both this value and the actual SketchUp callback are present. Server-side administrator checks remain authoritative.
 
 Extension 0.2.0 imports shaped and oriented stock for all cabinet types. Existing 0.1.0 installations get an explicit extension-update download before import. Construction settings wrap within the embedded window. Cabinet-type exclusions are not an export requirement.
+
+## Internal cost / price reports
+
+In a recent-design or consenting-lead preview, **Open on from-trees.com** opens
+`/cabinet-configurator?design=…` in a new tab. The website makes an editable copy
+of the saved configuration; this does not grant the source design’s edit key.
+
+**Download cost / price report (CSV)** requests the exact displayed revision via
+`GET /configurator/cost-report?slug=…&revision=…`. This has the same Access identity
+and system-admin requirement as the other configurator reporting routes. The
+private binding calls H2 `/admin/cost-report` with the separate reporting token.
+Responses are no-store. A changed design returns 409 and requires refreshing the
+view before download. Missing pricing configuration fails closed.
+
+The CSV contains individual modeled option costs and selling prices, per-cabinet
+cost/price/profit/gross margin, project totals, current rate timestamp, design
+revision, website link, assumptions and exclusions. Monetary values reconcile to
+the penny. Costs include overhead; whole-stock purchase pools are allocated by
+usage, miscellaneous allowance is split equally, and automatic finish panels
+belong to their cabinet. Style premiums are explicit selling-price additions with
+no separately modeled incremental cost. Unpriced work remains explicitly excluded
+or covered by standard allowances. This is a current-rate internal budget estimate,
+not the historical customer request snapshot or a final quote.
+
+Release the companion H2 endpoint before the FTOPS UI change. No new secrets,
+migrations or service bindings are required.

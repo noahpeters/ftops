@@ -28,7 +28,10 @@ const FORWARDED_HEADER_KEYS = [
 ];
 
 const ALLOWLIST: AllowlistEntry[] = [
-  { methods: new Set(["GET"]), pattern: /^\/configurator(?:\/(?:design|export|extension))?$/ },
+  {
+    methods: new Set(["GET"]),
+    pattern: /^\/configurator(?:\/(?:design|export|extension|cost-report))?$/,
+  },
   { methods: new Set(["GET"]), pattern: /^\/events$/ },
   { methods: new Set(["POST"]), pattern: /^\/events\/test$/ },
   { methods: new Set(["GET"]), pattern: /^\/plan\/preview$/ },

@@ -159,3 +159,26 @@ it("serves the pinned installer only to authenticated system administrators", as
   );
   expect(fetcher).not.toHaveBeenCalled();
 });
+
+it("restricts economics reports to admins and forwards only slug and revision", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(Response.json({ report: { totals: { cost: 100 } }, csv: "report" }));
+  const boundEnv = { ...env, CABINET_ANALYTICS_SERVICE: { fetch: fetcher } } as unknown as Env;
+  const costRequest = new Request(
+    "https://ops.example/configurator/cost-report?slug=aaaaaaaa&revision=4&margin=0&token=secret",
+    { headers: request().headers }
+  );
+  admin(false);
+  expect((await handleConfigurator(["cost-report"], costRequest, boundEnv)).status).toBe(403);
+  expect(fetcher).not.toHaveBeenCalled();
+  admin(true);
+  const response = await handleConfigurator(["cost-report"], costRequest, boundEnv);
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(fetcher.mock.calls[0][0].toString()).toBe(
+    "https://rooms.example/admin/cost-report?slug=aaaaaaaa&revision=4"
+  );
+  fetcher.mockResolvedValue(Response.json({ error: "design_revision_changed" }, { status: 409 }));
+  expect((await handleConfigurator(["cost-report"], costRequest, boundEnv)).status).toBe(409);
+});
