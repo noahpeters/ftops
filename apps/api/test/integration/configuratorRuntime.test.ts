@@ -12,6 +12,19 @@ it("loads reports in workerd and rejects upstream redirects without following th
   const mf = new Miniflare({
     workers: [
       {
+        name: "ui-proxy",
+        compatibilityDate: "2026-01-01",
+        modules: [
+          {
+            type: "ESModule",
+            path: "index.js",
+            contents: `import {handleApiProxyRequest} from './apiProxy'; export default {fetch(request, env){return handleApiProxyRequest(request, env);}};`,
+          },
+          { type: "ESModule", path: "apiProxy", contents: compile("../ui/src/worker/apiProxy.ts") },
+        ],
+        serviceBindings: { API: "reporting-api" },
+      },
+      {
         name: "reporting-api",
         compatibilityDate: "2026-01-01",
         modules: [
@@ -21,7 +34,7 @@ it("loads reports in workerd and rejects upstream redirects without following th
             contents: `import { handleConfigurator } from './routes/configurator';
               export default { fetch(request, env) {
                 const leaf = new URL(request.url).pathname.split('/').pop();
-                const segments = ['design','export','extension'].includes(leaf) ? [leaf] : [];
+                const segments = ['design','export','extension','cost-report'].includes(leaf) ? [leaf] : [];
                 return handleConfigurator(segments, request, env);
               }};`,
           },
@@ -63,21 +76,38 @@ it("loads reports in workerd and rejects upstream redirects without following th
   });
   try {
     const headers = { "Cf-Access-Authenticated-User-Email": "admin@example.com" };
-    const report = await mf.dispatchFetch("https://ops.example/configurator", { headers });
+    const report = await mf.dispatchFetch("https://ops.example/api/configurator", { headers });
     expect(report.status).toBe(200);
     expect(await report.json()).toEqual({ path: "/admin/dashboard" });
-    const preview = await mf.dispatchFetch("https://ops.example/configurator/design?slug=room", {
-      headers,
-    });
+    const preview = await mf.dispatchFetch(
+      "https://ops.example/api/configurator/design?slug=room",
+      {
+        headers,
+      }
+    );
     expect(preview.status).toBe(200);
     expect(await preview.json()).toEqual({ path: "/admin/design" });
     const exported = await mf.dispatchFetch(
-      "https://ops.example/configurator/export?slug=room&revision=4&drawerThickness=0.625",
+      "https://ops.example/api/configurator/export?slug=room&revision=4&drawerThickness=0.625",
       { headers }
     );
     expect(exported.status).toBe(200);
     expect(await exported.json()).toEqual({ path: "/admin/export" });
-    const installer = await mf.dispatchFetch("https://ops.example/configurator/extension", {
+    const cost = await mf.dispatchFetch(
+      "https://ops.example/api/configurator/cost-report?slug=room&revision=4",
+      { headers }
+    );
+    expect(cost.status).toBe(200);
+    expect(await cost.json()).toEqual({ path: "/admin/cost-report" });
+    expect(
+      (
+        await mf.dispatchFetch(
+          "https://ops.example/api/configurator/cost-report?slug=room&revision=4",
+          { method: "POST", headers }
+        )
+      ).status
+    ).toBe(403);
+    const installer = await mf.dispatchFetch("https://ops.example/api/configurator/extension", {
       headers,
     });
     expect(installer.status).toBe(200);
@@ -85,7 +115,7 @@ it("loads reports in workerd and rejects upstream redirects without following th
     expect(artifact.filename).toMatch(/\.rbz$/);
     expect(artifact.sourceRepository).toBe("https://github.com/noahpeters/from-trees-sketchup");
     const redirect = await mf.dispatchFetch(
-      "https://ops.example/configurator/design?slug=redirect",
+      "https://ops.example/api/configurator/design?slug=redirect",
       { headers }
     );
     expect(redirect.status).toBe(503);

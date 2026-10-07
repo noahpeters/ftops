@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { buildUrl, fetchJson } from "../../lib/api";
 import stylex from "~/lib/stylex";
 import { styles } from "./styles";
+import { CostReport } from "./CostReport";
 import { SketchupExport } from "./SketchupExport";
 
 type Plan = {
@@ -486,6 +487,22 @@ export function ConfiguratorPanel() {
                 ? `${selected.preview.width}″ × ${selected.preview.depth}″ · ${selected.preview.elements.length} elements`
                 : "Preview unavailable"}
             </p>
+            <a
+              className={stylex(styles.button, styles.controlButton, styles.focus)}
+              href={`https://from-trees.com/cabinet-configurator?design=${encodeURIComponent(selected.slug)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open on from-trees.com
+            </a>
+            <p className={stylex(styles.footnote)}>
+              Opens a copy of this saved configuration for editing.
+            </p>
+            <CostReport
+              key={`cost:${selected.slug}:${selected.revision}`}
+              slug={selected.slug}
+              revision={selected.revision}
+            />
             <SketchupExport
               key={`${selected.slug}:${selected.revision}`}
               slug={selected.slug}

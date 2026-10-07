@@ -68,6 +68,7 @@ describe("ops api proxy allowlist", () => {
   });
 
   it.each([
+    ["GET", "/api/configurator/cost-report?slug=aaaaaaaa&revision=1"],
     ["GET", "/api/customers?workspaceId=ws_123"],
     ["POST", "/api/customers"],
     ["GET", "/api/customers/customer_1"],

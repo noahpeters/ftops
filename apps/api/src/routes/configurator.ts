@@ -16,7 +16,7 @@ export async function handleConfigurator(segments: string[], request: Request, e
   if (request.method !== "GET") return methodNotAllowed(["GET"]);
   if (
     segments.length > 1 ||
-    (segments[0] && !["design", "export", "extension"].includes(segments[0]))
+    (segments[0] && !["design", "export", "extension", "cost-report"].includes(segments[0]))
   )
     return notFound("Route not found");
   if (segments[0] === "extension")
@@ -27,37 +27,41 @@ export async function handleConfigurator(segments: string[], request: Request, e
     return json({ error: "configurator_not_connected" }, 503);
   const incoming = new URL(request.url);
   const target = new URL(
-    segments[0] === "export"
-      ? "/admin/export"
-      : segments[0] === "design"
-        ? "/admin/design"
-        : "/admin/dashboard",
+    segments[0] === "cost-report"
+      ? "/admin/cost-report"
+      : segments[0] === "export"
+        ? "/admin/export"
+        : segments[0] === "design"
+          ? "/admin/design"
+          : "/admin/dashboard",
     env.CABINET_ANALYTICS_URL
   );
   if (target.protocol !== "https:") return json({ error: "configurator_not_connected" }, 503);
   const filters =
-    segments[0] === "export"
-      ? [
-          "slug",
-          "revision",
-          "carcassThickness",
-          "dadoDepth",
-          "backThickness",
-          "backGrooveDepth",
-          "stretcherWidth",
-          "drawerThickness",
-          "drawerRabbetDepth",
-          "drawerBottomThickness",
-          "drawerGrooveDepth",
-          "drawerBottomInset",
-          "drawerSideHeight",
-          "drawerWidthDeduction",
-          "drawerDepthDeduction",
-          "shakerRailWidth",
-          "shakerPanelThickness",
-          "shakerGrooveDepth",
-        ]
-      : ["days", "page", "slug"];
+    segments[0] === "cost-report"
+      ? ["slug", "revision"]
+      : segments[0] === "export"
+        ? [
+            "slug",
+            "revision",
+            "carcassThickness",
+            "dadoDepth",
+            "backThickness",
+            "backGrooveDepth",
+            "stretcherWidth",
+            "drawerThickness",
+            "drawerRabbetDepth",
+            "drawerBottomThickness",
+            "drawerGrooveDepth",
+            "drawerBottomInset",
+            "drawerSideHeight",
+            "drawerWidthDeduction",
+            "drawerDepthDeduction",
+            "shakerRailWidth",
+            "shakerPanelThickness",
+            "shakerGrooveDepth",
+          ]
+        : ["days", "page", "slug"];
   for (const key of filters) {
     const value = incoming.searchParams.get(key);
     if (value !== null) target.searchParams.set(key, value);
@@ -71,7 +75,10 @@ export async function handleConfigurator(segments: string[], request: Request, e
       signal: AbortSignal.timeout(15000),
       redirect: "manual",
     });
-    if (segments[0] === "export" && [400, 409, 422].includes(response.status)) {
+    if (
+      ["export", "cost-report"].includes(segments[0]) &&
+      [400, 409, 422].includes(response.status)
+    ) {
       const body = (await response.json()) as { error?: unknown; issues?: unknown };
       return json(
         {
@@ -79,6 +86,7 @@ export async function handleConfigurator(segments: string[], request: Request, e
             typeof body.error === "string" &&
             [
               "invalid_construction_profile",
+              "invalid_design_revision",
               "design_revision_changed",
               "fabrication_needs_review",
               "invalid_saved_design",
