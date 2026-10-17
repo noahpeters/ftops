@@ -326,6 +326,10 @@ export function CustomersPanel({
   const [creatingContact, setCreatingContact] = useState(false);
   const [contactCanSave, setContactCanSave] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(false);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [createCustomerError, setCreateCustomerError] = useState<string | null>(null);
   const [customerHasChanges, setCustomerHasChanges] = useState(false);
   const [creatingNote, setCreatingNote] = useState(false);
   const [noteCanSave, setNoteCanSave] = useState(false);
@@ -446,14 +450,27 @@ export function CustomersPanel({
   }, [customerId]);
   useEffect(() => () => followUpStreamRef.current?.close(), []);
   async function create() {
-    if (!workspaceId) return;
-    const displayName = prompt("Customer display name");
-    if (!displayName) return;
-    const r = await createCustomer({ workspaceId, displayName, status: "lead" });
-    if (r.ok && r.data) {
-      await refresh();
-      navigate(`/customers/${r.data.customer.id}`);
-    } else setError(r.text);
+    const displayName = newCustomerName.trim();
+    if (!workspaceId || !displayName || savingCustomer) return;
+    setSavingCustomer(true);
+    setCreateCustomerError(null);
+    try {
+      const r = await createCustomer({ workspaceId, displayName, status: "lead" });
+      if (r.ok && r.data) {
+        setCreatingCustomer(false);
+        setNewCustomerName("");
+        await refresh();
+        navigate(`/customers/${r.data.customer.id}`);
+      } else {
+        setCreateCustomerError(
+          (r.data as { error?: string } | null)?.error || r.text || "Could not create customer."
+        );
+      }
+    } catch (error) {
+      setCreateCustomerError(error instanceof Error ? error.message : "Could not create customer.");
+    } finally {
+      setSavingCustomer(false);
+    }
   }
   async function saveCustomer(input: CustomerInput) {
     if (!customerId) return;
@@ -642,8 +659,56 @@ export function CustomersPanel({
     <section className={stylex(styles.panel)}>
       <div className={stylex(styles.titleRow)}>
         <h2>Customers</h2>
-        <button onClick={create}>Create customer</button>
+        <button
+          type="button"
+          disabled={!workspaceId || creatingCustomer}
+          onClick={() => {
+            setNewCustomerName("");
+            setCreateCustomerError(null);
+            setCreatingCustomer(true);
+          }}
+        >
+          Create customer
+        </button>
       </div>
+      {creatingCustomer && (
+        <RightSideEditor
+          eyebrow="Customer"
+          title="Create customer"
+          formId="customer-create-form"
+          saveLabel="Create customer"
+          saveDisabled={!workspaceId || !newCustomerName.trim()}
+          saving={savingCustomer}
+          onCancel={() => setCreatingCustomer(false)}
+        >
+          <form
+            id="customer-create-form"
+            className={stylex(styles.form)}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void create();
+            }}
+          >
+            <label>
+              Customer display name
+              <input
+                name="displayName"
+                type="text"
+                required
+                autoFocus
+                disabled={savingCustomer}
+                value={newCustomerName}
+                onChange={(event) => setNewCustomerName(event.target.value)}
+              />
+            </label>
+            {createCustomerError && (
+              <p className={stylex(styles.error)} role="alert">
+                {createCustomerError}
+              </p>
+            )}
+          </form>
+        </RightSideEditor>
+      )}
       <div className={stylex(styles.toolbar)}>
         <input
           aria-label="Search customers"
