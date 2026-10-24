@@ -46,6 +46,8 @@ jobs:
         run: npm ci --workspaces
       - name: Apply production migrations
         run: npm --workspace apps/api run db:migrate:remote
+      - name: Ensure private billing document bucket
+        run: node tools/ensure-billing-bucket.mjs
       - name: Deploy API
         run: npm --workspace apps/api run deploy:unsafe
       - name: Apply API Worker secrets

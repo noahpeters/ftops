@@ -28,6 +28,16 @@ const FORWARDED_HEADER_KEYS = [
 ];
 
 const ALLOWLIST: AllowlistEntry[] = [
+  { methods: new Set(["GET", "POST"]), pattern: /^\/billing\/(?:settings|terms|estimates)$/ },
+  {
+    methods: new Set(["GET"]),
+    pattern: /^\/billing\/(?:payments|documents\/[^/]+|estimates\/[^/]+)$/,
+  },
+  {
+    methods: new Set(["POST"]),
+    pattern:
+      /^\/billing\/(?:reconcile|estimates\/[^/]+\/(?:issue|revise|withdraw|access)|invoices\/[^/]+\/refund)$/,
+  },
   {
     methods: new Set(["GET"]),
     pattern: /^\/configurator(?:\/(?:design|export|extension|cost-report))?$/,

@@ -19,6 +19,7 @@ export async function createTestEnv(options?: { env?: Record<string, unknown> })
       modules: true,
       d1Databases: { DB: "test-db" },
       r2Buckets: {
+        R2_BILLING_DOCUMENTS_BUCKET: "test-billing-documents",
         R2_TASK_FILES_BUCKET: "test-task-files",
         R2_CUSTOMER_EMAILS_BUCKET: "test-customer-emails",
       },
@@ -32,6 +33,7 @@ export async function createTestEnv(options?: { env?: Record<string, unknown> })
 
     const env = {
       DB: db,
+      R2_BILLING_DOCUMENTS_BUCKET: await mf.getR2Bucket("R2_BILLING_DOCUMENTS_BUCKET"),
       R2_TASK_FILES_BUCKET: taskFilesBucket,
       R2_CUSTOMER_EMAILS_BUCKET: customerEmailsBucket,
       EVENT_QUEUE: { send: async () => undefined },

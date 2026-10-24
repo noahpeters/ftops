@@ -76,3 +76,7 @@ terraform plan -var "account_id=..."
 
 See [Website intake](docs/website-intake.md) for integration provisioning, the submission
 contract, idempotency, reconciliation, and contact marketing email permissions.
+
+## Native estimating, e-signatures and Stripe billing
+
+The administrator **Estimates & billing** area owns native proposals, versioned terms, account-free electronic signatures, signed PDFs and card/ACH Checkout. QuickBooks is not a dependency. See [implementation/configuration and validation limits](docs/native-billing-implementation.md) and the [architecture](docs/native-estimating-contracting-invoicing.md).

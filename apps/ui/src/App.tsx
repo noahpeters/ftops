@@ -919,6 +919,9 @@ export default function App(): JSX.Element {
               {isWorkspaceMember && (
                 <AppNavLink to="/customers" label="Customers" collapsed={railCollapsed} />
               )}
+              {isWorkspaceAdmin && (
+                <AppNavLink to="/billing" label="Estimates & billing" collapsed={railCollapsed} />
+              )}
               {isWorkspaceMember && (
                 <AppNavLink to="/projects" label="Projects" collapsed={railCollapsed} />
               )}
