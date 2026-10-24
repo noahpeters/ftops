@@ -1,3 +1,5 @@
+import { handleBilling } from "../routes/billing";
+import { handleBillingGuest } from "../billing/guest";
 import { handleWebsiteIntake, handleWebsiteSubmissions } from "../routes/websiteIntake";
 import { handleConfigurator } from "../routes/configurator";
 import { notFound } from "./http";
@@ -77,6 +79,8 @@ async function routesRoot(
     url,
     {
       health: handleHealth,
+      billing: handleBilling,
+      "billing-public": handleBillingGuest,
       configurator: handleConfigurator,
       projects: handleProjects,
       events: handleEvents,

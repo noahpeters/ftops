@@ -1,0 +1,44 @@
+export function guestHtml() {
+  return String.raw`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>From Trees | Your project</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f5f3ed;color:#233c33;font:16px/1.55 system-ui,sans-serif}main{max-width:850px;margin:auto;padding:30px 22px 70px}header{border-bottom:1px solid #cbd3c9;padding:12px 0 24px;margin-bottom:28px}.brand{font:700 14px system-ui;letter-spacing:3px}h1{font:normal 38px Georgia,serif;line-height:1.15;margin:12px 0}h2{font:normal 27px Georgia,serif}section,.card{background:#fffef9;border:1px solid #d5dcd3;border-radius:10px;padding:24px;margin:20px 0}.muted{color:#627369}button,.button{display:inline-block;cursor:pointer;border:0;border-radius:5px;background:#234d3d;color:white;padding:13px 20px;font:600 16px system-ui;text-decoration:none;min-height:48px}button:disabled{opacity:.5;cursor:wait}input[type=text]{width:100%;padding:13px;border:1px solid #889f91;border-radius:5px;font:18px system-ui;margin:8px 0 16px}input[type=checkbox]{width:20px;height:20px;flex-shrink:0}label.choice{display:flex;gap:12px;align-items:flex-start;margin:15px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:12px 5px;border-bottom:1px solid #dce2d9;vertical-align:top}td:last-child,th:last-child{text-align:right;white-space:nowrap}.total{font-size:24px;font-weight:600}.error{color:#963e28;min-height:30px;white-space:pre-wrap}a{color:#234d3d}.notice{padding:14px;background:#e9eee5;border-radius:5px}small{font-size:13px}.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.hash{overflow-wrap:anywhere;font-size:12px;color:#627369}@media(max-width:500px){main{padding:18px 14px}section,.card{padding:18px}h1{font-size:32px}td,th{font-size:14px}button{width:100%}}
+</style></head><body><main><header><div class="brand">FROM TREES</div><h1>Your project, ready for review.</h1><p class="muted">Review your estimate, sign securely, and manage payments.</p></header><p id="message" role="status" aria-live="polite"></p><div id="content"></div></main><script>
+'use strict';
+let token=location.hash.slice(1);let state=null;const root=document.getElementById('content'),message=document.getElementById('message');
+const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
+const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n/100);
+async function api(path,body){const r=await fetch('/billing-public/'+path,{method:body?'POST':'GET',credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const d=await r.json();if(!r.ok)throw new Error((d.error||'Please try again').replaceAll('_',' '));return d;}
+function button(text,action){const b=el('button',text);b.type='button';b.onclick=async()=>{b.disabled=true;message.textContent='';try{await action()}catch(e){message.textContent=e.message;message.className='error'}finally{b.disabled=false}};return b;}
+async function load(){if(token){await verification();return;}try{state=await api('view');history.replaceState(null,'',location.pathname);token='';render();}catch(e){if(token)await verification();else{root.replaceChildren(el('section','Open the secure invitation link you received to review this project. No account is required.'));}}}
+async function verification(){
+ const info=await api('exchange',{token});const section=el('section');section.append(el('h2','Verify your email'),el('p','We will send a verification code to '+info.emailHint+'. No account or password is needed.'));
+ const input=el('input');input.type='text';input.inputMode='numeric';input.autocomplete='one-time-code';input.maxLength=6;input.id='code';const label=el('label','Six-digit verification code');label.htmlFor='code';
+ section.append(button('Email me a code',async()=>{await api('code',{token});message.textContent='Code sent. Check your email.'}),el('p'),label,input,button('Verify and continue',async()=>{await api('verify',{token,code:input.value});token='';history.replaceState(null,'',location.pathname);await load()}));root.replaceChildren(section);
+}
+function render(){
+ root.replaceChildren();const p=state.proposal;if(p.paymentEnvironment==='sandbox')root.append(el('p','Test mode — no real payments.','notice'));
+ root.append(el('p',p.customer+' · '+p.title+' · Revision '+state.revision,'muted'));
+ const section=el('section');section.append(el('h2','Your estimate'),el('pre',p.scope));
+ const table=el('table'),head=el('tr');head.append(el('th','Item'),el('th','Amount'));table.append(head);
+ for(const line of p.estimate.lines){const row=el('tr'),cell=el('td');cell.append(el('strong',line.description),el('div',(line.quantityMillis/1000)+' × '+money(line.unitPriceCents),'muted'),el('small','Discount '+money(line.discountCents)+' · Tax '+money(line.taxCents)));row.append(cell,el('td',money(line.totalCents)));table.append(row)}section.append(table,el('p','Total '+money(p.estimate.totalCents),'total'));
+ section.append(el('h3','Payment schedule'));for(const payment of p.schedule)section.append(el('p',payment.label+': '+money(payment.amountCents)));
+ root.append(section);
+ const terms=el('section');terms.append(el('h2',p.terms.title),el('p','Terms version '+p.terms.label,'muted'),el('pre',p.terms.content));root.append(terms);
+ const documents=el('section');documents.append(el('h2','Your documents'));for(const doc of state.documents){const a=el('a',(doc.invoice_label?doc.invoice_label+' invoice':doc.kind.replaceAll('_',' '))+' (PDF)');a.href='/billing-public/documents/'+encodeURIComponent(doc.id);const item=el('p');item.append(a);documents.append(item)}root.append(documents);
+ if(state.status==='issued'){
+  const sign=el('section');sign.append(el('h2','Approve and sign'),el('pre',p.disclosure,'notice'));const choices=[];
+  for(const text of ['I approve this estimate, scope and payment schedule.','I accept the complete terms and conditions, version '+p.terms.label+'.','I consent to electronic records and signatures under the disclosure above.','I am the customer or am authorized to sign for the customer.']){const label=el('label',undefined,'choice'),box=el('input');box.type='checkbox';label.append(box,el('span',text));sign.append(label);choices.push(box)}
+  const name=el('input');name.type='text';name.id='signer';name.autocomplete='name';name.value=p.signerName;const label=el('label','Your full name (electronic signature)');label.htmlFor='signer';sign.append(label,name,el('p',state.intent));
+  sign.append(button('Approve estimate & sign terms',async()=>{if(!choices.every(c=>c.checked))throw new Error('Please review and check each acceptance before signing.');await api('sign',{signerName:name.value,contentHash:state.hash,termsHash:p.terms.hash,approveEstimate:true,acceptTerms:true,electronicConsent:true,signerAuthority:true,intent:state.intent});await load();message.textContent='Signed. Your documents and invoices are ready.'}));root.append(sign);
+ }else if(state.status==='signing'){
+  const pending=el('section');pending.append(el('h2','Your signature is recorded'),el('p','We are preparing your signed PDFs. Your approval and signature have been saved.'),button('Finish preparing documents',async()=>{await api('finish',{});await load()}));root.append(pending);
+ }else if(state.status==='signed'){
+  root.append(el('p','Your estimate and terms are signed. Download and retain your documents above.','notice'));
+  const payments=el('section');payments.append(el('h2','Invoices & payments'),el('p','Pay securely by credit card or ACH bank payment. Card and bank details are collected by Stripe.'));
+  for(const invoice of state.invoices){const card=el('div',undefined,'card');card.append(el('h3',invoice.label),el('p',invoice.number),el('p',money(invoice.amount_cents)+' · '+invoice.status));if(invoice.refunded_cents)card.append(el('p','Refunded: '+money(invoice.refunded_cents)));if(['issued','failed'].includes(invoice.status)&&invoice.amount_cents>0)card.append(button('Pay '+money(invoice.amount_cents),async()=>{const data=await api('checkout',{invoiceId:invoice.id});location.assign(data.url)}));if(invoice.status==='processing')card.append(el('p','Your payment is processing. Bank payments may take several business days.'));payments.append(card)}payments.append(button('Refresh payment status',load));root.append(payments);
+ }
+ root.append(el('p','Document SHA-256: '+state.hash,'hash'));
+}
+function start(){load().catch(e=>{message.textContent=e.message;message.className='error'});}window.addEventListener('hashchange',()=>{token=location.hash.slice(1);if(token){state=null;root.replaceChildren();start();}});start();
+</script></body></html>`;
+}

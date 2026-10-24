@@ -1,3 +1,5 @@
+import { handleBillingGuest, resumeBillingDocuments } from "./billing/guest";
+import { paymentAdapter } from "./billing/provider";
 import { applyCorsHeaders, corsPreflight, getCorsContext } from "./lib/cors";
 import { route } from "./lib/router";
 import type { Env, EventQueuePayload } from "./lib/types";
@@ -14,6 +16,11 @@ import { enqueueMissingCustomerNoteFollowUps } from "./services/customerFollowUp
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    if (new URL(request.url).pathname.startsWith("/billing-public")) {
+      const segments = new URL(request.url).pathname.split("/").filter(Boolean);
+      if (segments[0] !== "billing-public") return new Response("Not found", { status: 404 });
+      return noStore(await handleBillingGuest(segments.slice(1), request, env));
+    }
     if (request.method === "OPTIONS") {
       return noStore(corsPreflight(request));
     }
@@ -77,6 +84,22 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, _ctx: ExecutionContext) {
+    await resumeBillingDocuments(env);
+    const billingWorkspaces = await env.DB.prepare(
+      "SELECT workspace_id FROM native_billing_settings"
+    ).all<{ workspace_id: string }>();
+    for (const workspace of billingWorkspaces.results) {
+      try {
+        await paymentAdapter().reconcile(env, workspace.workspace_id);
+      } catch {
+        console.error(
+          JSON.stringify({
+            event: "billing_reconciliation_failed",
+            workspace_id: workspace.workspace_id,
+          })
+        );
+      }
+    }
     await Promise.all([
       sendDailySummaries(env, new Date(controller.scheduledTime)),
       enqueueDueQuoSyncs(env),

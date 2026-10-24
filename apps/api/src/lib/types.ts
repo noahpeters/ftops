@@ -2,6 +2,8 @@ export type Env = {
   CABINET_ANALYTICS_SERVICE?: Fetcher;
   CABINET_ANALYTICS_URL?: string;
   CABINET_ANALYTICS_READ_TOKEN?: string;
+  BILLING_PUBLIC_ORIGIN?: string;
+  R2_BILLING_DOCUMENTS_BUCKET?: R2Bucket;
   DB: D1Database;
   AI?: {
     run(model: string, input: Record<string, unknown>): Promise<{ response?: unknown } | string>;
