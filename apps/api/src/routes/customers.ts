@@ -1,5 +1,6 @@
 import {
   classifyCustomer,
+  recordStaffQualification,
   isQualificationClass,
   loadQualification,
 } from "../services/customerQualification";
@@ -270,6 +271,21 @@ export async function handleCustomers(
       return json(await loadQualification(env, workspaceId, customerId));
     if (request.method !== "POST") return methodNotAllowed(["GET", "POST"]);
     const body = await readBody(request);
+    if (body.action === "confirm_scope") {
+      const classification = body.classification;
+      if (classification !== "qualified" && classification !== "not_qualified") {
+        return badRequest("invalid_staff_qualification");
+      }
+      const recorded = await recordStaffQualification(
+        env,
+        workspaceId,
+        customerId,
+        classification,
+        actor.email
+      );
+      if (!recorded) return badRequest("qualification_description_required");
+      return json(await loadDetail(env, workspaceId, customerId));
+    }
     if (body.action === "classify") {
       try {
         await classifyCustomer(env, workspaceId, customerId);
