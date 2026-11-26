@@ -67,15 +67,22 @@ export function CustomerQualification({
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, [open]);
-  async function assess() {
+  async function assess(classification?: "qualified" | "not_qualified") {
     setBusy(true);
     setError("");
     try {
-      const result = await qualificationAction(customerId, { action: "classify" });
+      const result = await qualificationAction(
+        customerId,
+        classification ? { action: "confirm_scope", classification } : { action: "classify" }
+      );
       if (!result.ok || !result.data?.qualification?.current) throw new Error("No assessment");
       onChange(result.data);
     } catch {
-      setError("Unable to assess project scope. Try again.");
+      setError(
+        classification
+          ? "Unable to record staff qualification."
+          : "Unable to assess project scope. You can review it manually."
+      );
     } finally {
       setBusy(false);
     }
@@ -89,6 +96,14 @@ export function CustomerQualification({
         <button type="button" disabled={busy} onClick={() => void assess()}>
           {busy ? "Assessing project scope…" : "Assess project scope"}
         </button>
+        <div>
+          <button type="button" disabled={busy} onClick={() => void assess("qualified")}>
+            Confirm qualified
+          </button>
+          <button type="button" disabled={busy} onClick={() => void assess("not_qualified")}>
+            Confirm unqualified
+          </button>
+        </div>
         {error && <p role="alert">{error}</p>}
       </div>
     );

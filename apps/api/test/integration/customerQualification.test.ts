@@ -167,3 +167,49 @@ it("preserves no assessment on unavailable AI, missing descriptions and malforme
   ])
     expect(() => parseQualification(invalid)).toThrow();
 });
+
+it("records a staff confirmation with the original website submission when AI is unavailable", async () => {
+  const context = await createTestEnv();
+  if (!context) throw new Error("Local database emulator required");
+  const { env, db, mf } = context;
+  try {
+    const created = (await (
+      await request(env, "/customers", {
+        workspaceId: "default",
+        displayName: "QA test",
+      })
+    ).json()) as { customer: { id: string } };
+    const path = `/customers/${created.customer.id}/qualification`;
+    const confirmation = { action: "confirm_scope", classification: "qualified" };
+    expect((await request(env, path, confirmation)).status).toBe(400);
+    const fields = JSON.stringify({ message: "A custom walnut table." });
+    await db
+      .prepare(
+        `INSERT INTO website_submissions
+      (id,workspace_id,integration_id,external_event_id,email,fields_json,raw_payload,received_at,customer_id,reconciliation_status)
+      VALUES ('submission-qa','default','site','qa','qa@example.com',?,?,?,?,'linked')`
+      )
+      .bind(fields, fields, new Date().toISOString(), created.customer.id)
+      .run();
+    expect((await request(env, path, { action: "classify" })).status).toBe(503);
+    expect((await request(env, path, confirmation)).status).toBe(200);
+    const history = await (await request(env, path)).json();
+    expect(history).toMatchObject({
+      current: {
+        model: "staff",
+        classification: "qualified",
+        source_id: "submission-qa",
+        source_type: "website_submission",
+      },
+      reviews: [
+        {
+          verdict: "correct",
+          expected_classification: "qualified",
+          reviewed_by: expect.any(String),
+        },
+      ],
+    });
+  } finally {
+    await mf.dispose();
+  }
+});

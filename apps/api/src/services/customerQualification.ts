@@ -101,6 +101,51 @@ export function parseQualification(result: unknown) {
     model: typeof response.model === "string" ? response.model.slice(0, 200) : QUALIFICATION_MODEL,
   };
 }
+export async function recordStaffQualification(
+  env: Env,
+  workspaceId: string,
+  customerId: string,
+  classification: "qualified" | "not_qualified",
+  reviewedBy: string
+) {
+  const input = await description(env, workspaceId, customerId);
+  if (!input.text.trim() || input.text.length > 16000) return false;
+  const id = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO customer_qualification_assessments (id,workspace_id,customer_id,classification,confidence,probabilities_json,model,rules_version,rules_snapshot,input_snapshot,source_type,source_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).bind(
+      id,
+      workspaceId,
+      customerId,
+      classification,
+      1,
+      "{}",
+      "staff",
+      QUALIFICATION_RULES_VERSION,
+      QUALIFICATION_RULES,
+      input.text,
+      input.sourceType,
+      input.sourceId,
+      timestamp
+    ),
+    env.DB.prepare(
+      "INSERT INTO customer_qualification_reviews (id,workspace_id,customer_id,assessment_id,verdict,expected_classification,reviewed_by,reviewed_at) VALUES (?,?,?,?,?,?,?,?)"
+    ).bind(
+      crypto.randomUUID(),
+      workspaceId,
+      customerId,
+      id,
+      "correct",
+      classification,
+      reviewedBy,
+      timestamp
+    ),
+  ]);
+  return true;
+}
+
 export async function classifyCustomer(
   env: Env,
   workspaceId: string,
