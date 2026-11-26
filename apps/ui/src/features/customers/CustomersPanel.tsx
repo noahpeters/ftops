@@ -1,9 +1,22 @@
 "use client";
+import {
+  CustomerDirectory,
+  customerSorts,
+  customerStatuses,
+  type CustomerSort,
+} from "./CustomerDirectory";
 import { CustomerQualification } from "./CustomerQualification";
-import { Button, NavigableSidePanel, Status } from "@from-trees/ui";
+import {
+  Button,
+  NavigableSidePanel,
+  Select,
+  Status,
+  tablePageSizes,
+  type TableQuery,
+} from "@from-trees/ui";
 import { CustomerNoteForm, customerTimeZone, type CustomerNoteInput } from "./CustomerNoteForm";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 import Markdown from "react-markdown";
 import stylex from "~/lib/stylex";
 import { buildUrl } from "@/lib/api";
@@ -32,6 +45,7 @@ import {
   streamCustomerFollowUp,
   type Contact,
   type CustomerDetail,
+  type CustomerPage,
   type CustomerSummary,
   type Opportunity,
 } from "./api";
@@ -42,6 +56,7 @@ const glimmer = stylex.keyframes({
 });
 
 const CUSTOMER_PAGE_SIZE = 25;
+const defaultCustomerSort = "next_follow_up_asc";
 
 type NoteUpload = {
   id: string;
@@ -52,69 +67,16 @@ type NoteUpload = {
 };
 
 const styles = stylex.create({
-  panel: { padding: "24px 32px" },
-  titleRow: { display: "flex", gap: "12px", alignItems: "center", marginBottom: "16px" },
-  toolbar: {
+  panel: { padding: { default: "24px 32px", "@media (max-width: 600px)": "16px" }, minWidth: 0 },
+  titleRow: {
     display: "flex",
-    gap: "8px",
+    justifyContent: "space-between",
     flexWrap: "wrap",
+    gap: "12px",
     alignItems: "center",
     marginBottom: "16px",
   },
-  search: { flex: "1 1 420px", minWidth: "300px" },
-  filterMenu: { position: "relative" },
-  filterSummary: {
-    border: `1px solid ${colors.border}`,
-    borderRadius: radius.sm,
-    padding: "8px 12px",
-    minWidth: "145px",
-    cursor: "pointer",
-    listStyle: "none",
-  },
-  filterOptions: {
-    position: "absolute",
-    zIndex: 10,
-    display: "grid",
-    gap: "8px",
-    minWidth: "180px",
-    padding: "12px",
-    marginTop: "4px",
-    border: `1px solid ${colors.border}`,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
-  },
-  card: {
-    border: `1px solid ${colors.border}`,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    padding: "8px",
-  },
-  scrollCard: {
-    maxHeight: "calc(100vh - 190px)",
-    overflowY: "auto",
-    "@media (max-width: 760px)": { maxHeight: "none", overflowY: "visible" },
-  },
-  list: { listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "8px" },
-  resultCount: { color: colors.textSubtle, fontSize: "13px", margin: "0 0 10px" },
-  item: {
-    width: "100%",
-    textAlign: "left",
-    padding: "8px",
-    border: `1px solid ${colors.border}`,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceAlt,
-    cursor: "pointer",
-  },
-  itemLink: {
-    display: "block",
-    width: "100%",
-    textAlign: "left",
-    border: "none",
-    backgroundColor: "transparent",
-    padding: 0,
-    color: "inherit",
-  },
-  active: { borderColor: colors.accent },
+  directoryActions: { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" },
   glimmer: {
     borderRadius: radius.sm,
     backgroundImage: `linear-gradient(90deg, ${colors.neutralBg} 25%, ${colors.surfaceStrong} 50%, ${colors.neutralBg} 75%)`,
@@ -124,24 +86,14 @@ const styles = stylex.create({
     animationIterationCount: "infinite",
     animationTimingFunction: "ease-in-out",
   },
-  listGlimmer: { height: "132px" },
   glimmerLine: { height: "14px", marginBottom: "12px" },
   glimmerLineShort: { width: "42%" },
   glimmerLineMedium: { width: "68%" },
   detailGlimmerHeader: { height: "28px", width: "46%", marginBottom: "18px" },
   detailGlimmerTabs: { height: "40px", marginBottom: "18px" },
   detailGlimmerCard: { height: "150px" },
-  loadSentinel: { height: "1px" },
   muted: { color: colors.textSubtle, fontSize: "13px" },
   error: { color: colors.errorText },
-  badge: {
-    display: "inline-block",
-    padding: "2px 7px",
-    borderRadius: "999px",
-    backgroundColor: colors.neutralBg,
-    fontSize: "12px",
-    marginRight: "6px",
-  },
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit,minmax(min(220px,100%),1fr))",
@@ -314,20 +266,42 @@ export function CustomersPanel({
   const uploadsInFlight = useRef(new Set<string>());
   const noteRefreshRequest = useRef(0);
   const latestNoteRef = useRef<HTMLElement>(null);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
+
   const listRequestRef = useRef(0);
   const followUpStreamRef = useRef<EventSource | null>(null);
-  const [rows, setRows] = useState<CustomerSummary[]>([]);
-  const [total, setTotal] = useState(0);
-  const [totalContacts, setTotalContacts] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const location = useLocation();
+  const initialStatusKey = initialStatuses.join(",");
+  const requestedSort = params.get("sort") ?? defaultCustomerSort;
+  const sort = Object.prototype.hasOwnProperty.call(customerSorts, requestedSort)
+    ? (requestedSort as CustomerSort)
+    : defaultCustomerSort;
+  const query = useMemo<TableQuery>(() => {
+    const requestedPageSize = Number(params.get("pageSize"));
+    const pageSize =
+      tablePageSizes.find((size) => size === requestedPageSize) ?? CUSTOMER_PAGE_SIZE;
+    const requestedPage = Number(params.get("page"));
+    const page =
+      Number.isSafeInteger(requestedPage * pageSize) && requestedPage > 0
+        ? Math.floor(requestedPage) || 1
+        : 1;
+    const filters: TableQuery["filters"] = {};
+    if (initialStatusKey) filters.status = { operator: "in", value: initialStatusKey.split(",") };
+    return {
+      search: (params.get("q") ?? "").slice(0, 200),
+      filters,
+      sort: null,
+      page,
+      pageSize,
+    };
+  }, [params, initialStatusKey]);
+  const [loaded, setLoaded] = useState<
+    (CustomerPage & { query: TableQuery; sort: CustomerSort; workspaceId: string }) | null
+  >(null);
   const [listLoading, setListLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [listError, setListError] = useState<string>();
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [search, setSearch] = useState("");
-  const [statuses, setStatuses] = useState<string[]>(initialStatuses);
-  const [sort, setSort] = useState("next_follow_up_asc");
   const [users, setUsers] = useState<WorkspaceUser[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [integrationId, setIntegrationId] = useState("");
@@ -359,75 +333,64 @@ export function CustomersPanel({
   const [analyzingFollowUp, setAnalyzingFollowUp] = useState(false);
   const [activeTab, setActiveTab] = useState<CustomerTab>("summary");
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const setRows = useCallback((update: (rows: CustomerSummary[]) => CustomerSummary[]) => {
+    setLoaded((page) => (page ? { ...page, items: update(page.items) } : page));
+  }, []);
+  function changeQuery(next: TableQuery, nextSort: CustomerSort = sort) {
+    const nextStatuses = customerStatuses(next);
+    if (nextStatuses.join(",") !== initialStatusKey) onStatusesChange(nextStatuses);
+    const updated = new URLSearchParams(params);
+    for (const [key, value] of [
+      ["q", next.search],
+      ["sort", nextSort === defaultCustomerSort ? "" : nextSort],
+      ["page", next.page === 1 ? "" : String(next.page)],
+      ["pageSize", next.pageSize === CUSTOMER_PAGE_SIZE ? "" : String(next.pageSize)],
+    ]) {
+      if (value) updated.set(key, value);
+      else updated.delete(key);
+    }
+    if (updated.toString() !== params.toString()) setParams(updated, { replace: true });
+  }
+  function openCustomer(row: CustomerSummary, target?: "activity" | "qualification") {
+    navigate(
+      { pathname: `/customers/${encodeURIComponent(row.id)}`, search: location.search },
+      {
+        state: { customerTarget: target },
+      }
+    );
+  }
   const refresh = useCallback(async () => {
+    const requestId = ++listRequestRef.current;
+    setListError(undefined);
     if (!workspaceId) {
-      listRequestRef.current += 1;
-      setRows([]);
-      setTotal(0);
-      setTotalContacts(0);
-      setHasMore(false);
+      setLoaded(null);
       setListLoading(false);
-      setLoadingMore(false);
       return;
     }
-    const requestId = ++listRequestRef.current;
     setListLoading(true);
-    setLoadingMore(false);
-    setHasMore(false);
-    setRows([]);
-    setTotal(0);
-    setTotalContacts(0);
-    const result = await listCustomerPage(workspaceId, {
-      search,
-      status: statuses,
-      sort,
-      limit: CUSTOMER_PAGE_SIZE,
-      offset: 0,
-    });
-    if (requestId !== listRequestRef.current) return;
-    setListLoading(false);
-    if (result.ok && result.data) {
-      setRows(result.data.items);
-      setTotal(result.data.total);
-      setTotalContacts(result.data.totalContacts);
-      setHasMore(result.data.hasMore);
-    } else setError(result.text);
-  }, [workspaceId, search, statuses, sort]);
-  const loadMore = useCallback(async () => {
-    if (!workspaceId || listLoading || loadingMore || !hasMore) return;
-    const requestId = listRequestRef.current;
-    setLoadingMore(true);
-    const result = await listCustomerPage(workspaceId, {
-      search,
-      status: statuses,
-      sort,
-      limit: CUSTOMER_PAGE_SIZE,
-      offset: rows.length,
-    });
-    if (requestId !== listRequestRef.current) return;
-    setLoadingMore(false);
-    if (result.ok && result.data) {
-      setRows((current) => [...current, ...result.data!.items]);
-      setTotal(result.data.total);
-      setTotalContacts(result.data.totalContacts);
-      setHasMore(result.data.hasMore);
-    } else setError(result.text);
-  }, [hasMore, listLoading, loadingMore, rows.length, search, sort, statuses, workspaceId]);
+    try {
+      const result = await listCustomerPage(workspaceId, {
+        search: query.search,
+        status: customerStatuses(query),
+        sort,
+        limit: query.pageSize,
+        offset: (query.page - 1) * query.pageSize,
+      });
+      if (requestId !== listRequestRef.current) return;
+      if (!result.ok || !result.data) throw new Error("Customers could not be loaded.");
+      setLoaded({ ...result.data, query, sort, workspaceId });
+    } catch {
+      if (requestId === listRequestRef.current) setListError("Customers could not be loaded.");
+    } finally {
+      if (requestId === listRequestRef.current) setListLoading(false);
+    }
+  }, [workspaceId, query, sort]);
   useEffect(() => {
     void refresh();
+    return () => {
+      listRequestRef.current += 1;
+    };
   }, [refresh]);
-  useEffect(() => {
-    const target = loadMoreRef.current;
-    if (!target || !hasMore) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) void loadMore();
-      },
-      { rootMargin: "240px" }
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [hasMore, loadMore]);
   useEffect(() => {
     if (!workspaceId) return setUsers([]);
     void listUsers(workspaceId).then((result) => {
@@ -438,7 +401,7 @@ export function CustomersPanel({
     followUpStreamRef.current?.close();
     followUpStreamRef.current = null;
     setAnalyzingFollowUp(false);
-    setActiveTab("summary");
+    setActiveTab(location.state?.customerTarget === "activity" ? "activity" : "summary");
     setActiveTaskId(null);
     setEditingCustomer(false);
     setCreatingNote(false);
@@ -463,7 +426,13 @@ export function CustomersPanel({
     return () => {
       canceled = true;
     };
-  }, [customerId]);
+  }, [customerId, location.state?.customerTarget]);
+  const loadedCustomerId = detail?.customer.id;
+  useEffect(() => {
+    if (loadedCustomerId && location.state?.customerTarget === "qualification") {
+      document.getElementById("customer-qualification")?.focus();
+    }
+  }, [loadedCustomerId, location.state?.customerTarget]);
   useEffect(() => () => followUpStreamRef.current?.close(), []);
   useEffect(() => {
     if (!creatingNote && noteReceipt) latestNoteRef.current?.scrollIntoView({ block: "start" });
@@ -479,7 +448,7 @@ export function CustomersPanel({
         setCreatingCustomer(false);
         setNewCustomerName("");
         await refresh();
-        navigate(`/customers/${r.data.customer.id}`);
+        navigate({ pathname: `/customers/${r.data.customer.id}`, search: location.search });
       } else {
         setCreateCustomerError(
           (r.data as { error?: string } | null)?.error || r.text || "Could not create customer."
@@ -782,17 +751,33 @@ export function CustomersPanel({
     <section className={stylex(styles.panel)}>
       <div className={stylex(styles.titleRow)}>
         <h2>Customers</h2>
-        <button
-          type="button"
-          disabled={!workspaceId || creatingCustomer}
-          onClick={() => {
-            setNewCustomerName("");
-            setCreateCustomerError(null);
-            setCreatingCustomer(true);
-          }}
-        >
-          Create customer
-        </button>
+        <div className={stylex(styles.directoryActions)}>
+          <Select
+            aria-label="Sort customers"
+            value={sort}
+            onChange={(event) =>
+              changeQuery({ ...query, page: 1 }, event.target.value as CustomerSort)
+            }
+          >
+            {Object.entries(customerSorts).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </Select>
+          <Button
+            icon="add"
+            variant="primary"
+            isDisabled={!workspaceId || creatingCustomer}
+            onPress={() => {
+              setNewCustomerName("");
+              setCreateCustomerError(null);
+              setCreatingCustomer(true);
+            }}
+          >
+            Create customer
+          </Button>
+        </div>
       </div>
       {creatingCustomer && (
         <RightSideEditor
@@ -832,115 +817,23 @@ export function CustomersPanel({
           </form>
         </RightSideEditor>
       )}
-      <div className={stylex(styles.toolbar)}>
-        <input
-          aria-label="Search customers"
-          className={stylex(styles.search)}
-          placeholder="Search name, email, company, phone"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <details className={stylex(styles.filterMenu)}>
-          <summary className={stylex(styles.filterSummary)}>
-            Status: {statuses.length ? statuses.join(", ") : "all"}
-          </summary>
-          <div className={stylex(styles.filterOptions)}>
-            {["lead", "active", "completed", "archived"].map((status) => (
-              <label key={status} className={stylex(styles.check)}>
-                <input
-                  type="checkbox"
-                  checked={statuses.includes(status)}
-                  onChange={(event) => {
-                    const next = event.target.checked
-                      ? [...statuses, status]
-                      : statuses.filter((value) => value !== status);
-                    setStatuses(next);
-                    onStatusesChange(next);
-                  }}
-                />
-                {status}
-              </label>
-            ))}
-          </div>
-        </details>
-        <select aria-label="Sort customers" value={sort} onChange={(e) => setSort(e.target.value)}>
-          <option value="name_asc">Name (A–Z)</option>
-          <option value="next_follow_up_asc">Next follow-up (soonest)</option>
-          <option value="last_note_desc">Last note (newest)</option>
-        </select>
-      </div>
       {error && <p className={stylex(styles.error)}>{error}</p>}
       <div>
-        <div className={stylex(styles.card, styles.scrollCard)}>
-          <p className={stylex(styles.resultCount)} aria-live="polite">
-            {listLoading
-              ? "Loading customers…"
-              : `${total} matching customer${total === 1 ? "" : "s"} · ${totalContacts} contact${totalContacts === 1 ? "" : "s"}`}
-          </p>
-          <ul className={stylex(styles.list)}>
-            {listLoading && <CustomerListGlimmer />}
-            {rows.map((row) => (
-              <li key={row.id}>
-                <div className={stylex(styles.item, row.id === customerId && styles.active)}>
-                  <button
-                    data-button-layout="card"
-                    className={stylex(styles.itemLink)}
-                    onClick={() => navigate(`/customers/${row.id}`)}
-                  >
-                    <strong>{row.display_name}</strong>
-                    <div>{row.company_name}</div>
-                    <div className={stylex(styles.muted)}>
-                      {row.primary_contact} · {row.email || formatPhoneNumber(row.phone)}
-                    </div>
-                    <span className={stylex(styles.badge)}>{row.status}</span>
-                    <span className={stylex(styles.badge)}>QBO: {row.quickbooks_sync_status}</span>
-                    <div className={stylex(styles.muted)}>
-                      {followUpLabel(row.next_follow_up_at, row.follow_up_urgency)}
-                    </div>
-                  </button>
-                  <CustomerQualification
-                    customerId={row.id}
-                    classification={row.qualification_classification}
-                    qualification={
-                      detail?.customer.id === row.id ? detail.qualification : undefined
-                    }
-                    onChange={(next) => {
-                      setDetail((current) =>
-                        current?.customer.id === next.customer.id ? next : current
-                      );
-                      setRows((current) =>
-                        current.map((item) =>
-                          item.id === next.customer.id
-                            ? {
-                                ...item,
-                                qualification_classification:
-                                  next.qualification?.current?.classification ?? null,
-                              }
-                            : item
-                        )
-                      );
-                    }}
-                  />
-                  <div className={stylex(styles.muted)}>
-                    {row.open_estimate_count} open estimates · $
-                    {Number(row.open_invoice_balance || 0).toFixed(2)} due
-                  </div>
-                  <div className={stylex(styles.muted)}>
-                    {formatBudget(row.non_lost_opportunity_total_cents || 0)} opportunity value
-                  </div>
-                </div>
-              </li>
-            ))}
-            {loadingMore && <CustomerListGlimmer count={2} />}
-          </ul>
-          <div ref={loadMoreRef} className={stylex(styles.loadSentinel)} aria-hidden="true" />
-        </div>
+        <CustomerDirectory
+          query={query}
+          page={loaded?.workspaceId === workspaceId && loaded?.sort === sort ? loaded : null}
+          loading={listLoading}
+          error={listError || (!workspaceId ? "Choose a workspace to view customers." : undefined)}
+          onChange={changeQuery}
+          onRetry={() => void refresh()}
+          onOpen={openCustomer}
+        />
         <NavigableSidePanel
           open={Boolean(customerId)}
           onOpenChange={(open) => {
             if (open || savingNote) return;
             if (creatingNote) setCreatingNote(false);
-            else navigate("/customers");
+            else navigate({ pathname: "/customers", search: location.search });
           }}
           title={creatingNote ? "Add note" : detail?.customer.display_name || "Customer"}
           description={creatingNote ? detail?.customer.display_name : undefined}
@@ -1062,27 +955,29 @@ export function CustomersPanel({
                             detail.customer.follow_up_urgency
                           )}
                     </p>
-                    <CustomerQualification
-                      key={detail.customer.id}
-                      customerId={detail.customer.id}
-                      qualification={detail.qualification}
-                      onChange={(next) => {
-                        setDetail((current) =>
-                          current?.customer.id === next.customer.id ? next : current
-                        );
-                        setRows((current) =>
-                          current.map((row) =>
-                            row.id === next.customer.id
-                              ? {
-                                  ...row,
-                                  qualification_classification:
-                                    next.qualification?.current?.classification ?? null,
-                                }
-                              : row
-                          )
-                        );
-                      }}
-                    />
+                    <div id="customer-qualification" tabIndex={-1}>
+                      <CustomerQualification
+                        key={detail.customer.id}
+                        customerId={detail.customer.id}
+                        qualification={detail.qualification}
+                        onChange={(next) => {
+                          setDetail((current) =>
+                            current?.customer.id === next.customer.id ? next : current
+                          );
+                          setRows((current) =>
+                            current.map((row) =>
+                              row.id === next.customer.id
+                                ? {
+                                    ...row,
+                                    qualification_classification:
+                                      next.qualification?.current?.classification ?? null,
+                                  }
+                                : row
+                            )
+                          );
+                        }}
+                      />
+                    </div>
                     {detail.customer.follow_up_reason && (
                       <p className={stylex(styles.muted)}>{detail.customer.follow_up_reason}</p>
                     )}
@@ -1526,19 +1421,6 @@ export function CustomersPanel({
     </section>
   );
 }
-function CustomerListGlimmer({ count = 4 }: { count?: number }) {
-  return Array.from({ length: count }, (_, index) => (
-    <li key={`customer-glimmer-${index}`} aria-hidden="true">
-      <div className={stylex(styles.item, styles.listGlimmer)}>
-        <div className={stylex(styles.glimmer, styles.glimmerLine, styles.glimmerLineMedium)} />
-        <div className={stylex(styles.glimmer, styles.glimmerLine, styles.glimmerLineShort)} />
-        <div className={stylex(styles.glimmer, styles.glimmerLine)} />
-        <div className={stylex(styles.glimmer, styles.glimmerLine, styles.glimmerLineMedium)} />
-      </div>
-    </li>
-  ));
-}
-
 function CustomerDetailGlimmer() {
   return (
     <div aria-label="Loading customer details" role="status">

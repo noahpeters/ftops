@@ -1,6 +1,14 @@
 ("use client");
 
-import { ThemeProvider } from "@from-trees/ui";
+import {
+  Icon,
+  Select,
+  TextInput,
+  ThemeProvider,
+  WorkspaceLayout,
+  type NavigationGroup,
+} from "@from-trees/ui";
+import { color, space } from "@from-trees/ui/tokens.stylex";
 
 import {
   createContext,
@@ -11,11 +19,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router";
+import { Outlet, useLocation, useNavigate, useParams } from "react-router";
 import stylex from "~/lib/stylex";
-import { colors, spacing, radius } from "./theme/tokens.stylex";
+import { colors, radius } from "./theme/tokens.stylex";
 import { buildUrl, fetchJson, fetchMe, setDebugEmailHeader } from "./lib/api";
 import { DevMigrationBanner } from "./components/DevMigrationBanner";
+import { ServerStatus } from "./components/ServerStatus";
 import { JsonView } from "./components/JsonView";
 import { DemoPanel } from "./features/demo/DemoPanel";
 import { ContextViewer } from "./features/planPreview/ContextViewer";
@@ -38,220 +47,36 @@ const EXAMPLE_URIS = ["manual://proposal/demo", "shopify://order/example", "qbo:
 
 const styles = stylex.create({
   app: {
-    minHeight: "100vh",
-    backgroundColor: colors.background,
-    color: colors.text,
-    fontFamily: '"IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif',
-  },
-  appShell: {
-    display: "grid",
-    gridTemplateColumns: "240px minmax(0, 1fr)",
-    minHeight: "100vh",
-    "@media (max-width: 760px)": {
-      gridTemplateColumns: "1fr",
-    },
-  },
-  appShellCollapsed: {
-    gridTemplateColumns: "64px minmax(0, 1fr)",
-    "@media (max-width: 760px)": {
-      gridTemplateColumns: "1fr",
-    },
-  },
-  sidebar: {
-    position: "sticky",
-    top: 0,
-    height: "100vh",
+    height: "calc(100dvh - 16px)",
     display: "flex",
     flexDirection: "column",
-    borderRight: `1px solid ${colors.border}`,
-    backgroundColor: colors.surface,
-    overflow: "hidden",
-    "@media (max-width: 760px)": {
-      position: "fixed",
-      zIndex: 30,
-      inset: "0 auto 0 0",
-      width: "min(86vw, 320px)",
-      height: "100vh",
-      borderRight: `1px solid ${colors.border}`,
-      transform: "translateX(-100%)",
-      transition: "transform 180ms ease",
-      boxShadow: "0 18px 40px rgba(47, 33, 24, 0.2)",
-    },
+    backgroundColor: color.canvas,
+    color: color.ink,
   },
-  sidebarMobileOpen: {
-    "@media (max-width: 760px)": {
-      transform: "translateX(0)",
-    },
-  },
-  mainContent: {
-    minWidth: 0,
-  },
+  workspaceBody: { flexGrow: 1, minHeight: 0, minWidth: 0 },
+  mainContent: { minWidth: 0 },
   appHeader: {
     display: "flex",
-    flexDirection: "column",
-    flexShrink: 0,
-    gap: spacing.lg,
-    padding: "24px 20px 18px",
-    borderBottom: `1px solid ${colors.border}`,
-  },
-  appHeaderCollapsed: {
-    display: "none",
-    "@media (max-width: 760px)": {
-      display: "flex",
-    },
-  },
-  desktopRailToggle: {
-    margin: "12px 12px 0",
-    minHeight: "36px",
-    border: `1px solid ${colors.border}`,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceAlt,
-    color: colors.text,
-    cursor: "pointer",
-    "@media (max-width: 760px)": {
-      display: "none",
-    },
-  },
-  mobileTopbar: {
-    display: "none",
-    "@media (max-width: 760px)": {
-      position: "sticky",
-      top: 0,
-      zIndex: 20,
-      display: "flex",
-      alignItems: "center",
-      gap: spacing.md,
-      minHeight: "56px",
-      padding: "8px 16px",
-      borderBottom: `1px solid ${colors.border}`,
-      backgroundColor: colors.surface,
-    },
-  },
-  hamburgerButton: {
-    width: "40px",
-    height: "40px",
-    border: `1px solid ${colors.border}`,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceAlt,
-    color: colors.text,
-    cursor: "pointer",
-    fontSize: "22px",
-    lineHeight: 1,
-  },
-  mobileBrand: {
-    fontWeight: 600,
-    fontSize: "18px",
-  },
-  mobileCloseRow: {
-    display: "none",
-    "@media (max-width: 760px)": {
-      display: "flex",
-      justifyContent: "flex-end",
-      padding: "12px 12px 0",
-    },
-  },
-  mobileOverlay: {
-    display: "none",
-    "@media (max-width: 760px)": {
-      position: "fixed",
-      zIndex: 25,
-      inset: 0,
-      display: "block",
-      border: 0,
-      backgroundColor: "rgba(47, 33, 24, 0.28)",
-    },
-  },
-  headerControls: {
-    display: "flex",
-    gap: "16px",
-    flexDirection: "column",
-    alignItems: "stretch",
-  },
-  workspaceSelect: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "6px",
-  },
-  devIdentity: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "6px",
-  },
-  tabs: {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-    gap: spacing.sm,
-    padding: "16px 12px",
-  },
-  tabsCollapsed: {
-    padding: "16px 8px",
     alignItems: "center",
-    "@media (max-width: 760px)": {
-      padding: "16px 12px",
-      alignItems: "stretch",
-    },
+    flexWrap: "wrap",
+    gap: space.md,
+    padding: "10px 16px",
+    backgroundColor: color.surface,
+    borderBottom: `1px solid ${color.border}`,
   },
-  logoutSection: {
-    flexShrink: 0,
-    marginTop: "auto",
-    padding: "16px 12px",
-    borderTop: `1px solid ${colors.border}`,
-  },
-  logoutSectionCollapsed: {
-    padding: "16px 8px",
+  brand: {
     display: "flex",
-    justifyContent: "center",
-    "@media (max-width: 760px)": {
-      padding: "16px 12px",
-      display: "block",
-    },
+    alignItems: "center",
+    gap: space.sm,
+    fontWeight: 650,
+    fontSize: "19px",
   },
-  tabButton: {
-    border: `1px solid ${colors.border}`,
-    backgroundColor: colors.surfaceAlt,
-    color: colors.textMuted,
-    padding: "8px 14px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "13px",
-    textDecoration: "none",
-    width: "100%",
-    boxSizing: "border-box",
-  },
-  tabButtonActive: {
-    backgroundColor: colors.accent,
-    color: colors.surface,
-    borderColor: colors.accent,
-  },
-  tabButtonCollapsed: {
-    width: "40px",
-    minWidth: "40px",
-    padding: "9px 0",
-    textAlign: "center",
-    fontWeight: 600,
-    "@media (max-width: 760px)": {
-      width: "100%",
-      padding: "8px 14px",
-      textAlign: "left",
-    },
-  },
-  tabLabelCollapsed: {
-    display: "none",
-    "@media (max-width: 760px)": {
-      display: "inline",
-    },
-  },
-  tabInitial: {
-    display: "none",
-  },
-  tabInitialVisible: {
-    display: "inline",
-    "@media (max-width: 760px)": {
-      display: "none",
-    },
+  workspaceSelect: { minWidth: 0, maxWidth: "min(260px, 100%)" },
+  logout: {
+    marginInlineStart: "auto",
+    padding: "8px 4px",
+    textDecoration: { default: "none", ":hover": "underline" },
+    color: color.ink,
   },
   panel: {
     padding: "24px 32px",
@@ -495,13 +320,6 @@ export default function App(): JSX.Element {
   const [actor, setActor] = useState<ActorInfo | null>(null);
   const [actorLoading, setActorLoading] = useState(false);
   const [userPreferences, setUserPreferences] = useState<UserPreferences>({});
-  const [railCollapsed, setRailCollapsed] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [location.pathname]);
-
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     setDebugEmailHeader(debugEmail);
@@ -531,11 +349,9 @@ export default function App(): JSX.Element {
       setActor(actorResult.data);
       const preferences = preferenceResult.ok ? (preferenceResult.data ?? {}) : {};
       setUserPreferences(preferences);
-      setRailCollapsed(preferences.left_rail_collapsed ?? false);
     } else {
       setActor(null);
       setUserPreferences({});
-      setRailCollapsed(false);
     }
     setActorLoading(false);
   }, []);
@@ -826,187 +642,103 @@ export default function App(): JSX.Element {
     updateUserPreference,
   };
 
+  const navigation: NavigationGroup[] = [];
+  if (isWorkspaceMember) {
+    navigation.push({
+      id: "operations",
+      href: "/customers",
+      label: "Operations",
+      items: [
+        { id: "customers", href: "/customers", label: "Customers", icon: "users" },
+        { id: "projects", href: "/projects", label: "Projects", icon: "folder" },
+        { id: "tasks", href: "/tasks", label: "Tasks", icon: "check" },
+      ],
+    });
+  }
+  if (isWorkspaceAdmin) {
+    navigation.push({
+      id: "administration",
+      href: "/templates",
+      label: "Administration",
+      items: [
+        { id: "templates", href: "/templates", label: "Templates", icon: "document" },
+        { id: "integrations", href: "/integrations", label: "Integrations", icon: "link" },
+        { id: "ingest", href: "/ingest", label: "Ingest", icon: "inbox" },
+        { id: "users", href: "/users", label: "Users", icon: "users" },
+      ],
+    });
+  }
+  if (isSystemAdmin) {
+    navigation.push({
+      id: "system",
+      href: "/configurator",
+      label: "System",
+      items: [
+        { id: "configurator", href: "/configurator", label: "Configurator", icon: "settings" },
+        { id: "plan-preview", href: "/plan-preview", label: "Plan Preview", icon: "document" },
+        { id: "events", href: "/events", label: "Events Viewer", icon: "history" },
+        { id: "demo", href: "/demo", label: "Demo", icon: "view" },
+        { id: "workspaces", href: "/workspaces", label: "Workspaces", icon: "folder" },
+      ],
+    });
+  }
+
   return (
     <AppContext.Provider value={appContextValue}>
-      <div className={stylex(styles.app)}>
-        <div className={stylex(styles.appShell, railCollapsed && styles.appShellCollapsed)}>
-          {mobileMenuOpen && (
-            <button
-              type="button"
-              data-button-layout="overlay"
-              className={stylex(styles.mobileOverlay)}
-              aria-label="Close navigation menu"
-              onClick={() => setMobileMenuOpen(false)}
-            />
-          )}
-          <aside
-            id="app-navigation"
-            className={stylex(styles.sidebar, mobileMenuOpen && styles.sidebarMobileOpen)}
-          >
-            <div className={stylex(styles.mobileCloseRow)}>
-              <button
-                type="button"
-                className={stylex(styles.hamburgerButton)}
-                aria-label="Close navigation menu"
-                onClick={() => setMobileMenuOpen(false)}
+      <ThemeProvider>
+        <div className={stylex(styles.app)}>
+          <header className={stylex(styles.appHeader)}>
+            <span className={stylex(styles.brand)}>
+              <Icon name="table" />
+              ftops
+            </span>
+            <div className={stylex(styles.workspaceSelect)}>
+              <Select
+                id="workspace-select"
+                aria-label="Workspace"
+                value={selectedWorkspaceId ?? ""}
+                onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+                disabled={workspaceLoading || workspaces.length === 0}
               >
-                ×
-              </button>
+                {workspaces.length === 0 && <option value="">Workspace</option>}
+                {workspaces.map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspace.name}
+                  </option>
+                ))}
+              </Select>
             </div>
-            <button
-              type="button"
-              className={stylex(styles.desktopRailToggle)}
-              aria-label={railCollapsed ? "Expand navigation" : "Minimize navigation"}
-              aria-expanded={!railCollapsed}
-              onClick={() => {
-                const next = !railCollapsed;
-                setRailCollapsed(next);
-                updateUserPreference("left_rail_collapsed", next);
-              }}
+            {import.meta.env.DEV && (
+              <TextInput
+                id="debug-email"
+                aria-label="Dev identity"
+                type="email"
+                placeholder="Dev identity"
+                value={debugEmail}
+                onChange={(event) => setDebugEmail(event.target.value)}
+              />
+            )}
+            <a className={stylex(styles.logout)} href="/cdn-cgi/access/logout">
+              Log out
+            </a>
+          </header>
+          <ServerStatus />
+          <div className={stylex(styles.workspaceBody)}>
+            <WorkspaceLayout
+              title="Navigation"
+              groups={navigation}
+              activeId={location.pathname.split("/")[1] ?? ""}
+              onNavigate={({ href }) => navigate(href)}
             >
-              {railCollapsed ? "›" : "‹ Minimize"}
-            </button>
-            <header
-              className={stylex(styles.appHeader, railCollapsed && styles.appHeaderCollapsed)}
-            >
-              <div>
-                <h1>ftops</h1>
-                <p>Operations</p>
-              </div>
-              <div className={stylex(styles.headerControls)}>
-                <div className={stylex(styles.workspaceSelect)}>
-                  <label htmlFor="workspace-select">Workspace</label>
-                  <select
-                    id="workspace-select"
-                    value={selectedWorkspaceId ?? ""}
-                    onChange={(event) => setSelectedWorkspaceId(event.target.value)}
-                    disabled={workspaceLoading}
-                  >
-                    {workspaces.map((workspace) => (
-                      <option key={workspace.id} value={workspace.id}>
-                        {workspace.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {import.meta.env.DEV && (
-                  <div className={stylex(styles.devIdentity)}>
-                    <label htmlFor="debug-email">Dev identity</label>
-                    <input
-                      id="debug-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={debugEmail}
-                      onChange={(event) => setDebugEmail(event.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-            </header>
-
-            <nav className={stylex(styles.tabs, railCollapsed && styles.tabsCollapsed)}>
-              {isSystemAdmin && (
-                <AppNavLink to="/configurator" label="Configurator" collapsed={railCollapsed} />
-              )}
-              {isSystemAdmin && (
-                <AppNavLink to="/plan-preview" label="Plan Preview" collapsed={railCollapsed} />
-              )}
-              {isSystemAdmin && (
-                <AppNavLink to="/events" label="Events Viewer" collapsed={railCollapsed} />
-              )}
-              {isSystemAdmin && <AppNavLink to="/demo" label="Demo" collapsed={railCollapsed} />}
-              {isWorkspaceAdmin && (
-                <AppNavLink to="/templates" label="Templates" collapsed={railCollapsed} />
-              )}
-              {isWorkspaceMember && (
-                <AppNavLink to="/customers" label="Customers" collapsed={railCollapsed} />
-              )}
-              {isWorkspaceMember && (
-                <AppNavLink to="/projects" label="Projects" collapsed={railCollapsed} />
-              )}
-              {isWorkspaceMember && (
-                <AppNavLink to="/tasks" label="Tasks" collapsed={railCollapsed} />
-              )}
-              {isWorkspaceAdmin && (
-                <AppNavLink to="/integrations" label="Integrations" collapsed={railCollapsed} />
-              )}
-              {isWorkspaceAdmin && (
-                <AppNavLink to="/ingest" label="Ingest" collapsed={railCollapsed} />
-              )}
-              {isSystemAdmin && (
-                <AppNavLink to="/workspaces" label="Workspaces" collapsed={railCollapsed} />
-              )}
-              {isWorkspaceAdmin && (
-                <AppNavLink to="/users" label="Users" collapsed={railCollapsed} />
-              )}
-            </nav>
-            <div
-              className={stylex(
-                styles.logoutSection,
-                railCollapsed && styles.logoutSectionCollapsed
-              )}
-            >
-              <a
-                href="/cdn-cgi/access/logout"
-                className={stylex(styles.tabButton, railCollapsed && styles.tabButtonCollapsed)}
-                title={railCollapsed ? "Log out" : undefined}
-                aria-label={railCollapsed ? "Log out" : undefined}
-              >
-                <span className={stylex(railCollapsed && styles.tabLabelCollapsed)}>Log out</span>
-                <span
-                  aria-hidden="true"
-                  className={stylex(styles.tabInitial, railCollapsed && styles.tabInitialVisible)}
-                >
-                  L
-                </span>
-              </a>
-            </div>
-          </aside>
-          <main className={stylex(styles.mainContent)}>
-            <div className={stylex(styles.mobileTopbar)}>
-              <button
-                type="button"
-                className={stylex(styles.hamburgerButton)}
-                aria-label="Open navigation menu"
-                aria-controls="app-navigation"
-                aria-expanded={mobileMenuOpen}
-                onClick={() => setMobileMenuOpen(true)}
-              >
-                ☰
-              </button>
-              <span className={stylex(styles.mobileBrand)}>ftops</span>
-            </div>
-            <DevMigrationBanner />
-            <Outlet />
-          </main>
+              <main className={stylex(styles.mainContent)}>
+                <DevMigrationBanner />
+                <Outlet />
+              </main>
+            </WorkspaceLayout>
+          </div>
         </div>
-      </div>
+      </ThemeProvider>
     </AppContext.Provider>
-  );
-}
-
-function AppNavLink({ to, label, collapsed }: { to: string; label: string; collapsed: boolean }) {
-  return (
-    <NavLink
-      className={({ isActive }) =>
-        stylex(
-          styles.tabButton,
-          collapsed && styles.tabButtonCollapsed,
-          isActive && styles.tabButtonActive
-        )
-      }
-      to={to}
-      title={collapsed ? label : undefined}
-      aria-label={collapsed ? label : undefined}
-    >
-      <span className={stylex(collapsed && styles.tabLabelCollapsed)}>{label}</span>
-      <span
-        aria-hidden="true"
-        className={stylex(styles.tabInitial, collapsed && styles.tabInitialVisible)}
-      >
-        {label.charAt(0)}
-      </span>
-    </NavLink>
   );
 }
 
@@ -1484,14 +1216,12 @@ export function CustomersRoute(): JSX.Element {
   if (actorLoading) return <section className={stylex(styles.panel)}>Loading...</section>;
   if (!isWorkspaceMember) return <NotAuthorized />;
   return (
-    <ThemeProvider>
-      <CustomersPanel
-        workspaceId={selectedWorkspaceId}
-        customerId={customerId ? decodeURIComponent(customerId) : undefined}
-        initialStatuses={userPreferences.customer_status_filters ?? ["lead", "active"]}
-        onStatusesChange={(statuses) => updateUserPreference("customer_status_filters", statuses)}
-      />
-    </ThemeProvider>
+    <CustomersPanel
+      workspaceId={selectedWorkspaceId}
+      customerId={customerId ? decodeURIComponent(customerId) : undefined}
+      initialStatuses={userPreferences.customer_status_filters ?? ["lead", "active"]}
+      onStatusesChange={(statuses) => updateUserPreference("customer_status_filters", statuses)}
+    />
   );
 }
 
