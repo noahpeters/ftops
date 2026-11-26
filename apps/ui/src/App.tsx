@@ -1,4 +1,6 @@
-"use client";
+("use client");
+
+import { ThemeProvider } from "@from-trees/ui";
 
 import {
   createContext,
@@ -1482,12 +1484,14 @@ export function CustomersRoute(): JSX.Element {
   if (actorLoading) return <section className={stylex(styles.panel)}>Loading...</section>;
   if (!isWorkspaceMember) return <NotAuthorized />;
   return (
-    <CustomersPanel
-      workspaceId={selectedWorkspaceId}
-      customerId={customerId ? decodeURIComponent(customerId) : undefined}
-      initialStatuses={userPreferences.customer_status_filters ?? ["lead", "active"]}
-      onStatusesChange={(statuses) => updateUserPreference("customer_status_filters", statuses)}
-    />
+    <ThemeProvider>
+      <CustomersPanel
+        workspaceId={selectedWorkspaceId}
+        customerId={customerId ? decodeURIComponent(customerId) : undefined}
+        initialStatuses={userPreferences.customer_status_filters ?? ["lead", "active"]}
+        onStatusesChange={(statuses) => updateUserPreference("customer_status_filters", statuses)}
+      />
+    </ThemeProvider>
   );
 }
 
