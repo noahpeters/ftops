@@ -600,6 +600,7 @@ export async function handleCustomers(
       noteId,
       occurredAt: now,
     });
+    if (url.searchParams.get("response") === "note-id") return json({ noteId }, 201);
     return json(
       await listRows(
         env,
@@ -626,7 +627,19 @@ export async function handleCustomers(
         .bind(activityId, workspaceId, customerId)
         .first();
       if (!activity) return badRequest("invalid_note_activity");
-      const storageKey = `customers/${workspaceId}/${customerId}/${activityId}/${crypto.randomUUID()}-${safeStorageName(filename)}`;
+      const uploadId = body.uploadId === undefined ? crypto.randomUUID() : string(body.uploadId);
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(uploadId))
+        return badRequest("invalid_upload_id");
+      const storageKey = `customers/${workspaceId}/${customerId}/${activityId}/${uploadId}-${safeStorageName(filename)}`;
+      if (body.uploadId !== undefined) {
+        const completed = await env.DB.prepare(
+          `SELECT 1 FROM customer_note_files
+            WHERE storage_key=? AND workspace_id=? AND customer_id=? AND activity_id=?`
+        )
+          .bind(storageKey, workspaceId, customerId, activityId)
+          .first();
+        if (completed) return json({ storageKey, completed: true });
+      }
       const uploadUrl = await signedUrl(env, storageKey, "PUT");
       if (uploadUrl) return json({ uploadUrl, storageKey });
       if (env.ALLOW_R2_FALLBACK_UPLOADS === "true") {
@@ -677,7 +690,8 @@ export async function handleCustomers(
       await env.DB.prepare(
         `INSERT INTO customer_note_files
          (id,workspace_id,customer_id,activity_id,uploaded_by_email,original_filename,content_type,size_bytes,storage_key,sha256,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(storage_key) DO NOTHING`
       )
         .bind(
           fileId,
@@ -693,10 +707,14 @@ export async function handleCustomers(
           now
         )
         .run();
-      return json(
-        await env.DB.prepare(`SELECT * FROM customer_note_files WHERE id=?`).bind(fileId).first(),
-        201
-      );
+      const file = await env.DB.prepare(
+        `SELECT * FROM customer_note_files
+          WHERE storage_key=? AND workspace_id=? AND customer_id=? AND activity_id=?`
+      )
+        .bind(storageKey, workspaceId, customerId, activityId)
+        .first<{ id: string }>();
+      if (!file) return notFound("Attachment not found");
+      return json(file, file.id === fileId ? 201 : 200);
     }
     return methodNotAllowed(["POST", "PUT"]);
   }
