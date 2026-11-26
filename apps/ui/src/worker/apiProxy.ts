@@ -64,6 +64,7 @@ const ALLOWLIST: AllowlistEntry[] = [
   { methods: new Set(["GET"]), pattern: /^\/customer-emails$/ },
   { methods: new Set(["POST"]), pattern: /^\/customer-emails\/ingestions\/[^/]+\/match$/ },
   { methods: new Set(["GET", "POST"]), pattern: /^\/customer-emails\/(?:mailboxes|forwarders)$/ },
+  { methods: new Set(["GET", "POST"]), pattern: /^\/customers\/[^/]+\/qualification$/ },
   { methods: new Set(["GET"]), pattern: /^\/customers\/[^/]+\/follow-up-stream$/ },
   { methods: new Set(["POST"]), pattern: /^\/customers\/[^/]+\/files\/(?:init|complete)$/ },
   { methods: new Set(["PUT"]), pattern: /^\/customers\/[^/]+\/files\/upload$/ },

@@ -73,6 +73,8 @@ describe("ops api proxy allowlist", () => {
     ["POST", "/api/customers"],
     ["GET", "/api/customers/customer_1"],
     ["PATCH", "/api/customers/customer_1"],
+    ["GET", "/api/customers/customer_1/qualification"],
+    ["POST", "/api/customers/customer_1/qualification"],
     ["POST", "/api/customers/customer_1/contacts"],
     ["GET", "/api/customers/customer_1/contacts/contact_1"],
     ["DELETE", "/api/customers/customer_1/contacts/contact_1"],

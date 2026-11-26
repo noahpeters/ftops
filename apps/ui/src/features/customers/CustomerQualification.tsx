@@ -67,7 +67,32 @@ export function CustomerQualification({
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, [open]);
-  if (value !== "qualified" && value !== "not_qualified") return null;
+  async function assess() {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await qualificationAction(customerId, { action: "classify" });
+      if (!result.ok || !result.data?.qualification?.current) throw new Error("No assessment");
+      onChange(result.data);
+    } catch {
+      setError("Unable to assess project scope. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (value !== "qualified" && value !== "not_qualified") {
+    // Only the customer detail includes qualification history and an assessment action.
+    if (!qualification) return null;
+    return (
+      <div className={stylex(styles.root)}>
+        {value === "unclear" && <p>Project scope is unclear.</p>}
+        <button type="button" disabled={busy} onClick={() => void assess()}>
+          {busy ? "Assessing project scope…" : "Assess project scope"}
+        </button>
+        {error && <p role="alert">{error}</p>}
+      </div>
+    );
+  }
   async function review(verdict: "correct" | "incorrect") {
     setBusy(true);
     setError("");
