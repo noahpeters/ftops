@@ -86,6 +86,7 @@ export function CustomerQualification({
             Assess project scope
           </Button>
           <MenuButton
+            label="Confirm manually"
             text="Confirm manually"
             actions={[
               {
@@ -114,6 +115,7 @@ export function CustomerQualification({
           {value === "qualified" ? "Qualified" : "Unqualified"}
         </Badge>
         <MenuButton
+          label="Review assessment"
           text="Review assessment"
           actions={[
             {

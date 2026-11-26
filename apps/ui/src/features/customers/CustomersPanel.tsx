@@ -1446,6 +1446,7 @@ export function CustomersPanel({
                           Find matches
                         </Button>
                         <MenuButton
+                          label="Sync actions"
                           text="Sync actions"
                           actions={[
                             {
