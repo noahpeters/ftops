@@ -19,8 +19,10 @@
     "ci": "npm run verify"
   },
   "dependencies": {
+    "@from-trees/ui": "file:../../vendor/from-trees-ui-0.16.2-0dc27ee.tgz",
     "@react-router/cloudflare": "^7.0.0",
-    "@stylexjs/stylex": "^0.7.0",
+    "@stylexjs/stylex": "0.19.1",
+    "luxon": "^3.7.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
@@ -30,7 +32,8 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240320.0",
     "@react-router/dev": "^7.0.0",
-    "@stylexjs/unplugin": "^0.17.5",
+    "@stylexjs/unplugin": "0.19.1",
+    "@types/luxon": "^3.7.1",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
@@ -42,6 +45,6 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "prettier": "^3.3.3",
     "typescript": "5.5.4",
-    "vite": "^5.4.0"
+    "vite": "7.3.1"
   }
 }

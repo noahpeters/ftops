@@ -1,5 +1,5 @@
 /* StyleX entrypoint */
-button,
+button:not([data-react-aria-pressable]),
 input[type="button"],
 input[type="submit"],
 input[type="reset"] {
@@ -10,12 +10,12 @@ input[type="reset"] {
   font: inherit;
 }
 
-button {
+button:not([data-react-aria-pressable]) {
   border: 1px solid grey;
   box-shadow: 1px 1px 1px brown;
 }
 
-button:not([role="tab"]):not([data-button-layout]) {
+button:not([role="tab"]):not([data-button-layout]):not([data-react-aria-pressable]) {
   box-sizing: border-box;
   height: 36px;
   padding: 6px 10px;

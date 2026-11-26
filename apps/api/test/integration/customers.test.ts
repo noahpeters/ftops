@@ -438,46 +438,70 @@ describe("customers API", () => {
       body: JSON.stringify({ workspaceId: "default", displayName: "Files Customer" }),
     });
     const customer = (await created.json()) as { customer: { id: string } };
-    await request(env, `/customers/${customer.customer.id}/activities`, {
+    const customerPath = `/customers/${customer.customer.id}`;
+    const createdNote = await request(env, `${customerPath}/activities?response=note-id`, {
       method: "POST",
       body: JSON.stringify({ subject: "Selections", body: "Current selections attached." }),
     });
-    const detail = (await (await request(env, `/customers/${customer.customer.id}`)).json()) as {
-      activities: Array<{ id: string }>;
-    };
-    const activityId = detail.activities[0].id;
-
-    const initialized = await request(env, `/customers/${customer.customer.id}/files/init`, {
+    expect(createdNote.status).toBe(201);
+    const { noteId: activityId } = (await createdNote.json()) as { noteId: string };
+    expect(activityId).toEqual(expect.any(String));
+    const laterNote = await request(env, `${customerPath}/activities?response=note-id`, {
       method: "POST",
-      body: JSON.stringify({
-        activityId,
-        filename: "selections.pdf",
-        contentType: "application/pdf",
-        sizeBytes: 7,
-      }),
+      body: JSON.stringify({ subject: "Unrelated note" }),
     });
+    expect(laterNote.status).toBe(201);
+    const { noteId: laterNoteId } = (await laterNote.json()) as { noteId: string };
+    expect(laterNoteId).not.toBe(activityId);
+
+    const uploadId = crypto.randomUUID();
+    const metadata = {
+      activityId,
+      filename: "selections.pdf",
+      contentType: "application/pdf",
+      sizeBytes: 7,
+    };
+    const init = () =>
+      request(env, `${customerPath}/files/init`, {
+        method: "POST",
+        body: JSON.stringify({ ...metadata, uploadId }),
+      });
+    const initialized = await init();
     expect(initialized.status).toBe(200);
     const upload = (await initialized.json()) as { uploadUrl: string; storageKey: string };
-    expect(upload.storageKey).toContain(`/customers/`.slice(1));
+    const resumed = await init();
+    expect(resumed.status).toBe(200);
+    expect(await resumed.json()).toMatchObject({ storageKey: upload.storageKey });
+    expect(upload.storageKey).toContain(uploadId);
     const uploaded = await request(env, upload.uploadUrl, {
       method: "PUT",
       headers: { "content-type": "application/pdf" },
       body: "pdfdata",
     });
     expect(uploaded.status).toBe(200);
-    const completed = await request(env, `/customers/${customer.customer.id}/files/complete`, {
-      method: "POST",
-      body: JSON.stringify({
-        activityId,
-        storageKey: upload.storageKey,
-        filename: "selections.pdf",
-        contentType: "application/pdf",
-        sizeBytes: 7,
-      }),
-    });
+    const complete = () =>
+      request(env, `${customerPath}/files/complete`, {
+        method: "POST",
+        body: JSON.stringify({ ...metadata, storageKey: upload.storageKey }),
+      });
+    const completed = await complete();
     expect(completed.status).toBe(201);
     const file = (await completed.json()) as { id: string; deprecated_at: string | null };
     expect(file.deprecated_at).toBeNull();
+    const repeated = await complete();
+    expect(repeated.status).toBe(200);
+    expect(await repeated.json()).toMatchObject({ id: file.id, activity_id: activityId });
+    const afterComplete = await init();
+    expect(await afterComplete.json()).toEqual({ storageKey: upload.storageKey, completed: true });
+    const detail = (await (await request(env, customerPath)).json()) as {
+      activities: { id: string; activity_type: string }[];
+      files: unknown[];
+    };
+    const notes = detail.activities.filter((activity) => activity.activity_type === "note");
+    expect(notes.map((note) => note.id).sort()).toEqual([activityId, laterNoteId].sort());
+    expect(detail.files).toEqual([
+      expect.objectContaining({ id: file.id, activity_id: activityId }),
+    ]);
 
     const deprecated = await request(env, `/customer-files/${file.id}`, {
       method: "PATCH",

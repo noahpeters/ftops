@@ -1,5 +1,7 @@
 "use client";
 import { CustomerQualification } from "./CustomerQualification";
+import { Button, NavigableSidePanel, Status } from "@from-trees/ui";
+import { CustomerNoteForm, customerTimeZone, type CustomerNoteInput } from "./CustomerNoteForm";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import Markdown from "react-markdown";
@@ -41,6 +43,14 @@ const glimmer = stylex.keyframes({
 
 const CUSTOMER_PAGE_SIZE = 25;
 
+type NoteUpload = {
+  id: string;
+  file: File;
+  noteId: string;
+  customerId: string;
+  failed: boolean;
+};
+
 const styles = stylex.create({
   panel: { padding: "24px 32px" },
   titleRow: { display: "flex", gap: "12px", alignItems: "center", marginBottom: "16px" },
@@ -72,12 +82,6 @@ const styles = stylex.create({
     border: `1px solid ${colors.border}`,
     borderRadius: radius.sm,
     backgroundColor: colors.surface,
-  },
-  layout: {
-    display: "grid",
-    gridTemplateColumns: "minmax(280px, 35%) 1fr",
-    gap: "16px",
-    alignItems: "stretch",
   },
   card: {
     border: `1px solid ${colors.border}`,
@@ -140,7 +144,7 @@ const styles = stylex.create({
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+    gridTemplateColumns: "repeat(auto-fit,minmax(min(220px,100%),1fr))",
     gap: "12px",
     padding: "8px",
   },
@@ -162,6 +166,7 @@ const styles = stylex.create({
   contact: { borderBottom: `1px solid ${colors.border}`, padding: "10px 0" },
   textarea: { minHeight: "120px", resize: "vertical", font: "inherit" },
   note: { borderBottom: `1px solid ${colors.border}`, padding: "10px 0" },
+  noteFeedback: { display: "grid", gap: "8px", marginBlock: "8px", overflowWrap: "anywhere" },
   markdown: { lineHeight: 1.5 },
   detailTabs: {
     display: "flex",
@@ -303,7 +308,12 @@ export function CustomersPanel({
   onStatusesChange: (statuses: string[]) => void;
 }) {
   const navigate = useNavigate();
-  const detailCardRef = useRef<HTMLDivElement>(null);
+  const selectedCustomer = useRef(customerId);
+  selectedCustomer.current = customerId;
+  const noteSaveInFlight = useRef(false);
+  const uploadsInFlight = useRef(new Set<string>());
+  const noteRefreshRequest = useRef(0);
+  const latestNoteRef = useRef<HTMLElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const listRequestRef = useRef(0);
   const followUpStreamRef = useRef<EventSource | null>(null);
@@ -332,7 +342,14 @@ export function CustomersPanel({
   const [createCustomerError, setCreateCustomerError] = useState<string | null>(null);
   const [customerHasChanges, setCustomerHasChanges] = useState(false);
   const [creatingNote, setCreatingNote] = useState(false);
-  const [noteCanSave, setNoteCanSave] = useState(false);
+  const [noteSaveError, setNoteSaveError] = useState<string | null>(null);
+  const [noteUploads, setNoteUploads] = useState<NoteUpload[]>([]);
+  const [noteReceipt, setNoteReceipt] = useState<{
+    noteId: string;
+    followUpAt?: string;
+    description?: string;
+    assignee?: string;
+  } | null>(null);
   const [creatingOpportunity, setCreatingOpportunity] = useState(false);
   const [opportunityCanSave, setOpportunityCanSave] = useState(false);
   const [editingOpportunityId, setEditingOpportunityId] = useState<string | null>(null);
@@ -429,7 +446,6 @@ export function CustomersPanel({
     setEditingContactId(null);
     setCreatingOpportunity(false);
     setEditingOpportunityId(null);
-    detailCardRef.current?.scrollTo({ top: 0 });
     if (!customerId) {
       setDetail(null);
       setDetailLoading(false);
@@ -449,6 +465,9 @@ export function CustomersPanel({
     };
   }, [customerId]);
   useEffect(() => () => followUpStreamRef.current?.close(), []);
+  useEffect(() => {
+    if (!creatingNote && noteReceipt) latestNoteRef.current?.scrollIntoView({ block: "start" });
+  }, [creatingNote, noteReceipt]);
   async function create() {
     const displayName = newCustomerName.trim();
     if (!workspaceId || !displayName || savingCustomer) return;
@@ -483,95 +502,199 @@ export function CustomersPanel({
       await refresh();
     } else setError((r.data as { error?: string } | null)?.error || r.text);
   }
-  async function saveNote(input: {
-    subject: string;
-    body: string;
-    followUpAt?: string;
-    followUpDescription?: string;
-    followUpAssignedTo?: string;
-    files: File[];
-  }) {
-    if (!customerId) return;
-    setSavingNote(true);
-    setError(null);
-    const { files, ...noteInput } = input;
-    const r = await addNote(customerId, noteInput);
-    if (r.ok) {
-      const note = r.data?.find((activity) => activity.activity_type === "note");
-      if (!note && files.length) {
-        setError("The note was saved, but its attachments could not be linked.");
-      } else if (note) {
-        followUpStreamRef.current?.close();
-        setAnalyzingFollowUp(true);
-        followUpStreamRef.current = streamCustomerFollowUp(customerId, note.id, (update) => {
-          setDetail((current) =>
-            current ? { ...current, customer: { ...current.customer, ...update } } : current
-          );
-          setRows((current) =>
-            current.map((row) => (row.id === customerId ? { ...row, ...update } : row))
-          );
-          setAnalyzingFollowUp(false);
-          followUpStreamRef.current = null;
+  async function uploadAttachment(upload: NoteUpload) {
+    if (uploadsInFlight.current.has(upload.id)) return;
+    uploadsInFlight.current.add(upload.id);
+    setNoteUploads((entries) =>
+      entries.map((entry) => (entry.id === upload.id ? { ...entry, failed: false } : entry))
+    );
+    try {
+      const metadata = {
+        activityId: upload.noteId,
+        filename: upload.file.name,
+        contentType: upload.file.type || "application/octet-stream",
+        sizeBytes: upload.file.size,
+      };
+      const initialized = await initCustomerFileUpload(upload.customerId, {
+        ...metadata,
+        uploadId: upload.id,
+      });
+      if (!initialized.ok || !initialized.data) throw new Error("Could not start file upload.");
+      if ("uploadUrl" in initialized.data) {
+        const url = initialized.data.uploadUrl.startsWith("/")
+          ? buildUrl(initialized.data.uploadUrl)
+          : initialized.data.uploadUrl;
+        const uploaded = await fetch(url, {
+          method: "PUT",
+          headers: { "Content-Type": metadata.contentType },
+          body: upload.file,
         });
-        for (const file of files) {
-          const uploaded = await uploadNoteFile(note.id, file, false);
-          if (!uploaded) break;
-        }
+        if (!uploaded.ok) throw new Error("File upload failed.");
+        const completed = await completeCustomerFileUpload(upload.customerId, {
+          ...metadata,
+          storageKey: initialized.data.storageKey,
+        });
+        if (!completed.ok) throw new Error("Could not finalize file upload.");
       }
-      await reloadDetail();
-      setCreatingNote(false);
-    } else {
-      setError(r.text);
+      setNoteUploads((entries) => entries.filter((entry) => entry.id !== upload.id));
+    } catch {
+      setNoteUploads((entries) =>
+        entries.map((entry) => (entry.id === upload.id ? { ...entry, failed: true } : entry))
+      );
+    } finally {
+      uploadsInFlight.current.delete(upload.id);
     }
-    setSavingNote(false);
+  }
+  async function refreshAfterNote(id: string) {
+    const request = ++noteRefreshRequest.current;
+    try {
+      const loaded = await getCustomer(id);
+      const updated = loaded.data;
+      if (request !== noteRefreshRequest.current) return;
+      if (!loaded.ok || !updated) throw new Error("Could not refresh customer.");
+      setDetail((current) => (current?.customer.id === id ? updated : current));
+    } catch {
+      if (request === noteRefreshRequest.current && selectedCustomer.current === id)
+        setError("The note was saved. Could not refresh the customer.");
+    }
+  }
+  function observeNoteFollowUp(customerId: string, noteId: string) {
+    if (selectedCustomer.current !== customerId) return;
+    followUpStreamRef.current?.close();
+    setAnalyzingFollowUp(true);
+    try {
+      const source = streamCustomerFollowUp(customerId, noteId, (update) => {
+        setDetail((current) =>
+          current?.customer.id === customerId
+            ? { ...current, customer: { ...current.customer, ...update } }
+            : current
+        );
+        setRows((current) =>
+          current.map((row) => (row.id === customerId ? { ...row, ...update } : row))
+        );
+        finish();
+      });
+      function finish() {
+        source.close();
+        if (followUpStreamRef.current !== source) return;
+        followUpStreamRef.current = null;
+        setAnalyzingFollowUp(false);
+      }
+      source.onerror = finish;
+      followUpStreamRef.current = source;
+    } catch {
+      followUpStreamRef.current = null;
+      setAnalyzingFollowUp(false);
+    }
+  }
+  async function saveNote({ files, ...noteInput }: CustomerNoteInput) {
+    if (!customerId || noteSaveInFlight.current) return;
+    noteSaveInFlight.current = true;
+    setSavingNote(true);
+    setNoteSaveError(null);
+    setError(null);
+    try {
+      const result = await addNote(customerId, noteInput).catch(() => null);
+      const noteId = result?.data?.noteId;
+      if (!result?.ok || !noteId) {
+        if (selectedCustomer.current === customerId)
+          setNoteSaveError("Could not save the note. Try again.");
+        return;
+      }
+      setDetail((current) =>
+        current?.customer.id === customerId
+          ? {
+              ...current,
+              activities: [
+                {
+                  id: noteId,
+                  activity_type: "note",
+                  subject: noteInput.subject,
+                  body: noteInput.body,
+                  occurred_at: new Date().toISOString(),
+                  created_by: null,
+                },
+                ...current.activities.filter((activity) => activity.id !== noteId),
+              ],
+            }
+          : current
+      );
+      setNoteReceipt({
+        noteId,
+        followUpAt: noteInput.followUpAt,
+        description: noteInput.followUpDescription,
+        assignee: noteInput.followUpAssignedTo,
+      });
+      observeNoteFollowUp(customerId, noteId);
+      const uploads = files.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        noteId,
+        customerId,
+        failed: false,
+      }));
+      if (uploads.length) {
+        setNoteUploads((current) => [...current, ...uploads]);
+        for (const upload of uploads) await uploadAttachment(upload);
+      }
+      await refreshAfterNote(customerId);
+      if (selectedCustomer.current === customerId) setCreatingNote(false);
+    } finally {
+      noteSaveInFlight.current = false;
+      setSavingNote(false);
+    }
   }
   function openNoteEditor() {
-    setNoteCanSave(false);
+    setNoteSaveError(null);
+    setNoteReceipt(null);
     setCreatingNote(true);
   }
-  async function uploadNoteFile(activityId: string, file: File, reload = true) {
-    if (!customerId) return false;
-    if (file.size > 100 * 1024 * 1024) {
-      setError("Files must be 100 MB or smaller.");
-      return false;
-    }
-    setError(null);
-    const contentType = file.type || "application/octet-stream";
-    const initialized = await initCustomerFileUpload(customerId, {
-      activityId,
-      filename: file.name,
-      contentType,
-      sizeBytes: file.size,
-    });
-    if (!initialized.ok || !initialized.data) {
-      setError(initialized.text || "Could not start file upload.");
-      return false;
-    }
-    const uploadUrl = initialized.data.uploadUrl.startsWith("/")
-      ? buildUrl(initialized.data.uploadUrl)
-      : initialized.data.uploadUrl;
-    const uploaded = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": contentType },
-      body: file,
-    });
-    if (!uploaded.ok) {
-      setError("File upload failed.");
-      return false;
-    }
-    const completed = await completeCustomerFileUpload(customerId, {
-      activityId,
-      storageKey: initialized.data.storageKey,
-      filename: file.name,
-      contentType,
-      sizeBytes: file.size,
-    });
-    if (!completed.ok) {
-      setError(completed.text || "Could not finalize file upload.");
-      return false;
-    }
-    if (reload) await reloadDetail();
-    return true;
+  async function retryAttachment(upload: NoteUpload) {
+    await uploadAttachment(upload);
+    await refreshAfterNote(upload.customerId);
+  }
+  function noteFeedback(noteId: string) {
+    const uploads = noteUploads.filter(
+      (upload) => upload.noteId === noteId && upload.customerId === customerId
+    );
+    const receipt = noteReceipt?.noteId === noteId ? noteReceipt : null;
+    if (!receipt && uploads.length === 0) return null;
+    return (
+      <div className={stylex(styles.noteFeedback)}>
+        {receipt && uploads.length === 0 && (
+          <Status tone="success">
+            {receipt.followUpAt ? "Note saved and follow-up scheduled." : "Note saved."}
+          </Status>
+        )}
+        {receipt?.followUpAt && (
+          <div className={stylex(styles.muted)}>
+            {receipt.description} · {formatDateTime(receipt.followUpAt)} ·{" "}
+            {users.find((user) => user.user_id === receipt.assignee)?.name || "Unassigned"}
+          </div>
+        )}
+        {uploads.map((upload) => (
+          <div key={upload.id} className={stylex(styles.noteFeedback)}>
+            <div id={`note-attachment-${upload.id}`}>
+              <Status tone={upload.failed ? "warning" : "neutral"}>
+                {upload.failed
+                  ? `Note saved. ${upload.file.name} could not be uploaded.`
+                  : `Uploading ${upload.file.name}…`}
+              </Status>
+            </div>
+            {upload.failed && (
+              <div>
+                <Button
+                  aria-describedby={`note-attachment-${upload.id}`}
+                  onPress={() => void retryAttachment(upload)}
+                >
+                  Retry attachment
+                </Button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
   }
   async function toggleFileDeprecated(fileId: string, deprecated: boolean) {
     const result = await setCustomerFileDeprecated(fileId, deprecated);
@@ -747,7 +870,7 @@ export function CustomersPanel({
         </select>
       </div>
       {error && <p className={stylex(styles.error)}>{error}</p>}
-      <div className={stylex(styles.layout)}>
+      <div>
         <div className={stylex(styles.card, styles.scrollCard)}>
           <p className={stylex(styles.resultCount)} aria-live="polite">
             {listLoading
@@ -812,14 +935,59 @@ export function CustomersPanel({
           </ul>
           <div ref={loadMoreRef} className={stylex(styles.loadSentinel)} aria-hidden="true" />
         </div>
-        <div ref={detailCardRef} className={stylex(styles.card, styles.scrollCard)}>
-          {detailLoading ? (
+        <NavigableSidePanel
+          open={Boolean(customerId)}
+          onOpenChange={(open) => {
+            if (open || savingNote) return;
+            if (creatingNote) setCreatingNote(false);
+            else navigate("/customers");
+          }}
+          title={creatingNote ? "Add note" : detail?.customer.display_name || "Customer"}
+          description={creatingNote ? detail?.customer.display_name : undefined}
+          pageKey={creatingNote ? "add-note" : "customer"}
+          dismissible={!savingNote}
+          back={
+            creatingNote && !savingNote
+              ? {
+                  label: activeTab === "summary" ? "Back to Summary" : "Back to Activity",
+                  onPress: () => setCreatingNote(false),
+                }
+              : undefined
+          }
+          footer={
+            creatingNote ? (
+              <>
+                <Button isDisabled={savingNote} onPress={() => setCreatingNote(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  form="customer-note-editor-form"
+                  variant="primary"
+                  icon="save"
+                  busy={savingNote}
+                >
+                  {savingNote ? "Saving note…" : "Save note"}
+                </Button>
+              </>
+            ) : undefined
+          }
+        >
+          {creatingNote && detail ? (
+            <CustomerNoteForm
+              id="customer-note-editor-form"
+              onSave={saveNote}
+              saving={savingNote}
+              users={users}
+              saveError={noteSaveError}
+            />
+          ) : detailLoading ? (
             <CustomerDetailGlimmer />
           ) : !detail ? (
             <p className={stylex(styles.muted)}>Select a customer.</p>
           ) : (
             <>
-              <h3>{detail.customer.display_name}</h3>
+              {error && <Status tone="danger">{error}</Status>}
               <div
                 className={stylex(styles.detailTabs)}
                 role="tablist"
@@ -1208,14 +1376,26 @@ export function CustomersPanel({
                   )}
                   <div className={stylex(styles.actions)}>
                     <h4>Recent notes</h4>
-                    {!creatingNote && <button onClick={openNoteEditor}>Add note</button>}
+                    <Button variant="primary" icon="add" onPress={openNoteEditor}>
+                      Add note
+                    </Button>
                   </div>
                   {!detail.activities.some((activity) => activity.activity_type === "note") && (
                     <p className={stylex(styles.muted)}>No notes yet.</p>
                   )}
-                  {recentCustomerNotes(detail.activities).map((activity) => (
-                    <article key={activity.id} className={stylex(styles.note)}>
+                  {recentCustomerNotes(
+                    detail.activities,
+                    noteUploads
+                      .filter((upload) => upload.customerId === customerId)
+                      .map((upload) => upload.noteId)
+                  ).map((activity) => (
+                    <article
+                      key={activity.id}
+                      ref={activity.id === noteReceipt?.noteId ? latestNoteRef : undefined}
+                      className={stylex(styles.note)}
+                    >
                       <b>{activity.subject}</b>
+                      {noteFeedback(activity.id)}
                       <div className={stylex(styles.muted)}>
                         {activity.created_by ? `by ${activity.created_by} · ` : ""}
                         {formatDateTime(activity.occurred_at)}
@@ -1225,6 +1405,11 @@ export function CustomersPanel({
                           <Markdown>{activity.body}</Markdown>
                         </div>
                       )}
+                      {detail.files
+                        .filter((file) => file.activity_id === activity.id && !file.deprecated_at)
+                        .map((file) => (
+                          <CustomerFileLink key={file.id} file={file} compact />
+                        ))}
                     </article>
                   ))}
                 </div>
@@ -1264,10 +1449,16 @@ export function CustomersPanel({
               {activeTab === "activity" && (
                 <div className={stylex(styles.section)} role="tabpanel">
                   <h4>Activity</h4>
-                  {!creatingNote && <button onClick={openNoteEditor}>Add note</button>}
+                  <Button variant="primary" icon="add" onPress={openNoteEditor}>
+                    Add note
+                  </Button>
                   {detail.activities.map((activity) => (
-                    <article key={activity.id} className={stylex(styles.note)}>
-                      <b>{activity.subject}</b>{" "}
+                    <article
+                      key={activity.id}
+                      ref={activity.id === noteReceipt?.noteId ? latestNoteRef : undefined}
+                      className={stylex(styles.note)}
+                    >
+                      <b>{activity.subject}</b> {noteFeedback(activity.id)}
                       <span className={stylex(styles.muted)}>
                         {activity.created_by ? `by ${activity.created_by} · ` : ""}
                         {activity.occurred_at}
@@ -1328,28 +1519,9 @@ export function CustomersPanel({
                   </div>
                 </>
               )}
-              {creatingNote && (
-                <RightSideEditor
-                  eyebrow="Note"
-                  title={`Add note for ${detail.customer.display_name}`}
-                  formId="customer-note-editor-form"
-                  saveDisabled={!noteCanSave}
-                  saving={savingNote}
-                  saveLabel="Save note"
-                  onCancel={() => setCreatingNote(false)}
-                >
-                  <NoteForm
-                    id="customer-note-editor-form"
-                    onSave={saveNote}
-                    saving={savingNote}
-                    users={users}
-                    onCanSaveChange={setNoteCanSave}
-                  />
-                </RightSideEditor>
-              )}
             </>
           )}
-        </div>
+        </NavigableSidePanel>
       </div>
     </section>
   );
@@ -1616,154 +1788,6 @@ function CustomerForm({
     </form>
   );
 }
-function NoteForm({
-  id,
-  onSave,
-  saving,
-  users,
-  onCanSaveChange,
-}: {
-  id: string;
-  onSave: (input: {
-    subject: string;
-    body: string;
-    followUpAt?: string;
-    followUpDescription?: string;
-    followUpAssignedTo?: string;
-    files: File[];
-  }) => Promise<void>;
-  saving: boolean;
-  users: WorkspaceUser[];
-  onCanSaveChange: (canSave: boolean) => void;
-}) {
-  const [subject, setSubject] = useState("Note");
-  const [body, setBody] = useState("");
-  const [scheduleFollowUp, setScheduleFollowUp] = useState(false);
-  const [followUpAt, setFollowUpAt] = useState("");
-  const [followUpDescription, setFollowUpDescription] = useState("");
-  const [followUpAssignedTo, setFollowUpAssignedTo] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const canSave =
-    Boolean(subject.trim()) &&
-    Boolean(body.trim()) &&
-    (!scheduleFollowUp || (Boolean(followUpAt) && Boolean(followUpDescription.trim())));
-  useEffect(() => onCanSaveChange(canSave), [canSave, onCanSaveChange]);
-  return (
-    <form
-      id={id}
-      className={stylex(styles.form)}
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (body.trim())
-          onSave({
-            subject,
-            body,
-            followUpAt: scheduleFollowUp ? new Date(followUpAt).toISOString() : undefined,
-            followUpDescription: scheduleFollowUp ? followUpDescription : undefined,
-            followUpAssignedTo: scheduleFollowUp ? followUpAssignedTo || undefined : undefined,
-            files,
-          });
-      }}
-    >
-      <input
-        aria-label="Note title"
-        placeholder="Note title"
-        required
-        value={subject}
-        onChange={(e) => setSubject(e.target.value)}
-      />
-      <textarea
-        aria-label="Note body"
-        className={stylex(styles.textarea)}
-        placeholder="Write a note… Markdown is supported."
-        required
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-      />
-      <span className={stylex(styles.muted)}>
-        Markdown supported: headings, lists, links, bold, italic, and code.
-      </span>
-      <label className={stylex(styles.check)}>
-        <input
-          type="checkbox"
-          checked={scheduleFollowUp}
-          onChange={(e) => setScheduleFollowUp(e.target.checked)}
-        />
-        Schedule follow-up
-      </label>
-      {scheduleFollowUp && (
-        <>
-          <label>
-            Follow-up date and time
-            <input
-              aria-label="Follow-up date and time"
-              type="datetime-local"
-              required
-              value={followUpAt}
-              onChange={(e) => setFollowUpAt(e.target.value)}
-            />
-          </label>
-          <label>
-            Follow-up description
-            <input
-              aria-label="Follow-up description"
-              required
-              placeholder="Call about the proposal"
-              value={followUpDescription}
-              onChange={(e) => setFollowUpDescription(e.target.value)}
-            />
-          </label>
-          <label>
-            Assign to
-            <select
-              aria-label="Follow-up assignee"
-              value={followUpAssignedTo}
-              onChange={(event) => setFollowUpAssignedTo(event.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {users.map((user) => (
-                <option key={user.user_id} value={user.user_id}>
-                  {user.name} ({user.email})
-                </option>
-              ))}
-            </select>
-          </label>
-        </>
-      )}
-      <label>
-        Attach files
-        <input
-          aria-label="Attach files"
-          type="file"
-          multiple
-          disabled={saving}
-          onChange={(event) => {
-            const selected = Array.from(event.target.files || []);
-            setFiles((current) => [...current, ...selected]);
-            event.target.value = "";
-          }}
-        />
-      </label>
-      {files.map((file, index) => (
-        <div key={`${file.name}-${file.size}-${index}`} className={stylex(styles.actions)}>
-          <span>
-            {file.name} · {formatFileSize(file.size)}
-          </span>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => setFiles((current) => current.filter((_, item) => item !== index))}
-          >
-            Remove
-          </button>
-        </div>
-      ))}
-      <span className={stylex(styles.muted)}>
-        Files are uploaded when the note is saved. Maximum 100 MB per file.
-      </span>
-    </form>
-  );
-}
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("en-US", {
     month: "short",
@@ -1771,15 +1795,19 @@ function formatDateTime(value: string) {
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: customerTimeZone,
+    timeZoneName: "short",
   });
 }
-function recentCustomerNotes(activities: CustomerDetail["activities"]) {
+function recentCustomerNotes(activities: CustomerDetail["activities"], pendingNoteIds: string[]) {
   const notes = activities.filter((activity) => activity.activity_type === "note");
   const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const recentCount = notes.filter(
     (activity) => new Date(activity.occurred_at).getTime() >= oneWeekAgo
   ).length;
-  return notes.slice(0, Math.max(3, recentCount));
+  return notes.filter(
+    (note, index) => index < Math.max(3, recentCount) || pendingNoteIds.includes(note.id)
+  );
 }
 function followUpLabel(
   value: string | null,

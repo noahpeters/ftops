@@ -252,11 +252,14 @@ export function addAddress(id: string, input: Record<string, unknown>) {
   });
 }
 export function addNote(id: string, input: Record<string, unknown>) {
-  return fetchJson<CustomerActivity[]>(buildUrl(`/customers/${id}/activities`), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
+  return fetchJson<{ noteId: string }>(
+    buildUrl(`/customers/${id}/activities`, { response: "note-id" }),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }
+  );
 }
 export function reviewEmailNoteCandidate(candidateId: string, action: "apply" | "dismiss") {
   return fetchJson<{ applied?: boolean; dismissed?: boolean; activityId?: string }>(
@@ -281,16 +284,21 @@ export function streamCustomerFollowUp(
 }
 export function initCustomerFileUpload(
   customerId: string,
-  input: { activityId: string; filename: string; contentType: string; sizeBytes: number }
+  input: {
+    activityId: string;
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+    uploadId: string;
+  }
 ) {
-  return fetchJson<{ uploadUrl: string; storageKey: string }>(
-    buildUrl(`/customers/${customerId}/files/init`),
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    }
-  );
+  return fetchJson<
+    { uploadUrl: string; storageKey: string } | { completed: true; storageKey: string }
+  >(buildUrl(`/customers/${customerId}/files/init`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
 }
 export function completeCustomerFileUpload(
   customerId: string,
