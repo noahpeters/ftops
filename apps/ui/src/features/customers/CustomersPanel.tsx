@@ -7,24 +7,35 @@ import {
 } from "./CustomerDirectory";
 import { CustomerQualification } from "./CustomerQualification";
 import {
+  Badge,
   Button,
+  Dialog,
+  List,
+  MenuButton,
   NavigableSidePanel,
+  Panel,
+  Section,
+  SegmentedControl,
+  Shimmer,
+  SidePanel,
   Select,
   Status,
+  Switch,
+  TextArea,
+  TextInput,
   tablePageSizes,
   type TableQuery,
 } from "@from-trees/ui";
 import { CustomerNoteForm, customerTimeZone, type CustomerNoteInput } from "./CustomerNoteForm";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import Markdown from "react-markdown";
 import stylex from "~/lib/stylex";
 import { buildUrl } from "@/lib/api";
 import { listUsers, type WorkspaceUser } from "../users/api";
 import { TaskEditorDrawer } from "../tasks/TaskDetailDrawer";
-import { RightSideEditor } from "../../components/RightSideEditor";
 import { formatPhoneNumber } from "../../lib/formatPhoneNumber";
-import { colors, radius } from "../../theme/tokens.stylex";
+import { color, metrics, space } from "@from-trees/ui/tokens.stylex";
 import {
   addContact,
   addNote,
@@ -50,11 +61,6 @@ import {
   type Opportunity,
 } from "./api";
 
-const glimmer = stylex.keyframes({
-  "0%": { backgroundPosition: "200% 0" },
-  "100%": { backgroundPosition: "-200% 0" },
-});
-
 const CUSTOMER_PAGE_SIZE = 25;
 const defaultCustomerSort = "next_follow_up_asc";
 
@@ -77,128 +83,47 @@ const styles = stylex.create({
     marginBottom: "16px",
   },
   directoryActions: { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" },
-  glimmer: {
-    borderRadius: radius.sm,
-    backgroundImage: `linear-gradient(90deg, ${colors.neutralBg} 25%, ${colors.surfaceStrong} 50%, ${colors.neutralBg} 75%)`,
-    backgroundSize: "200% 100%",
-    animationName: glimmer,
-    animationDuration: "1.4s",
-    animationIterationCount: "infinite",
-    animationTimingFunction: "ease-in-out",
-  },
-  glimmerLine: { height: "14px", marginBottom: "12px" },
-  glimmerLineShort: { width: "42%" },
-  glimmerLineMedium: { width: "68%" },
-  detailGlimmerHeader: { height: "28px", width: "46%", marginBottom: "18px" },
-  detailGlimmerTabs: { height: "40px", marginBottom: "18px" },
-  detailGlimmerCard: { height: "150px" },
-  muted: { color: colors.textSubtle, fontSize: "13px" },
-  error: { color: colors.errorText },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(min(220px,100%),1fr))",
-    gap: "12px",
-    padding: "8px",
-  },
-  section: { borderTop: `1px solid ${colors.border}`, paddingTop: "12px", marginTop: "16px" },
-  table: { width: "100%", borderCollapse: "collapse" },
-  cell: { padding: "7px", borderBottom: `1px solid ${colors.border}`, textAlign: "left" },
-  actions: { display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" },
-  editorDangerZone: {
-    marginTop: "auto",
-    paddingTop: "16px",
-    borderTop: `1px solid ${colors.border}`,
-  },
-  dangerButton: {
-    borderColor: colors.errorText,
-    color: colors.errorText,
-  },
-  form: { display: "grid", gap: "8px", padding: "12px 0" },
-  check: { display: "flex", gap: "6px", alignItems: "center" },
-  contact: { borderBottom: `1px solid ${colors.border}`, padding: "10px 0" },
-  textarea: { minHeight: "120px", resize: "vertical", font: "inherit" },
-  note: { borderBottom: `1px solid ${colors.border}`, padding: "10px 0" },
-  noteFeedback: { display: "grid", gap: "8px", marginBlock: "8px", overflowWrap: "anywhere" },
-  markdown: { lineHeight: 1.5 },
-  detailTabs: {
+  panelStack: { display: "grid", gap: space.lg, minWidth: 0 },
+  muted: { color: color.muted, fontSize: metrics.small, margin: 0 },
+  actions: { display: "flex", gap: space.sm, flexWrap: "wrap", alignItems: "center" },
+  form: { display: "grid", gap: space.md },
+  record: { display: "grid", gap: space.sm, minWidth: 0, overflowWrap: "anywhere" },
+  recordHeader: {
     display: "flex",
-    gap: "6px",
-    flexWrap: "wrap",
-    padding: "10px 0 0",
-    borderBottom: `1px solid ${colors.border}`,
-    "@media (max-width: 760px)": {
-      display: "none",
-    },
-  },
-  mobileTabPicker: {
-    display: "none",
-    "@media (max-width: 760px)": {
-      display: "grid",
-      gap: "6px",
-      padding: "10px 0 4px",
-    },
-  },
-  mobileTabSelect: {
-    width: "100%",
-    minHeight: "44px",
-    boxSizing: "border-box",
-    border: `1px solid ${colors.border}`,
-    borderRadius: radius.sm,
-    padding: "8px 10px",
-    backgroundColor: colors.surfaceAlt,
-    color: colors.text,
-    font: "inherit",
-  },
-  detailTab: {
-    border: `1px solid ${colors.border}`,
-    borderRadius: `${radius.sm} ${radius.sm} 0 0`,
-    padding: "6px 8px 8px",
-    color: colors.textMuted,
-    cursor: "pointer",
-  },
-  detailTabActive: {
-    color: colors.text,
-    borderBottom: "none",
-    boxShadow: "none",
-    marginBottom: "-1px",
-    padding: "8px 10px",
-    backgroundColor: colors.surface,
-    fontWeight: 600,
-  },
-  tabBadge: {
-    display: "inline-flex",
+    justifyContent: "space-between",
     alignItems: "center",
-    justifyContent: "center",
-    minWidth: "20px",
-    height: "20px",
-    marginLeft: "6px",
-    padding: "0 6px",
-    borderRadius: "999px",
-    backgroundColor: colors.neutralBg,
-    color: colors.neutralText,
-    fontSize: "11px",
-    fontWeight: 600,
+    flexWrap: "wrap",
+    gap: space.sm,
+    minWidth: 0,
+    overflowWrap: "anywhere",
   },
-  summaryCard: {
-    border: `1px solid ${colors.border}`,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceAlt,
-    padding: "8px",
+  facts: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(min(130px,100%),1fr))",
+    gap: space.md,
+    margin: 0,
+    fontSize: metrics.small,
   },
+  factValue: { margin: 0, marginTop: space.xs, overflowWrap: "anywhere" },
+  phoneLink: { color: color.accent, textDecoration: "underline" },
+  markdown: { lineHeight: 1.5, overflowWrap: "anywhere" },
+  noteFeedback: { display: "grid", gap: space.sm, overflowWrap: "anywhere" },
+  detailTabs: { display: { default: "block", "@media (max-width: 760px)": "none" } },
+  mobileTabPicker: { display: { default: "none", "@media (max-width: 760px)": "block" } },
   attachmentLink: {
     display: "grid",
     gap: "6px",
     justifyItems: "start",
-    color: colors.text,
+    color: color.ink,
     textDecoration: "none",
     minWidth: 0,
   },
   attachmentPreview: {
     display: "block",
     overflow: "hidden",
-    border: `1px solid ${colors.border}`,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceStrong,
+    border: `1px solid ${color.border}`,
+    borderRadius: metrics.radius,
+    backgroundColor: color.subtle,
   },
   imagePreview: {
     width: "100%",
@@ -307,6 +232,7 @@ export function CustomersPanel({
   const [integrationId, setIntegrationId] = useState("");
   const [matches, setMatches] = useState<Array<{ id: string; displayName: string }>>([]);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const [creatingContact, setCreatingContact] = useState(false);
   const [contactCanSave, setContactCanSave] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(false);
@@ -407,6 +333,7 @@ export function CustomersPanel({
     setCreatingNote(false);
     setCreatingContact(false);
     setEditingContactId(null);
+    setConfirmArchive(false);
     setCreatingOpportunity(false);
     setEditingOpportunityId(null);
     if (!customerId) {
@@ -461,15 +388,24 @@ export function CustomersPanel({
     }
   }
   async function saveCustomer(input: CustomerInput) {
-    if (!customerId) return;
+    if (!customerId || savingEditor) return;
     setSavingEditor(true);
-    const r = await updateCustomer(customerId, input);
-    setSavingEditor(false);
-    if (r.ok && r.data) {
-      setDetail(r.data);
-      setEditingCustomer(false);
-      await refresh();
-    } else setError((r.data as { error?: string } | null)?.error || r.text);
+    setError(null);
+    try {
+      const r = await updateCustomer(customerId, input);
+      if (r.ok && r.data) {
+        setDetail(r.data);
+        setEditingCustomer(false);
+        await refresh();
+      } else
+        setError(
+          (r.data as { error?: string } | null)?.error || r.text || "Could not save the customer."
+        );
+    } catch {
+      setError("Could not save the customer.");
+    } finally {
+      setSavingEditor(false);
+    }
   }
   async function uploadAttachment(upload: NoteUpload) {
     if (uploadsInFlight.current.has(upload.id)) return;
@@ -686,35 +622,55 @@ export function CustomersPanel({
     if (action === "apply") await refresh();
   }
   async function saveOpportunity(input: OpportunityInput, opportunityId?: string) {
-    if (!customerId) return;
+    if (!customerId || savingEditor) return;
     setSavingEditor(true);
-    const payload = { ...input, budgetCents: Math.round(input.budget * 100) };
-    const r = opportunityId
-      ? await updateOpportunity(customerId, opportunityId, payload)
-      : await addOpportunity(customerId, payload);
-    setSavingEditor(false);
-    if (r.ok && r.data) {
-      setDetail(r.data);
-      setCreatingOpportunity(false);
-      setEditingOpportunityId(null);
-    } else setError((r.data as { error?: string } | null)?.error || r.text);
+    setError(null);
+    try {
+      const payload = { ...input, budgetCents: Math.round(input.budget * 100) };
+      const r = opportunityId
+        ? await updateOpportunity(customerId, opportunityId, payload)
+        : await addOpportunity(customerId, payload);
+      if (r.ok && r.data) {
+        setDetail(r.data);
+        setCreatingOpportunity(false);
+        setEditingOpportunityId(null);
+      } else
+        setError(
+          (r.data as { error?: string } | null)?.error ||
+            r.text ||
+            "Could not save the opportunity."
+        );
+    } catch {
+      setError("Could not save the opportunity.");
+    } finally {
+      setSavingEditor(false);
+    }
   }
   async function saveContact(input: ContactInput, contactId?: string) {
-    if (!customerId) return;
+    if (!customerId || savingEditor) return;
     setSavingEditor(true);
-    const r = contactId
-      ? await updateContact(customerId, contactId, input)
-      : await addContact(customerId, input);
-    setSavingEditor(false);
-    if (r.ok && r.data) {
-      setDetail(r.data);
-      setEditingContactId(null);
-      setCreatingContact(false);
-      await refresh();
-    } else setError((r.data as { error?: string } | null)?.error || r.text);
+    setError(null);
+    try {
+      const r = contactId
+        ? await updateContact(customerId, contactId, input)
+        : await addContact(customerId, input);
+      if (r.ok && r.data) {
+        setDetail(r.data);
+        setEditingContactId(null);
+        setCreatingContact(false);
+        await refresh();
+      } else
+        setError(
+          (r.data as { error?: string } | null)?.error || r.text || "Could not save the contact."
+        );
+    } catch {
+      setError("Could not save the contact.");
+    } finally {
+      setSavingEditor(false);
+    }
   }
   async function removeContact(contact: Contact): Promise<boolean> {
-    if (!customerId || !confirm(`Archive ${contact.display_name}?`)) return false;
+    if (!customerId) return false;
     const r = await archiveContact(customerId, contact.id);
     if (!r.ok) {
       setError(r.text);
@@ -741,12 +697,195 @@ export function CustomersPanel({
   const editingOpportunity = detail?.opportunities.find(
     (opportunity) => opportunity.id === editingOpportunityId
   );
-  const openTaskCount =
-    detail?.tasks.filter((task) => task.status !== "done" && task.status !== "canceled").length ??
-    0;
-  const nonLostOpportunityCount =
-    detail?.opportunities.filter((opportunity) => opportunity.status !== "lost").length ?? 0;
-  const currentFileCount = detail?.files.filter((file) => !file.deprecated_at).length ?? 0;
+  const currentFiles = detail?.files.filter((file) => !file.deprecated_at) ?? [];
+  const deprecatedFiles = detail?.files.filter((file) => file.deprecated_at) ?? [];
+  const primaryContact = detail?.contacts.find((contact) => contact.is_primary);
+  const tabCounts: Partial<Record<CustomerTab, number>> = {
+    tasks: detail?.tasks.filter((task) => task.status !== "done" && task.status !== "canceled")
+      .length,
+    opportunities: detail?.opportunities.filter((opportunity) => opportunity.status !== "lost")
+      .length,
+    files: currentFiles.length,
+  };
+  const tabOptions = CUSTOMER_TABS.map(({ id, label }) => ({
+    value: id,
+    label: tabCounts[id] === undefined ? label : `${label} (${tabCounts[id]})`,
+  }));
+  const sectionLabel = CUSTOMER_TABS.find(({ id }) => id === activeTab)?.label ?? "Summary";
+  const recentNotes = recentCustomerNotes(
+    detail?.activities ?? [],
+    noteUploads.filter((upload) => upload.customerId === customerId).map((upload) => upload.noteId)
+  );
+
+  function renderActivity(activity: CustomerDetail["activities"][number]) {
+    const attachments = currentFiles.filter((file) => file.activity_id === activity.id);
+    return (
+      <article
+        key={activity.id}
+        className={stylex(styles.record)}
+        ref={activity.id === noteReceipt?.noteId ? latestNoteRef : undefined}
+      >
+        <strong>{activity.subject}</strong>
+        {noteFeedback(activity.id)}
+        <span className={stylex(styles.muted)}>
+          {activity.created_by ? `by ${activity.created_by} · ` : ""}
+          {formatDateTime(activity.occurred_at)}
+        </span>
+        {activity.body && (
+          <div className={stylex(styles.markdown)}>
+            <Markdown>{activity.body}</Markdown>
+          </div>
+        )}
+        {attachments.length > 0 && (
+          <div className={stylex(styles.actions)}>
+            {attachments.map((file) => (
+              <CustomerFileLink key={file.id} file={file} compact />
+            ))}
+          </div>
+        )}
+      </article>
+    );
+  }
+
+  let editor:
+    | {
+        key: string;
+        title: string;
+        formId: string;
+        label: string;
+        busy: boolean;
+        disabled?: boolean;
+        cancel: () => void;
+        content: ReactNode;
+      }
+    | undefined;
+  if (detail && creatingNote) {
+    editor = {
+      key: "note",
+      title: "Add note",
+      formId: "customer-note-editor-form",
+      label: "Save note",
+      busy: savingNote,
+      cancel: () => setCreatingNote(false),
+      content: (
+        <CustomerNoteForm
+          id="customer-note-editor-form"
+          onSave={saveNote}
+          saving={savingNote}
+          users={users}
+          saveError={noteSaveError}
+        />
+      ),
+    };
+  } else if (detail && editingCustomer) {
+    editor = {
+      key: "customer",
+      title: `Edit ${detail.customer.display_name}`,
+      formId: "customer-editor-form",
+      label: "Save customer",
+      busy: savingEditor,
+      disabled: !customerHasChanges,
+      cancel: () => setEditingCustomer(false),
+      content: (
+        <CustomerForm
+          id="customer-editor-form"
+          customer={detail.customer}
+          onSave={saveCustomer}
+          onDirtyChange={setCustomerHasChanges}
+        />
+      ),
+    };
+  } else if (detail && (creatingContact || editingContact)) {
+    const cancel = () => {
+      setConfirmArchive(false);
+      setCreatingContact(false);
+      setEditingContactId(null);
+    };
+    editor = {
+      key: "contact",
+      title: editingContact ? `Edit ${editingContact.display_name}` : "Add contact",
+      formId: "customer-contact-editor-form",
+      label: editingContact ? "Save contact" : "Add contact",
+      busy: savingEditor,
+      disabled: !contactCanSave,
+      cancel,
+      content: (
+        <>
+          <ContactForm
+            id="customer-contact-editor-form"
+            contact={editingContact}
+            onSave={(input) => saveContact(input, editingContact?.id)}
+            onCanSaveChange={setContactCanSave}
+          />
+          {editingContact && editingContact.status !== "archived" && (
+            <div>
+              <Button
+                variant="danger"
+                isDisabled={savingEditor}
+                onPress={() => setConfirmArchive(true)}
+              >
+                Archive contact
+              </Button>
+              <Dialog
+                title="Archive contact?"
+                open={confirmArchive}
+                dismissible={!savingEditor}
+                onOpenChange={setConfirmArchive}
+                footer={
+                  <>
+                    <Button isDisabled={savingEditor} onPress={() => setConfirmArchive(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="danger"
+                      busy={savingEditor}
+                      onPress={async () => {
+                        setSavingEditor(true);
+                        try {
+                          if (await removeContact(editingContact)) cancel();
+                          else setConfirmArchive(false);
+                        } catch {
+                          setError("Could not archive the contact.");
+                          setConfirmArchive(false);
+                        } finally {
+                          setSavingEditor(false);
+                        }
+                      }}
+                    >
+                      Archive contact
+                    </Button>
+                  </>
+                }
+              >
+                <p>Archive {editingContact.display_name}?</p>
+              </Dialog>
+            </div>
+          )}
+        </>
+      ),
+    };
+  } else if (detail && (creatingOpportunity || editingOpportunity)) {
+    editor = {
+      key: "opportunity",
+      title: editingOpportunity ? "Edit opportunity" : "Add opportunity",
+      formId: "customer-opportunity-editor-form",
+      label: editingOpportunity ? "Save opportunity" : "Add opportunity",
+      busy: savingEditor,
+      disabled: !opportunityCanSave,
+      cancel: () => {
+        setCreatingOpportunity(false);
+        setEditingOpportunityId(null);
+      },
+      content: (
+        <OpportunityForm
+          id="customer-opportunity-editor-form"
+          opportunity={editingOpportunity}
+          onSave={(input) => saveOpportunity(input, editingOpportunity?.id)}
+          onCanSaveChange={setOpportunityCanSave}
+        />
+      ),
+    };
+  }
   return (
     <section className={stylex(styles.panel)}>
       <div className={stylex(styles.titleRow)}>
@@ -780,14 +919,29 @@ export function CustomersPanel({
         </div>
       </div>
       {creatingCustomer && (
-        <RightSideEditor
-          eyebrow="Customer"
+        <SidePanel
           title="Create customer"
-          formId="customer-create-form"
-          saveLabel="Create customer"
-          saveDisabled={!workspaceId || !newCustomerName.trim()}
-          saving={savingCustomer}
-          onCancel={() => setCreatingCustomer(false)}
+          open
+          dismissible={!savingCustomer}
+          onOpenChange={(open) => {
+            if (!open) setCreatingCustomer(false);
+          }}
+          footer={
+            <>
+              <Button isDisabled={savingCustomer} onPress={() => setCreatingCustomer(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                form="customer-create-form"
+                variant="primary"
+                busy={savingCustomer}
+                isDisabled={!workspaceId || !newCustomerName.trim()}
+              >
+                Create customer
+              </Button>
+            </>
+          }
         >
           <form
             id="customer-create-form"
@@ -797,27 +951,20 @@ export function CustomersPanel({
               void create();
             }}
           >
-            <label>
-              Customer display name
-              <input
-                name="displayName"
-                type="text"
-                required
-                autoFocus
-                disabled={savingCustomer}
-                value={newCustomerName}
-                onChange={(event) => setNewCustomerName(event.target.value)}
-              />
-            </label>
-            {createCustomerError && (
-              <p className={stylex(styles.error)} role="alert">
-                {createCustomerError}
-              </p>
-            )}
+            <TextInput
+              label="Customer display name"
+              name="displayName"
+              required
+              autoFocus
+              disabled={savingCustomer}
+              value={newCustomerName}
+              onChange={(event) => setNewCustomerName(event.target.value)}
+            />
+            {createCustomerError && <Status tone="danger">{createCustomerError}</Status>}
           </form>
-        </RightSideEditor>
+        </SidePanel>
       )}
-      {error && <p className={stylex(styles.error)}>{error}</p>}
+      {error && !customerId && <Status tone="danger">{error}</Status>}
       <div>
         <CustomerDirectory
           query={query}
@@ -831,289 +978,509 @@ export function CustomersPanel({
         <NavigableSidePanel
           open={Boolean(customerId)}
           onOpenChange={(open) => {
-            if (open || savingNote) return;
-            if (creatingNote) setCreatingNote(false);
+            if (open || editor?.busy) return;
+            if (editor) editor.cancel();
             else navigate({ pathname: "/customers", search: location.search });
           }}
-          title={creatingNote ? "Add note" : detail?.customer.display_name || "Customer"}
-          description={creatingNote ? detail?.customer.display_name : undefined}
-          pageKey={creatingNote ? "add-note" : "customer"}
-          dismissible={!savingNote}
+          title={editor?.title ?? detail?.customer.display_name ?? "Customer"}
+          description={editor ? detail?.customer.display_name : undefined}
+          pageKey={editor?.key ?? "details"}
+          dismissible={!editor?.busy}
           back={
-            creatingNote && !savingNote
-              ? {
-                  label: activeTab === "summary" ? "Back to Summary" : "Back to Activity",
-                  onPress: () => setCreatingNote(false),
-                }
+            editor && !editor.busy
+              ? { label: `Back to ${sectionLabel}`, onPress: editor.cancel }
               : undefined
           }
           footer={
-            creatingNote ? (
+            editor ? (
               <>
-                <Button isDisabled={savingNote} onPress={() => setCreatingNote(false)}>
+                <Button isDisabled={editor.busy} onPress={editor.cancel}>
                   Cancel
                 </Button>
                 <Button
                   type="submit"
-                  form="customer-note-editor-form"
-                  variant="primary"
+                  form={editor.formId}
                   icon="save"
-                  busy={savingNote}
+                  variant="primary"
+                  busy={editor.busy}
+                  isDisabled={editor.disabled}
                 >
-                  {savingNote ? "Saving note…" : "Save note"}
+                  {editor.busy ? "Saving…" : editor.label}
                 </Button>
               </>
             ) : undefined
           }
         >
-          {creatingNote && detail ? (
-            <CustomerNoteForm
-              id="customer-note-editor-form"
-              onSave={saveNote}
-              saving={savingNote}
-              users={users}
-              saveError={noteSaveError}
-            />
+          {editor ? (
+            <div className={stylex(styles.panelStack)}>
+              {error && !creatingNote && <Status tone="danger">{error}</Status>}
+              {editor.content}
+            </div>
           ) : detailLoading ? (
             <CustomerDetailGlimmer />
           ) : !detail ? (
-            <p className={stylex(styles.muted)}>Select a customer.</p>
+            <Status tone={error ? "danger" : "neutral"}>{error || "Select a customer."}</Status>
           ) : (
             <>
-              {error && <Status tone="danger">{error}</Status>}
-              <div
-                className={stylex(styles.detailTabs)}
-                role="tablist"
-                aria-label="Customer details"
-              >
-                {CUSTOMER_TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeTab === tab.id}
-                    className={stylex(
-                      styles.detailTab,
-                      activeTab === tab.id && styles.detailTabActive
-                    )}
-                    onClick={() => setActiveTab(tab.id)}
+              <div className={stylex(styles.panelStack)}>
+                {error && <Status tone="danger">{error}</Status>}
+                <div className={stylex(styles.detailTabs)}>
+                  <SegmentedControl
+                    label="Customer sections"
+                    value={activeTab}
+                    onChange={(value) => setActiveTab(value as CustomerTab)}
+                    options={tabOptions}
+                  />
+                </div>
+                <div className={stylex(styles.mobileTabPicker)}>
+                  <Select
+                    label="Customer section"
+                    value={activeTab}
+                    onChange={(event) => setActiveTab(event.target.value as CustomerTab)}
                   >
-                    {tab.label}
-                    {tab.id === "tasks" && (
-                      <span className={stylex(styles.tabBadge)}>{openTaskCount}</span>
-                    )}
-                    {tab.id === "opportunities" && (
-                      <span className={stylex(styles.tabBadge)}>{nonLostOpportunityCount}</span>
-                    )}
-                    {tab.id === "files" && (
-                      <span className={stylex(styles.tabBadge)}>{currentFileCount}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-              <label className={stylex(styles.mobileTabPicker)}>
-                <span className={stylex(styles.muted)}>Customer section</span>
-                <select
-                  className={stylex(styles.mobileTabSelect)}
-                  value={activeTab}
-                  onChange={(event) => setActiveTab(event.target.value as CustomerTab)}
-                >
-                  {CUSTOMER_TABS.map((tab) => (
-                    <option key={tab.id} value={tab.id}>
-                      {tab.label}
-                      {tab.id === "tasks" ? ` (${openTaskCount})` : ""}
-                      {tab.id === "opportunities" ? ` (${nonLostOpportunityCount})` : ""}
-                      {tab.id === "files" ? ` (${currentFileCount})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {activeTab === "summary" && (
-                <div className={stylex(styles.grid)} role="tabpanel">
-                  <div>
-                    <div className={stylex(styles.actions)}>
-                      <b>Customer</b>
-                      {!editingCustomer && (
-                        <button
-                          onClick={() => {
+                    {tabOptions.map(({ value, label }) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                {activeTab === "summary" && (
+                  <>
+                    <Panel
+                      title="Customer"
+                      actions={
+                        <Button
+                          icon="edit"
+                          onPress={() => {
+                            setError(null);
                             setCustomerHasChanges(false);
                             setEditingCustomer(true);
                           }}
                         >
                           Edit customer
-                        </button>
-                      )}
-                    </div>
-                    <p>Name: {detail.customer.display_name}</p>
-                    <p>Status: {detail.customer.status}</p>
-                    <p>Lead source: {detail.customer.lead_source || "—"}</p>
-                    <p>
-                      {analyzingFollowUp
-                        ? "Analyzing follow-up…"
-                        : followUpLabel(
-                            detail.customer.next_follow_up_at,
-                            detail.customer.follow_up_urgency
-                          )}
-                    </p>
-                    <div id="customer-qualification" tabIndex={-1}>
-                      <CustomerQualification
-                        key={detail.customer.id}
-                        customerId={detail.customer.id}
-                        qualification={detail.qualification}
-                        onChange={(next) => {
-                          setDetail((current) =>
-                            current?.customer.id === next.customer.id ? next : current
-                          );
-                          setRows((current) =>
-                            current.map((row) =>
-                              row.id === next.customer.id
-                                ? {
-                                    ...row,
-                                    qualification_classification:
-                                      next.qualification?.current?.classification ?? null,
-                                  }
-                                : row
-                            )
-                          );
-                        }}
-                      />
-                    </div>
-                    {detail.customer.follow_up_reason && (
-                      <p className={stylex(styles.muted)}>{detail.customer.follow_up_reason}</p>
-                    )}
-                  </div>
-                  <div className={stylex(styles.summaryCard)}>
-                    <b>Primary contact</b>
-                    {detail.contacts.find((contact) => contact.is_primary) ? (
-                      <>
-                        <p>{detail.contacts.find((contact) => contact.is_primary)?.display_name}</p>
-                        <p className={stylex(styles.muted)}>
-                          {detail.contacts.find((contact) => contact.is_primary)?.email ||
-                            "No email"}{" "}
-                          ·{" "}
-                          <PhoneLink
-                            phone={detail.contacts.find((contact) => contact.is_primary)?.phone}
-                          />
-                        </p>
-                      </>
-                    ) : (
-                      <p className={stylex(styles.muted)}>No primary contact.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-              {activeTab === "contacts" && (
-                <div className={stylex(styles.section)} role="tabpanel">
-                  <h4>Contacts</h4>
-                  {!creatingContact && !editingContactId && (
-                    <button
-                      onClick={() => {
-                        setContactCanSave(false);
-                        setCreatingContact(true);
-                      }}
+                        </Button>
+                      }
                     >
-                      Add contact
-                    </button>
-                  )}
-                  {detail.contacts.map((contact) => (
-                    <div key={contact.id} className={stylex(styles.contact)}>
-                      <b>{contact.display_name}</b>
-                      {contact.is_primary ? " · Primary" : ""}
+                      <dl className={stylex(styles.facts)}>
+                        <div>
+                          <dt>Status</dt>
+                          <dd className={stylex(styles.factValue)}>
+                            <Badge>{readableLabel(detail.customer.status)}</Badge>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Lead source</dt>
+                          <dd className={stylex(styles.factValue)}>
+                            {detail.customer.lead_source || "—"}
+                          </dd>
+                        </div>
+                      </dl>
                       <div>
-                        {contact.role || "Contact"} · {contact.status}
+                        <Status
+                          tone={
+                            detail.customer.follow_up_urgency === "overdue" ? "warning" : "neutral"
+                          }
+                        >
+                          {analyzingFollowUp
+                            ? "Analyzing follow-up…"
+                            : followUpLabel(
+                                detail.customer.next_follow_up_at,
+                                detail.customer.follow_up_urgency
+                              )}
+                        </Status>
+                        {detail.customer.follow_up_reason && (
+                          <p className={stylex(styles.muted)}>{detail.customer.follow_up_reason}</p>
+                        )}
                       </div>
-                      <div>
-                        Marketing email:{" "}
-                        {contact.marketing_email_permission === "allowed"
-                          ? "Allowed"
-                          : contact.marketing_email_permission === "not_allowed"
-                            ? "Not allowed"
-                            : "Unknown"}
-                      </div>
-                      <div>
-                        {contact.email || "No email"} · <PhoneLink phone={contact.phone} />
-                      </div>
-                      <div className={stylex(styles.actions)}>
-                        <button
-                          onClick={() => {
+                    </Panel>
+                    <Panel title="Primary contact">
+                      {primaryContact ? (
+                        <div>
+                          <strong>{primaryContact.display_name}</strong>
+                          <div className={stylex(styles.muted)}>
+                            {primaryContact.email || "No email"} ·{" "}
+                            <PhoneLink phone={primaryContact.phone} />
+                          </div>
+                        </div>
+                      ) : (
+                        <EmptyCustomerSection>No primary contact.</EmptyCustomerSection>
+                      )}
+                    </Panel>
+                    <div id="customer-qualification" tabIndex={-1}>
+                      <Panel title="Qualification">
+                        <CustomerQualification
+                          key={detail.customer.id}
+                          customerId={detail.customer.id}
+                          qualification={detail.qualification}
+                          onChange={(next) => {
+                            setDetail((current) =>
+                              current?.customer.id === next.customer.id ? next : current
+                            );
+                            setRows((current) =>
+                              current.map((row) =>
+                                row.id === next.customer.id
+                                  ? {
+                                      ...row,
+                                      qualification_classification:
+                                        next.qualification?.current?.classification ?? null,
+                                    }
+                                  : row
+                              )
+                            );
+                          }}
+                        />
+                      </Panel>
+                    </div>
+                    {!!detail.emailNoteCandidates?.length && (
+                      <Panel
+                        title="Email note suggestions"
+                        actions={<Badge>{detail.emailNoteCandidates.length}</Badge>}
+                      >
+                        <p className={stylex(styles.muted)}>
+                          Review information from forwarded emails before adding it to Notes.
+                        </p>
+                        {detail.emailNoteCandidates.map((candidate) => (
+                          <article key={candidate.id} className={stylex(styles.record)}>
+                            <strong>{candidate.proposed_subject}</strong>
+                            <div className={stylex(styles.muted)}>
+                              {candidate.category === "email_summary"
+                                ? "Complete email summary"
+                                : candidate.category}
+                              {" · "}
+                              {Math.round(candidate.confidence * 100)}% confidence
+                              {candidate.original_sender_email
+                                ? ` · from ${candidate.original_sender_name || candidate.original_sender_email}`
+                                : ""}
+                              {candidate.attachment_count
+                                ? ` · ${candidate.attachment_count} ${candidate.attachment_count === 1 ? "attachment" : "attachments"}`
+                                : ""}
+                              {candidate.email_sent_at
+                                ? ` · sent ${formatDateTime(candidate.email_sent_at)}`
+                                : ""}
+                            </div>
+                            <div className={stylex(styles.markdown)}>
+                              <Markdown>{candidate.proposed_body}</Markdown>
+                            </div>
+                            {candidate.evidence && (
+                              <p className={stylex(styles.muted)}>Evidence: {candidate.evidence}</p>
+                            )}
+                            <div className={stylex(styles.actions)}>
+                              <Button
+                                isDisabled={reviewingEmailCandidateId === candidate.id}
+                                onPress={() => void reviewEmailCandidate(candidate.id, "apply")}
+                              >
+                                Apply to notes
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                isDisabled={reviewingEmailCandidateId === candidate.id}
+                                onPress={() => void reviewEmailCandidate(candidate.id, "dismiss")}
+                              >
+                                Dismiss
+                              </Button>
+                            </div>
+                          </article>
+                        ))}
+                      </Panel>
+                    )}
+                    <Panel
+                      title="Recent notes"
+                      actions={
+                        <Button variant="primary" icon="add" onPress={openNoteEditor}>
+                          Add note
+                        </Button>
+                      }
+                    >
+                      {recentNotes.length ? (
+                        recentNotes.map(renderActivity)
+                      ) : (
+                        <EmptyCustomerSection>No notes yet.</EmptyCustomerSection>
+                      )}
+                    </Panel>
+                  </>
+                )}
+                {activeTab === "contacts" && (
+                  <>
+                    <Panel
+                      title="Contacts"
+                      actions={
+                        <Button
+                          variant="primary"
+                          icon="add"
+                          onPress={() => {
+                            setError(null);
                             setContactCanSave(false);
-                            setEditingContactId(contact.id);
+                            setCreatingContact(true);
                           }}
                         >
-                          Edit
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {activeTab === "opportunities" && (
-                <div className={stylex(styles.section)} role="tabpanel">
-                  <h4>Opportunities</h4>
-                  {!creatingOpportunity && !editingOpportunityId && (
-                    <button
-                      onClick={() => {
-                        setOpportunityCanSave(false);
-                        setCreatingOpportunity(true);
-                      }}
+                          Add contact
+                        </Button>
+                      }
                     >
-                      Add opportunity
-                    </button>
-                  )}
-                  {detail.opportunities.map((opportunity) => (
-                    <article key={opportunity.id} className={stylex(styles.contact)}>
-                      <b>{opportunity.description}</b>
-                      <div>
-                        {opportunity.opportunity_type} · {opportunity.status} ·{" "}
-                        {formatBudget(opportunity.budget_cents)}
-                      </div>
-                      <button
-                        onClick={() => {
+                      {detail.contacts.length === 0 && (
+                        <EmptyCustomerSection>No contacts yet.</EmptyCustomerSection>
+                      )}
+                      {detail.contacts.map((contact) => (
+                        <article key={contact.id} className={stylex(styles.record)}>
+                          <div className={stylex(styles.recordHeader)}>
+                            <strong>{contact.display_name}</strong>
+                            <Button
+                              variant="ghost"
+                              icon="edit"
+                              aria-label={`Edit ${contact.display_name}`}
+                              onPress={() => {
+                                setError(null);
+                                setContactCanSave(false);
+                                setEditingContactId(contact.id);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                          </div>
+                          <div className={stylex(styles.actions)}>
+                            <Badge>{readableLabel(contact.status)}</Badge>
+                            {contact.is_primary ? <Badge tone="success">Primary</Badge> : null}
+                            <span>{contact.role || "Contact"}</span>
+                          </div>
+                          <div>
+                            {contact.email || "No email"} · <PhoneLink phone={contact.phone} />
+                          </div>
+                          <div className={stylex(styles.muted)}>
+                            Marketing email:{" "}
+                            {contact.marketing_email_permission === "allowed"
+                              ? "Allowed"
+                              : contact.marketing_email_permission === "not_allowed"
+                                ? "Not allowed"
+                                : "Unknown"}
+                          </div>
+                        </article>
+                      ))}
+                    </Panel>
+                    <Panel title="Addresses">
+                      <List
+                        label="Customer addresses"
+                        emptyMessage="No addresses yet."
+                        items={detail.addresses.map((address) => ({
+                          id: String(address.id),
+                          title: readableLabel(String(address.address_type)),
+                          metadata: [
+                            address.line1,
+                            address.line2,
+                            address.city,
+                            address.region,
+                            address.postal_code,
+                            address.country,
+                          ]
+                            .filter(Boolean)
+                            .join(", "),
+                        }))}
+                      />
+                    </Panel>
+                  </>
+                )}
+                {activeTab === "opportunities" && (
+                  <Panel
+                    title="Opportunities"
+                    actions={
+                      <Button
+                        variant="primary"
+                        icon="add"
+                        onPress={() => {
+                          setError(null);
                           setOpportunityCanSave(false);
-                          setEditingOpportunityId(opportunity.id);
+                          setCreatingOpportunity(true);
                         }}
                       >
-                        Edit
-                      </button>
-                    </article>
-                  ))}
-                </div>
-              )}
-              {activeTab === "tasks" && (
-                <div className={stylex(styles.section)} role="tabpanel">
-                  <h4>Tasks</h4>
-                  {detail.tasks.length === 0 && (
-                    <p className={stylex(styles.muted)}>No customer tasks.</p>
-                  )}
-                  {detail.tasks.map((task) => {
-                    const assignee = users.find((user) => user.user_id === task.assigned_to);
-                    return (
-                      <article
-                        key={task.id}
-                        className={stylex(styles.note)}
-                        onClick={() => setActiveTaskId(task.id)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            setActiveTaskId(task.id);
-                          }
-                        }}
-                      >
-                        <b>{task.title}</b>
-                        <div className={stylex(styles.muted)}>
-                          {task.status} ·{" "}
-                          {task.due_at ? formatDateTime(task.due_at) : "No due date"}
-                          {` · ${assignee ? `${assignee.name} (${assignee.email})` : "Unassigned"}`}
-                          {task.project_id ? " · Linked to project" : " · Customer-only"}
+                        Add opportunity
+                      </Button>
+                    }
+                  >
+                    {detail.opportunities.length === 0 && (
+                      <EmptyCustomerSection>No opportunities yet.</EmptyCustomerSection>
+                    )}
+                    {detail.opportunities.map((opportunity) => (
+                      <article key={opportunity.id} className={stylex(styles.record)}>
+                        <div className={stylex(styles.recordHeader)}>
+                          <strong>{opportunity.description}</strong>
+                          <Button
+                            variant="ghost"
+                            icon="edit"
+                            aria-label={`Edit ${opportunity.description}`}
+                            onPress={() => {
+                              setError(null);
+                              setOpportunityCanSave(false);
+                              setEditingOpportunityId(opportunity.id);
+                            }}
+                          >
+                            Edit
+                          </Button>
                         </div>
-                        {task.description && <div>{task.description}</div>}
+                        <div className={stylex(styles.actions)}>
+                          <Badge>{readableLabel(opportunity.status)}</Badge>
+                          <span>
+                            {readableLabel(opportunity.opportunity_type)} ·{" "}
+                            {formatBudget(opportunity.budget_cents)}
+                          </span>
+                        </div>
                       </article>
-                    );
-                  })}
-                </div>
-              )}
+                    ))}
+                  </Panel>
+                )}
+                {activeTab === "tasks" && (
+                  <Panel title="Tasks">
+                    {detail.tasks.length === 0 && (
+                      <EmptyCustomerSection>No customer tasks.</EmptyCustomerSection>
+                    )}
+                    {detail.tasks.map((task) => {
+                      const assignee = users.find((user) => user.user_id === task.assigned_to);
+                      return (
+                        <article key={task.id} className={stylex(styles.record)}>
+                          <div className={stylex(styles.recordHeader)}>
+                            <strong>{task.title}</strong>
+                            <Button
+                              variant="ghost"
+                              icon="edit"
+                              aria-label={`Open task ${task.title}`}
+                              onPress={() => setActiveTaskId(task.id)}
+                            >
+                              Open
+                            </Button>
+                          </div>
+                          <div className={stylex(styles.actions)}>
+                            <Badge
+                              tone={
+                                task.status === "done"
+                                  ? "success"
+                                  : task.status === "blocked"
+                                    ? "warning"
+                                    : "neutral"
+                              }
+                            >
+                              {readableLabel(task.status)}
+                            </Badge>
+                            <span>{task.due_at ? formatDateTime(task.due_at) : "No due date"}</span>
+                          </div>
+                          <span className={stylex(styles.muted)}>
+                            {assignee ? `${assignee.name} (${assignee.email})` : "Unassigned"} ·{" "}
+                            {task.project_id ? "Linked to project" : "Customer-only"}
+                          </span>
+                          {task.description && <div>{task.description}</div>}
+                        </article>
+                      );
+                    })}
+                  </Panel>
+                )}
+                {activeTab === "activity" && (
+                  <Panel
+                    title="Activity"
+                    actions={
+                      <Button variant="primary" icon="add" onPress={openNoteEditor}>
+                        Add note
+                      </Button>
+                    }
+                  >
+                    {detail.activities.length ? (
+                      detail.activities.map(renderActivity)
+                    ) : (
+                      <EmptyCustomerSection>No activity yet.</EmptyCustomerSection>
+                    )}
+                  </Panel>
+                )}
+                {activeTab === "files" && (
+                  <Panel title="Files">
+                    {currentFiles.length ? (
+                      currentFiles.map((file) => (
+                        <CustomerFileRow
+                          key={file.id}
+                          file={file}
+                          onDeprecated={() => void toggleFileDeprecated(file.id, true)}
+                        />
+                      ))
+                    ) : (
+                      <EmptyCustomerSection>No current files.</EmptyCustomerSection>
+                    )}
+                    {!!deprecatedFiles.length && (
+                      <Section title={`Deprecated files (${deprecatedFiles.length})`} collapsible>
+                        {deprecatedFiles.map((file) => (
+                          <CustomerFileRow
+                            key={file.id}
+                            file={file}
+                            onDeprecated={() => void toggleFileDeprecated(file.id, false)}
+                            deprecated
+                          />
+                        ))}
+                      </Section>
+                    )}
+                  </Panel>
+                )}
+                {activeTab === "quickbooks" && (
+                  <>
+                    <Panel title="QuickBooks synchronization">
+                      <dl className={stylex(styles.facts)}>
+                        <div>
+                          <dt>Sync status</dt>
+                          <dd className={stylex(styles.factValue)}>
+                            <Badge>{readableLabel(detail.customer.quickbooks_sync_status)}</Badge>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Last sync</dt>
+                          <dd className={stylex(styles.factValue)}>
+                            {detail.customer.last_synced_at
+                              ? formatDateTime(detail.customer.last_synced_at)
+                              : "Never"}
+                          </dd>
+                        </div>
+                      </dl>
+                      {detail.customer.last_error && (
+                        <Status tone="warning">{detail.customer.last_error}</Status>
+                      )}
+                      <TextInput
+                        label="Integration ID"
+                        value={integrationId}
+                        onChange={(event) => setIntegrationId(event.target.value)}
+                      />
+                      <div className={stylex(styles.actions)}>
+                        <Button icon="search" onPress={() => void findMatches()}>
+                          Find matches
+                        </Button>
+                        <MenuButton
+                          label="Sync actions"
+                          text="Sync actions"
+                          actions={[
+                            {
+                              id: "create",
+                              label: "Create in QuickBooks",
+                              onAction: () => void action("create"),
+                            },
+                            {
+                              id: "refresh",
+                              label: "Refresh",
+                              onAction: () => void action("refresh"),
+                            },
+                            {
+                              id: "retry",
+                              label: "Retry failed sync",
+                              onAction: () => void action("retry"),
+                            },
+                          ]}
+                        />
+                      </div>
+                      {matches.map((match) => (
+                        <div key={match.id} className={stylex(styles.recordHeader)}>
+                          <span>{match.displayName}</span>
+                          <Button onPress={() => void action("link", { externalId: match.id })}>
+                            Confirm link
+                          </Button>
+                        </div>
+                      ))}
+                    </Panel>
+                    <Financial title="Estimates" rows={detail.estimates} />
+                    <Financial title="Invoices" rows={detail.invoices} />
+                  </>
+                )}
+              </div>
               {activeTaskId && (
                 <TaskEditorDrawer
                   taskId={activeTaskId}
@@ -1122,297 +1489,6 @@ export function CustomersPanel({
                   onClose={() => setActiveTaskId(null)}
                   onUpdated={reloadDetail}
                 />
-              )}
-              {editingCustomer && (
-                <RightSideEditor
-                  eyebrow="Customer"
-                  title={`Edit ${detail.customer.display_name}`}
-                  formId="customer-editor-form"
-                  saveDisabled={!customerHasChanges}
-                  saving={savingEditor}
-                  onCancel={() => setEditingCustomer(false)}
-                >
-                  <CustomerForm
-                    id="customer-editor-form"
-                    customer={detail.customer}
-                    onSave={saveCustomer}
-                    onDirtyChange={setCustomerHasChanges}
-                  />
-                </RightSideEditor>
-              )}
-              {(creatingContact || editingContact) && (
-                <RightSideEditor
-                  eyebrow="Contact"
-                  title={editingContact ? `Edit ${editingContact.display_name}` : "Add contact"}
-                  formId="customer-contact-editor-form"
-                  saveDisabled={!contactCanSave}
-                  saving={savingEditor}
-                  saveLabel={editingContact ? "Save" : "Add contact"}
-                  onCancel={() => {
-                    setCreatingContact(false);
-                    setEditingContactId(null);
-                  }}
-                >
-                  <ContactForm
-                    id="customer-contact-editor-form"
-                    contact={editingContact}
-                    onSave={(input) => saveContact(input, editingContact?.id)}
-                    onCanSaveChange={setContactCanSave}
-                  />
-                  {editingContact && editingContact.status !== "archived" && (
-                    <div className={stylex(styles.editorDangerZone)}>
-                      <button
-                        type="button"
-                        className={stylex(styles.dangerButton)}
-                        disabled={savingEditor}
-                        onClick={() => {
-                          void (async () => {
-                            setSavingEditor(true);
-                            const archived = await removeContact(editingContact);
-                            setSavingEditor(false);
-                            if (archived) setEditingContactId(null);
-                          })();
-                        }}
-                      >
-                        Archive contact
-                      </button>
-                    </div>
-                  )}
-                </RightSideEditor>
-              )}
-              {(creatingOpportunity || editingOpportunity) && (
-                <RightSideEditor
-                  eyebrow="Opportunity"
-                  title={editingOpportunity ? "Edit opportunity" : "Add opportunity"}
-                  formId="customer-opportunity-editor-form"
-                  saveDisabled={!opportunityCanSave}
-                  saving={savingEditor}
-                  saveLabel={editingOpportunity ? "Save" : "Add opportunity"}
-                  onCancel={() => {
-                    setCreatingOpportunity(false);
-                    setEditingOpportunityId(null);
-                  }}
-                >
-                  <OpportunityForm
-                    id="customer-opportunity-editor-form"
-                    opportunity={editingOpportunity}
-                    onSave={(input) => saveOpportunity(input, editingOpportunity?.id)}
-                    onCanSaveChange={setOpportunityCanSave}
-                  />
-                </RightSideEditor>
-              )}
-              {activeTab === "contacts" && (
-                <div className={stylex(styles.section)} role="tabpanel">
-                  <h4>Addresses</h4>
-                  {detail.addresses.map((x) => (
-                    <p key={String(x.id)}>
-                      {String(x.address_type)}: {String(x.line1 || "")}, {String(x.city || "")}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {activeTab === "summary" && (
-                <div className={stylex(styles.section)} role="tabpanel">
-                  {(detail.emailNoteCandidates?.length ?? 0) > 0 && (
-                    <section aria-label="Email note suggestions">
-                      <h4>
-                        Email note suggestions
-                        <span className={stylex(styles.tabBadge)}>
-                          {detail.emailNoteCandidates?.length ?? 0}
-                        </span>
-                      </h4>
-                      <p className={stylex(styles.muted)}>
-                        Review information extracted from forwarded customer emails before it is
-                        added to Notes.
-                      </p>
-                      {(detail.emailNoteCandidates ?? []).map((candidate) => (
-                        <article key={candidate.id} className={stylex(styles.note)}>
-                          <b>{candidate.proposed_subject}</b>
-                          <div className={stylex(styles.muted)}>
-                            {candidate.category === "email_summary"
-                              ? "Complete email summary"
-                              : candidate.category}{" "}
-                            · {Math.round(candidate.confidence * 100)}% confidence
-                            {candidate.original_sender_email
-                              ? ` · from ${candidate.original_sender_name || candidate.original_sender_email}`
-                              : ""}
-                            {candidate.attachment_count
-                              ? ` · ${candidate.attachment_count} attachment${candidate.attachment_count === 1 ? "" : "s"}`
-                              : ""}
-                            {candidate.email_sent_at
-                              ? ` · sent ${new Date(candidate.email_sent_at).toLocaleDateString()}`
-                              : ""}
-                          </div>
-                          <div className={stylex(styles.markdown)}>
-                            <Markdown>{candidate.proposed_body}</Markdown>
-                          </div>
-                          {candidate.evidence && (
-                            <p className={stylex(styles.muted)}>Evidence: {candidate.evidence}</p>
-                          )}
-                          <div className={stylex(styles.actions)}>
-                            <button
-                              type="button"
-                              disabled={reviewingEmailCandidateId === candidate.id}
-                              onClick={() => void reviewEmailCandidate(candidate.id, "apply")}
-                            >
-                              Apply to notes
-                            </button>
-                            <button
-                              type="button"
-                              disabled={reviewingEmailCandidateId === candidate.id}
-                              onClick={() => void reviewEmailCandidate(candidate.id, "dismiss")}
-                            >
-                              Dismiss
-                            </button>
-                          </div>
-                        </article>
-                      ))}
-                    </section>
-                  )}
-                  <div className={stylex(styles.actions)}>
-                    <h4>Recent notes</h4>
-                    <Button variant="primary" icon="add" onPress={openNoteEditor}>
-                      Add note
-                    </Button>
-                  </div>
-                  {!detail.activities.some((activity) => activity.activity_type === "note") && (
-                    <p className={stylex(styles.muted)}>No notes yet.</p>
-                  )}
-                  {recentCustomerNotes(
-                    detail.activities,
-                    noteUploads
-                      .filter((upload) => upload.customerId === customerId)
-                      .map((upload) => upload.noteId)
-                  ).map((activity) => (
-                    <article
-                      key={activity.id}
-                      ref={activity.id === noteReceipt?.noteId ? latestNoteRef : undefined}
-                      className={stylex(styles.note)}
-                    >
-                      <b>{activity.subject}</b>
-                      {noteFeedback(activity.id)}
-                      <div className={stylex(styles.muted)}>
-                        {activity.created_by ? `by ${activity.created_by} · ` : ""}
-                        {formatDateTime(activity.occurred_at)}
-                      </div>
-                      {activity.body && (
-                        <div className={stylex(styles.markdown)}>
-                          <Markdown>{activity.body}</Markdown>
-                        </div>
-                      )}
-                      {detail.files
-                        .filter((file) => file.activity_id === activity.id && !file.deprecated_at)
-                        .map((file) => (
-                          <CustomerFileLink key={file.id} file={file} compact />
-                        ))}
-                    </article>
-                  ))}
-                </div>
-              )}
-              {activeTab === "files" && (
-                <div className={stylex(styles.section)} role="tabpanel">
-                  <h4>Files</h4>
-                  {detail.files.filter((file) => !file.deprecated_at).length === 0 && (
-                    <p className={stylex(styles.muted)}>No current files.</p>
-                  )}
-                  {detail.files
-                    .filter((file) => !file.deprecated_at)
-                    .map((file) => (
-                      <CustomerFileRow
-                        key={file.id}
-                        file={file}
-                        onDeprecated={() => toggleFileDeprecated(file.id, true)}
-                      />
-                    ))}
-                  {detail.files.some((file) => file.deprecated_at) && (
-                    <details>
-                      <summary>Deprecated files</summary>
-                      {detail.files
-                        .filter((file) => file.deprecated_at)
-                        .map((file) => (
-                          <CustomerFileRow
-                            key={file.id}
-                            file={file}
-                            onDeprecated={() => toggleFileDeprecated(file.id, false)}
-                            deprecated
-                          />
-                        ))}
-                    </details>
-                  )}
-                </div>
-              )}
-              {activeTab === "activity" && (
-                <div className={stylex(styles.section)} role="tabpanel">
-                  <h4>Activity</h4>
-                  <Button variant="primary" icon="add" onPress={openNoteEditor}>
-                    Add note
-                  </Button>
-                  {detail.activities.map((activity) => (
-                    <article
-                      key={activity.id}
-                      ref={activity.id === noteReceipt?.noteId ? latestNoteRef : undefined}
-                      className={stylex(styles.note)}
-                    >
-                      <b>{activity.subject}</b> {noteFeedback(activity.id)}
-                      <span className={stylex(styles.muted)}>
-                        {activity.created_by ? `by ${activity.created_by} · ` : ""}
-                        {activity.occurred_at}
-                      </span>
-                      {activity.body && (
-                        <div className={stylex(styles.markdown)}>
-                          <Markdown>{activity.body}</Markdown>
-                        </div>
-                      )}
-                      {activity.activity_type === "note" && (
-                        <div className={stylex(styles.actions)}>
-                          {detail.files
-                            .filter(
-                              (file) => file.activity_id === activity.id && !file.deprecated_at
-                            )
-                            .map((file) => (
-                              <CustomerFileLink key={file.id} file={file} compact />
-                            ))}
-                        </div>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              )}
-              {activeTab === "quickbooks" && (
-                <>
-                  <div className={stylex(styles.section)} role="tabpanel">
-                    <h4>QuickBooks fields</h4>
-                    <p>State: {detail.customer.quickbooks_sync_status}</p>
-                    <p>Last sync: {detail.customer.last_synced_at || "Never"}</p>
-                    {detail.customer.last_error && (
-                      <p className={stylex(styles.error)}>{detail.customer.last_error}</p>
-                    )}
-                  </div>
-                  <Financial title="Estimates" rows={detail.estimates} />
-                  <Financial title="Invoices" rows={detail.invoices} />
-                  <div className={stylex(styles.section)}>
-                    <h4>QuickBooks synchronization</h4>
-                    <input
-                      placeholder="Integration ID"
-                      value={integrationId}
-                      onChange={(e) => setIntegrationId(e.target.value)}
-                    />
-                    <div className={stylex(styles.actions)}>
-                      <button onClick={findMatches}>Find matches</button>
-                      <button onClick={() => action("create")}>Create in QuickBooks</button>
-                      <button onClick={() => action("refresh")}>Refresh</button>
-                      <button onClick={() => action("retry")}>Retry failed sync</button>
-                    </div>
-                    {matches.map((m) => (
-                      <p key={m.id}>
-                        {m.displayName}{" "}
-                        <button onClick={() => action("link", { externalId: m.id })}>
-                          Confirm link
-                        </button>
-                      </p>
-                    ))}
-                  </div>
-                </>
               )}
             </>
           )}
@@ -1423,17 +1499,22 @@ export function CustomersPanel({
 }
 function CustomerDetailGlimmer() {
   return (
-    <div aria-label="Loading customer details" role="status">
-      <div className={stylex(styles.glimmer, styles.detailGlimmerHeader)} />
-      <div className={stylex(styles.glimmer, styles.detailGlimmerTabs)} />
-      <div className={stylex(styles.grid)}>
-        <div className={stylex(styles.glimmer, styles.detailGlimmerCard)} />
-        <div className={stylex(styles.glimmer, styles.detailGlimmerCard)} />
-      </div>
+    <div className={stylex(styles.panelStack)} aria-label="Loading customer details" role="status">
+      <Shimmer width="60%" height={32} />
+      <Shimmer width="100%" height={132} variant="block" />
+      <Shimmer width="100%" height={100} variant="block" />
     </div>
   );
 }
 
+function EmptyCustomerSection({ children }: { children: ReactNode }) {
+  return <p className={stylex(styles.muted)}>{children}</p>;
+}
+
+function readableLabel(value: string) {
+  const readable = value.replace(/_/g, " ");
+  return readable.charAt(0).toUpperCase() + readable.slice(1);
+}
 function CustomerFileRow({
   file,
   onDeprecated,
@@ -1444,13 +1525,16 @@ function CustomerFileRow({
   deprecated?: boolean;
 }) {
   return (
-    <article className={stylex(styles.note)}>
+    <article className={stylex(styles.record)}>
       <CustomerFileLink file={file} />
       <div className={stylex(styles.muted)}>
-        {formatFileSize(file.size_bytes)} · attached to “{file.note_subject}” · {file.created_at}
+        {formatFileSize(file.size_bytes)} · attached to “{file.note_subject}” ·{" "}
+        {formatDateTime(file.created_at)}
       </div>
       <div className={stylex(styles.actions)}>
-        <button onClick={onDeprecated}>{deprecated ? "Restore" : "Mark deprecated"}</button>
+        <Button variant="ghost" icon={deprecated ? "undo" : undefined} onPress={onDeprecated}>
+          {deprecated ? "Restore" : "Mark deprecated"}
+        </Button>
       </div>
     </article>
   );
@@ -1563,21 +1647,20 @@ function OpportunityForm({
         onSave({ description: description.trim(), type, budget: parsedBudget, status });
       }}
     >
-      <textarea
-        aria-label="Opportunity description"
-        className={stylex(styles.textarea)}
+      <TextArea
+        label="Opportunity description"
         placeholder="Describe the opportunity"
         required
         value={description}
         onChange={(e) => setDescription(e.target.value)}
       />
-      <select aria-label="Opportunity type" value={type} onChange={(e) => setType(e.target.value)}>
+      <Select label="Opportunity type" value={type} onChange={(e) => setType(e.target.value)}>
         <option value="furniture">furniture</option>
         <option value="cabinets">cabinets</option>
         <option value="other">other</option>
-      </select>
-      <input
-        aria-label="Opportunity budget"
+      </Select>
+      <TextInput
+        label="Opportunity budget"
         type="number"
         min="0"
         step="0.01"
@@ -1586,16 +1669,12 @@ function OpportunityForm({
         value={budget}
         onChange={(e) => setBudget(e.target.value)}
       />
-      <select
-        aria-label="Opportunity status"
-        value={status}
-        onChange={(e) => setStatus(e.target.value)}
-      >
+      <Select label="Opportunity status" value={status} onChange={(e) => setStatus(e.target.value)}>
         <option value="scoping">scoping</option>
         <option value="quoted">quoted</option>
         <option value="accepted">accepted</option>
         <option value="lost">lost</option>
-      </select>
+      </Select>
     </form>
   );
 }
@@ -1605,7 +1684,11 @@ function formatBudget(cents: number) {
 function PhoneLink({ phone }: { phone: string | null | undefined }) {
   const formatted = formatPhoneNumber(phone);
   if (!formatted || !phone) return <>No phone</>;
-  return <a href={`tel:${phone.trim()}`}>{formatted}</a>;
+  return (
+    <a className={stylex(styles.phoneLink)} href={`tel:${phone.trim()}`}>
+      {formatted}
+    </a>
+  );
 }
 type CustomerInput = { displayName: string; status: string; leadSource: string };
 function CustomerForm({
@@ -1636,37 +1719,28 @@ function CustomerForm({
         onSave({ displayName: displayName.trim(), status, leadSource: leadSource.trim() });
       }}
     >
-      <label>
-        Name
-        <input
-          aria-label="Customer name"
-          required
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-        />
-      </label>
-      <label>
-        Status
-        <select
-          aria-label="Edit customer status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          {["lead", "active", "completed", "archived"].map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Lead source
-        <input
-          aria-label="Lead source"
-          value={leadSource}
-          onChange={(e) => setLeadSource(e.target.value)}
-        />
-      </label>
+      <TextInput
+        label="Customer name"
+        required
+        value={displayName}
+        onChange={(event) => setDisplayName(event.target.value)}
+      />
+      <Select
+        label="Customer status"
+        value={status}
+        onChange={(event) => setStatus(event.target.value)}
+      >
+        {["lead", "active", "completed", "archived"].map((value) => (
+          <option key={value} value={value}>
+            {readableLabel(value)}
+          </option>
+        ))}
+      </Select>
+      <TextInput
+        label="Lead source"
+        value={leadSource}
+        onChange={(event) => setLeadSource(event.target.value)}
+      />
     </form>
   );
 }
@@ -1765,95 +1839,70 @@ function ContactForm({
         });
       }}
     >
-      <input
-        aria-label="First name"
+      <TextInput
+        label="First name"
         placeholder="First name"
         value={firstName}
         onChange={(e) => setFirstName(e.target.value)}
       />
-      <input
-        aria-label="Last name"
+      <TextInput
+        label="Last name"
         placeholder="Last name"
         value={lastName}
         onChange={(e) => setLastName(e.target.value)}
       />
-      <input
-        aria-label="Email"
+      <TextInput
+        label="Email"
         placeholder="Email"
         type="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
-      <input
-        aria-label="Phone"
+      <TextInput
+        label="Phone"
         placeholder="Phone"
         type="tel"
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
       />
-      <input
-        aria-label="Role"
+      <TextInput
+        label="Role"
         placeholder="Role"
         value={role}
         onChange={(e) => setRole(e.target.value)}
       />
-      <select
-        aria-label="Marketing email"
+      <Select
+        label="Marketing email"
         value={permission}
         onChange={(e) => setPermission(e.target.value as typeof permission)}
       >
         <option value="unknown">Marketing email: Unknown</option>
         <option value="allowed">Marketing email: Allowed</option>
         <option value="not_allowed">Marketing email: Not allowed</option>
-      </select>
-      <select
-        aria-label="Contact status"
-        value={status}
-        onChange={(e) => setStatus(e.target.value)}
-      >
+      </Select>
+      <Select label="Contact status" value={status} onChange={(e) => setStatus(e.target.value)}>
         <option value="active">active</option>
         <option value="inactive">inactive</option>
         {contact && <option value="archived">archived</option>}
-      </select>
-      <label className={stylex(styles.check)}>
-        <input
-          type="checkbox"
-          checked={isPrimary}
-          onChange={(e) => setIsPrimary(e.target.checked)}
-        />{" "}
-        Primary contact
-      </label>
+      </Select>
+      <Switch label="Primary contact" selected={isPrimary} onChange={setIsPrimary} />
     </form>
   );
 }
 function Financial({ title, rows }: { title: string; rows: Array<Record<string, unknown>> }) {
+  const label = title.toLowerCase();
   return (
-    <div className={stylex(styles.section)}>
-      <h4>
-        {title} <small>(read-only from QuickBooks)</small>
-      </h4>
-      <table className={stylex(styles.table)}>
-        <thead>
-          <tr>
-            <th className={stylex(styles.cell)}>Number</th>
-            <th className={stylex(styles.cell)}>Status</th>
-            <th className={stylex(styles.cell)}>Total</th>
-            <th className={stylex(styles.cell)}>Balance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((x) => (
-            <tr key={String(x.id)}>
-              <td className={stylex(styles.cell)}>{String(x.doc_number || "—")}</td>
-              <td className={stylex(styles.cell)}>{String(x.status || "—")}</td>
-              <td className={stylex(styles.cell)}>${Number(x.total || 0).toFixed(2)}</td>
-              <td className={stylex(styles.cell)}>
-                {x.balance == null ? "—" : `$${Number(x.balance).toFixed(2)}`}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Panel title={title} actions={<Badge>Read-only</Badge>}>
+      <List
+        label={`QuickBooks ${label}`}
+        emptyMessage={`No QuickBooks ${label}.`}
+        items={rows.map((row) => ({
+          id: String(row.id),
+          title: String(row.doc_number || "—"),
+          metadata: `Total $${Number(row.total || 0).toFixed(2)} · Balance ${row.balance == null ? "—" : `$${Number(row.balance).toFixed(2)}`}`,
+          status: { label: readableLabel(String(row.status || "—")) },
+        }))}
+      />
+    </Panel>
   );
 }
