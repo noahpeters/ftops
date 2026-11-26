@@ -1,8 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import stylex from "~/lib/stylex";
-import { colors, radius, spacing } from "../../theme/tokens.stylex";
+import {
+  Button,
+  List,
+  Panel,
+  Select,
+  SidePanel,
+  Status,
+  TextArea,
+  TextInput,
+} from "@from-trees/ui";
+import { color, metrics, space } from "@from-trees/ui/tokens.stylex";
 import {
   completeFileUpload,
   createNote,
@@ -20,96 +30,21 @@ import {
 } from "./api";
 import { buildUrl } from "@/lib/api";
 import { listCustomers, type CustomerSummary } from "@/features/customers/api";
-import { RightSideEditor } from "@/components/RightSideEditor";
 
 const STATUS_OPTIONS = ["scheduled", "blocked", "in progress", "done", "canceled"];
 
 const styles = stylex.create({
-  label: {
-    fontSize: "12px",
-    lineHeight: "1.4",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    color: colors.textSubtle,
+  stack: { display: "grid", gap: space.md, minWidth: 0 },
+  details: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: space.md,
+    margin: 0,
   },
-  section: {
-    display: "flex",
-    flexDirection: "column",
-    gap: spacing.sm,
-    paddingBottom: spacing.md,
-    borderBottom: `1px solid ${colors.border}`,
-  },
-  field: {
-    display: "flex",
-    flexDirection: "column",
-    gap: spacing.xs,
-  },
-  input: {
-    border: `1px solid ${colors.border}`,
-    borderRadius: radius.sm,
-    padding: "8px 10px",
-    fontFamily: "inherit",
-    fontSize: "14px",
-  },
-  textarea: {
-    border: `1px solid ${colors.border}`,
-    borderRadius: radius.sm,
-    padding: "8px 10px",
-    fontFamily: "inherit",
-    fontSize: "14px",
-    minHeight: "90px",
-  },
-  row: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    alignItems: "center",
-  },
-  metaText: {
-    fontSize: "14px",
-    lineHeight: "1.5",
-    color: colors.textMuted,
-  },
-  list: {
-    display: "flex",
-    flexDirection: "column",
-    gap: spacing.sm,
-  },
-  noteCard: {
-    border: `1px solid ${colors.border}`,
-    borderRadius: radius.sm,
-    padding: "8px 10px",
-    backgroundColor: colors.surfaceAlt,
-    fontSize: "14px",
-    lineHeight: "1.5",
-  },
-  noteMeta: {
-    fontSize: "12px",
-    lineHeight: "1.4",
-    color: colors.textMuted,
-  },
-  fileRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-    alignItems: "center",
-    border: `1px solid ${colors.border}`,
-    padding: "8px 10px",
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceAlt,
-  },
-  fileMeta: {
-    display: "flex",
-    flexDirection: "column",
-    gap: spacing.xs,
-    fontSize: "12px",
-    lineHeight: "1.4",
-  },
-  actions: {
-    display: "flex",
-    gap: spacing.sm,
-    flexWrap: "wrap",
-  },
+  value: { margin: 0, overflowWrap: "anywhere" },
+  notes: { listStyleType: "none", margin: 0, padding: 0, display: "grid", gap: space.md },
+  note: { whiteSpace: "pre-wrap", overflowWrap: "anywhere" },
+  muted: { color: color.muted, fontSize: metrics.small, margin: 0 },
 });
 
 type Props = {
@@ -187,6 +122,8 @@ export function TaskDetailDrawer({
   const [notes, setNotes] = useState<TaskNote[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [files, setFiles] = useState<TaskFile[]>([]);
+  const filePicker = useRef<HTMLInputElement>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -258,13 +195,21 @@ export function TaskDetailDrawer({
   );
 
   async function handleSave() {
-    if (!hasChanges) return;
+    if (!hasChanges || saving) return;
     setSaving(true);
-    const result = await updateTask(task.id, taskUpdates);
-    setSaving(false);
-    if (result.ok) {
+    setSaveError(null);
+    try {
+      const result = await updateTask(task.id, taskUpdates);
+      if (!result.ok) {
+        setSaveError(result.text || "Could not save the task.");
+        return;
+      }
       await onUpdated();
       onClose();
+    } catch {
+      setSaveError("Could not save the task.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -373,149 +318,140 @@ export function TaskDetailDrawer({
   }
 
   return (
-    <RightSideEditor
-      eyebrow="Task"
+    <SidePanel
+      open
       title={task.title}
-      onSave={() => void handleSave()}
-      onCancel={onClose}
-      saveDisabled={!hasChanges}
-      saving={saving}
+      description="Task"
+      dismissible={!saving}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      footer={
+        <>
+          <Button isDisabled={saving} onPress={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            busy={saving}
+            isDisabled={!hasChanges}
+            onPress={() => void handleSave()}
+          >
+            Save task
+          </Button>
+        </>
+      }
     >
-      <section className={stylex(styles.section)}>
-        <div className={stylex(styles.label)}>Fields</div>
-        <div className={stylex(styles.field)}>
-          <label className={stylex(styles.label)}>Title</label>
-          <input
-            className={stylex(styles.input)}
+      <div className={stylex(styles.stack)}>
+        {saveError && <Status tone="danger">{saveError}</Status>}
+        <Panel title="Fields">
+          <TextInput
+            label="Title"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
           />
-        </div>
-        <div className={stylex(styles.field)}>
-          <label className={stylex(styles.label)}>Description</label>
-          <textarea
-            className={stylex(styles.textarea)}
+          <TextArea
+            label="Description"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
           />
-        </div>
-        <div className={stylex(styles.row)}>
-          <div className={stylex(styles.field)}>
-            <label className={stylex(styles.label)}>Status</label>
-            <select value={status} onChange={(event) => setStatus(event.target.value)}>
-              {STATUS_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className={stylex(styles.field)}>
-            <label className={stylex(styles.label)}>Assigned</label>
-            <select
-              className={stylex(styles.input)}
-              value={assignedTo}
-              onChange={(event) => setAssignedTo(event.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {users.map((user) => (
-                <option key={user.user_id} value={user.user_id}>
-                  {user.name} ({user.email})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className={stylex(styles.row)}>
-          <div className={stylex(styles.field)}>
-            <label className={stylex(styles.label)}>Due date and time</label>
-            <input
-              className={stylex(styles.input)}
-              type="datetime-local"
-              value={dueDate}
-              onChange={(event) => setDueDate(event.target.value)}
-            />
-          </div>
-          <div className={stylex(styles.field)}>
-            <label className={stylex(styles.label)}>Completed</label>
-            <span className={stylex(styles.metaText)}>{completedAt}</span>
-          </div>
-        </div>
-        <div className={stylex(styles.row)}>
-          <div className={stylex(styles.field)}>
-            <label className={stylex(styles.label)}>Template ID</label>
-            <span className={stylex(styles.metaText)}>
-              {task.template_id ?? task.template_key ?? "—"}
-            </span>
-          </div>
-          <div className={stylex(styles.field)}>
-            <label className={stylex(styles.label)}>Customer</label>
-            <select
-              className={stylex(styles.input)}
-              value={customerId}
-              onChange={(event) => setCustomerId(event.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {buildCustomerOptions(customers).map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </section>
-
-      <section className={stylex(styles.section)}>
-        <div className={stylex(styles.label)}>Notes</div>
-        {noteError && <span className={stylex(styles.metaText)}>{noteError}</span>}
-        <div className={stylex(styles.list)}>
-          {notes.length === 0 && <span className={stylex(styles.metaText)}>No notes yet.</span>}
-          {notes.map((note) => (
-            <div key={note.id} className={stylex(styles.noteCard)}>
-              <div className={stylex(styles.noteMeta)}>
-                {note.author_email} · {note.created_at}
-              </div>
-              <div>{note.body}</div>
+          <Select label="Status" value={status} onChange={(event) => setStatus(event.target.value)}>
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="Assigned"
+            value={assignedTo}
+            onChange={(event) => setAssignedTo(event.target.value)}
+          >
+            <option value="">Unassigned</option>
+            {users.map((user) => (
+              <option key={user.user_id} value={user.user_id}>
+                {user.name} ({user.email})
+              </option>
+            ))}
+          </Select>
+          <TextInput
+            label="Due date and time"
+            type="datetime-local"
+            value={dueDate}
+            onChange={(event) => setDueDate(event.target.value)}
+          />
+          <Select
+            label="Customer"
+            value={customerId}
+            onChange={(event) => setCustomerId(event.target.value)}
+          >
+            <option value="">Unassigned</option>
+            {buildCustomerOptions(customers).map((customer) => (
+              <option key={customer.id} value={customer.id}>
+                {customer.label}
+              </option>
+            ))}
+          </Select>
+          <dl className={stylex(styles.details)}>
+            <div>
+              <dt className={stylex(styles.muted)}>Completed</dt>
+              <dd className={stylex(styles.value)}>{completedAt}</dd>
             </div>
-          ))}
-        </div>
-        <textarea
-          className={stylex(styles.textarea)}
-          value={noteDraft}
-          onChange={(event) => setNoteDraft(event.target.value)}
-          placeholder="Add a note..."
-        />
-        <button type="button" onClick={() => void handleAddNote()}>
-          Add note
-        </button>
-      </section>
-
-      <section className={stylex(styles.section)}>
-        <div className={stylex(styles.label)}>Files</div>
-        {fileError && <span className={stylex(styles.metaText)}>{fileError}</span>}
-        <div className={stylex(styles.list)}>
-          {files.length === 0 && <span className={stylex(styles.metaText)}>No files yet.</span>}
-          {files.map((file) => (
-            <div key={file.id} className={stylex(styles.fileRow)}>
-              <div className={stylex(styles.fileMeta)}>
-                <strong>{file.original_filename}</strong>
-                <span>{formatFileMeta(file)}</span>
-              </div>
-              <div className={stylex(styles.actions)}>
-                <button type="button" onClick={() => void handleDownload(file)}>
-                  Download
-                </button>
-                <button type="button" onClick={() => void handleDelete(file.id)}>
-                  Delete
-                </button>
-              </div>
+            <div>
+              <dt className={stylex(styles.muted)}>Template ID</dt>
+              <dd className={stylex(styles.value)}>
+                {task.template_id ?? task.template_key ?? "—"}
+              </dd>
             </div>
-          ))}
-        </div>
-        <input type="file" onChange={handleUpload} />
-      </section>
-    </RightSideEditor>
+          </dl>
+        </Panel>
+        <Panel title="Notes">
+          {noteError && <Status tone="danger">{noteError}</Status>}
+          {notes.length ? (
+            <ul className={stylex(styles.notes)}>
+              {notes.map((note) => (
+                <li key={note.id}>
+                  <p className={stylex(styles.muted)}>
+                    {note.author_email} · {note.created_at}
+                  </p>
+                  <div className={stylex(styles.note)}>{note.body}</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={stylex(styles.muted)}>No notes yet.</p>
+          )}
+          <TextArea
+            label="Add a note"
+            value={noteDraft}
+            onChange={(event) => setNoteDraft(event.target.value)}
+          />
+          <div>
+            <Button onPress={() => void handleAddNote()}>Add note</Button>
+          </div>
+        </Panel>
+        <Panel
+          title="Files"
+          actions={<Button onPress={() => filePicker.current?.click()}>Attach file</Button>}
+        >
+          <input ref={filePicker} type="file" hidden onChange={handleUpload} />
+          {fileError && <Status tone="danger">{fileError}</Status>}
+          <List
+            label="Task files"
+            emptyMessage="No files yet."
+            items={files.map((file) => ({
+              id: file.id,
+              title: file.original_filename,
+              metadata: formatFileMeta(file),
+              actions: [
+                { id: "download", label: "Download", onAction: () => void handleDownload(file) },
+                { id: "delete", label: "Delete", onAction: () => void handleDelete(file.id) },
+              ],
+            }))}
+          />
+        </Panel>
+      </div>
+    </SidePanel>
   );
 }
 

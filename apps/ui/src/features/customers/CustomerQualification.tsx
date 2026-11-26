@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import stylex from "~/lib/stylex";
-import { colors } from "../../theme/tokens.stylex";
+import { useState } from "react";
+import * as stylex from "@stylexjs/stylex";
+import { Badge, Button, MenuButton, Status } from "@from-trees/ui";
+import { gap, layout } from "@from-trees/ui/utilities";
 import {
   getQualification,
   qualificationAction,
@@ -8,37 +9,6 @@ import {
   type Qualification,
   type QualificationClass,
 } from "./api";
-
-const styles = stylex.create({
-  root: { position: "relative", width: "fit-content", marginTop: 4, marginBottom: 4 },
-  circle: {
-    width: 24,
-    height: 24,
-    padding: 0,
-    borderRadius: "50%",
-    border: `1px solid ${colors.border}`,
-    fontSize: 12,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  qualified: { backgroundColor: colors.successBg, color: colors.successText },
-  unqualified: { backgroundColor: colors.warnBg, color: colors.warnText },
-  menu: {
-    position: "absolute",
-    top: 28,
-    left: 0,
-    zIndex: 10,
-    minWidth: 170,
-    padding: 4,
-    border: `1px solid ${colors.border}`,
-    borderRadius: 6,
-    backgroundColor: colors.surfaceAlt,
-    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-    display: "grid",
-    gap: 4,
-  },
-});
 
 export function CustomerQualification({
   customerId,
@@ -51,22 +21,10 @@ export function CustomerQualification({
   classification?: QualificationClass | null;
   onChange: (detail: CustomerDetail) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const root = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const firstItem = useRef<HTMLButtonElement>(null);
   const value = qualification?.current?.classification ?? classification;
-  useEffect(() => {
-    if (!open) return;
-    firstItem.current?.focus();
-    const close = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, [open]);
+
   async function assess(classification?: "qualified" | "not_qualified") {
     setBusy(true);
     setError("");
@@ -87,27 +45,7 @@ export function CustomerQualification({
       setBusy(false);
     }
   }
-  if (value !== "qualified" && value !== "not_qualified") {
-    // Only the customer detail includes qualification history and an assessment action.
-    if (!qualification) return null;
-    return (
-      <div className={stylex(styles.root)}>
-        {value === "unclear" && <p>Project scope is unclear.</p>}
-        <button type="button" disabled={busy} onClick={() => void assess()}>
-          {busy ? "Assessing project scope…" : "Assess project scope"}
-        </button>
-        <div>
-          <button type="button" disabled={busy} onClick={() => void assess("qualified")}>
-            Confirm qualified
-          </button>
-          <button type="button" disabled={busy} onClick={() => void assess("not_qualified")}>
-            Confirm unqualified
-          </button>
-        </div>
-        {error && <p role="alert">{error}</p>}
-      </div>
-    );
-  }
+
   async function review(verdict: "correct" | "incorrect") {
     setBusy(true);
     setError("");
@@ -131,75 +69,70 @@ export function CustomerQualification({
       });
       if (!result.ok || !result.data) throw new Error("Unable to save");
       onChange(result.data);
-      setOpen(false);
-      trigger.current?.focus();
     } catch {
       setError("Unable to save. Try again.");
     } finally {
       setBusy(false);
     }
   }
-  return (
-    <div
-      ref={root}
-      className={stylex(styles.root)}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          setOpen(false);
-          trigger.current?.focus();
-        }
-        if (open && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
-          event.preventDefault();
-          const items = Array.from(
-            root.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []
-          );
-          const index = items.indexOf(document.activeElement as HTMLButtonElement);
-          items[
-            (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length
-          ]?.focus();
-        }
-      }}
-    >
-      <button
-        ref={trigger}
-        type="button"
-        className={stylex(
-          styles.circle,
-          value === "qualified" ? styles.qualified : styles.unqualified
-        )}
-        aria-label={value === "qualified" ? "Qualified" : "Unqualified"}
-        title={value === "qualified" ? "Qualified" : "Unqualified"}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => {
-          setError("");
-          setOpen(!open);
-        }}
-      >
-        {value === "qualified" ? "Q" : "U"}
-      </button>
-      {open && (
-        <div role="menu" aria-label="Evaluate qualification" className={stylex(styles.menu)}>
-          <button
-            ref={firstItem}
-            type="button"
-            role="menuitem"
-            disabled={busy}
-            onClick={() => void review("correct")}
-          >
-            Good evaluation
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={busy}
-            onClick={() => void review("incorrect")}
-          >
-            Bad evaluation
-          </button>
-          {error && <span role="alert">{error}</span>}
+
+  if (value !== "qualified" && value !== "not_qualified") {
+    if (!qualification) return null;
+    return (
+      <div {...stylex.props(layout.stack, gap.sm)}>
+        {value === "unclear" && <Status tone="warning">Project scope is unclear.</Status>}
+        <div {...stylex.props(layout.row, layout.wrap, gap.sm)}>
+          <Button busy={busy} onPress={() => void assess()}>
+            Assess project scope
+          </Button>
+          <MenuButton
+            text="Confirm manually"
+            actions={[
+              {
+                id: "qualified",
+                label: "Confirm qualified",
+                disabled: busy,
+                onAction: () => void assess("qualified"),
+              },
+              {
+                id: "unqualified",
+                label: "Confirm unqualified",
+                disabled: busy,
+                onAction: () => void assess("not_qualified"),
+              },
+            ]}
+          />
         </div>
-      )}
+        {error && <Status tone="danger">{error}</Status>}
+      </div>
+    );
+  }
+  return (
+    <div {...stylex.props(layout.stack, gap.sm)}>
+      <div {...stylex.props(layout.row, layout.wrap, layout.alignCenter, gap.sm)}>
+        <Badge tone={value === "qualified" ? "success" : "warning"}>
+          {value === "qualified" ? "Qualified" : "Unqualified"}
+        </Badge>
+        <MenuButton
+          text="Review assessment"
+          actions={[
+            {
+              id: "correct",
+              label: "Good evaluation",
+              disabled: busy,
+              onAction: () => void review("correct"),
+            },
+            {
+              id: "incorrect",
+              label: "Bad evaluation",
+              disabled: busy,
+              onAction: () => void review("incorrect"),
+            },
+          ]}
+        />
+      </div>
+      {busy && <Status>Updating qualification…</Status>}
+      {error && <Status tone="danger">{error}</Status>}
     </div>
   );
 }
