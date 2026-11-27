@@ -1,6 +1,6 @@
 import { json } from "../lib/http";
 import type { Env } from "../lib/types";
-import { requireActor } from "../lib/access";
+import { canAccessWorkspace, requireActor } from "../lib/access";
 
 export async function handleMe(
   _segments: string[],
@@ -15,10 +15,15 @@ export async function handleMe(
   }
 
   const { actor } = actorResult;
+  const reportingWorkspaceId = env.CABINET_ANALYTICS_WORKSPACE_ID;
   return json({
     email: actor.email,
     isSystemAdmin: actor.isSystemAdmin,
     workspaceIds: actor.workspaceIds,
     workspaceAdminIds: actor.workspaceAdminIds,
+    cabinetAnalyticsWorkspaceId:
+      reportingWorkspaceId && canAccessWorkspace(actor, reportingWorkspaceId)
+        ? reportingWorkspaceId
+        : null,
   });
 }

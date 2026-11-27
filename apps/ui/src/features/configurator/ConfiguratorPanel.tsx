@@ -120,7 +120,7 @@ function PlanPreview({
     </svg>
   );
 }
-export function ConfiguratorPanel() {
+export function ConfiguratorPanel({ canViewCostReport }: { canViewCostReport: boolean }) {
   const [days, setDays] = useState(30);
   const [page, setPage] = useState(0);
   const [reload, setReload] = useState(0);
@@ -498,11 +498,13 @@ export function ConfiguratorPanel() {
             <p className={stylex(styles.footnote)}>
               Opens a copy of this saved configuration for editing.
             </p>
-            <CostReport
-              key={`cost:${selected.slug}:${selected.revision}`}
-              slug={selected.slug}
-              revision={selected.revision}
-            />
+            {canViewCostReport && (
+              <CostReport
+                key={`cost:${selected.slug}:${selected.revision}`}
+                slug={selected.slug}
+                revision={selected.revision}
+              />
+            )}
             <SketchupExport
               key={`${selected.slug}:${selected.revision}`}
               slug={selected.slug}

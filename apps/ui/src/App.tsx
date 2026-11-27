@@ -227,6 +227,7 @@ type ActorInfo = {
   isSystemAdmin: boolean;
   workspaceIds: string[];
   workspaceAdminIds: string[];
+  cabinetAnalyticsWorkspaceId: string | null;
 };
 
 type AppContextValue = {
@@ -272,6 +273,7 @@ type AppContextValue = {
   selectedWorkspaceId: string | null;
   setSelectedWorkspaceId: (value: string | null) => void;
   actor: ActorInfo | null;
+  chosenReportingWorkspace: string | null;
   actorLoading: boolean;
   userPreferences: UserPreferences;
   updateUserPreference: (
@@ -595,7 +597,12 @@ export default function App(): JSX.Element {
     }
   }
 
+  const chosenReportingWorkspace =
+    selectedWorkspaceId && actor?.cabinetAnalyticsWorkspaceId === selectedWorkspaceId
+      ? selectedWorkspaceId
+      : null;
   const appContextValue: AppContextValue = {
+    chosenReportingWorkspace,
     recordUri,
     setRecordUri,
     autoRunOnSelect,
@@ -653,6 +660,22 @@ export default function App(): JSX.Element {
         { id: "customers", href: "/customers", label: "Customers", icon: "users" },
         { id: "projects", href: "/projects", label: "Projects", icon: "folder" },
         { id: "tasks", href: "/tasks", label: "Tasks", icon: "check" },
+        ...(chosenReportingWorkspace
+          ? ([
+              {
+                id: "website-analytics",
+                href: "/analytics",
+                label: "Website analytics",
+                icon: "view",
+              },
+              {
+                id: "configurator",
+                href: "/configurator",
+                label: "Configurator",
+                icon: "settings",
+              },
+            ] satisfies NavigationGroup["items"])
+          : []),
       ],
     });
   }
@@ -672,11 +695,9 @@ export default function App(): JSX.Element {
   if (isSystemAdmin) {
     navigation.push({
       id: "system",
-      href: "/configurator",
+      href: "/workspaces",
       label: "System",
       items: [
-        { id: "website-analytics", href: "/analytics", label: "Website analytics", icon: "view" },
-        { id: "configurator", href: "/configurator", label: "Configurator", icon: "settings" },
         { id: "plan-preview", href: "/plan-preview", label: "Plan Preview", icon: "document" },
         { id: "events", href: "/events", label: "Events Viewer", icon: "history" },
         { id: "demo", href: "/demo", label: "Demo", icon: "view" },
@@ -1376,15 +1397,18 @@ function NotAuthorized(): JSX.Element {
 }
 
 export function ConfiguratorRoute(): JSX.Element {
-  const { actor, actorLoading } = useAppState();
-  if (actorLoading) return <section className={stylex(styles.panel)}>Loading...</section>;
-  if (!actor?.isSystemAdmin) return <NotAuthorized />;
-  return <ConfiguratorPanel />;
+  const { actor, actorLoading, chosenReportingWorkspace, workspaceLoading } = useAppState();
+  if (actorLoading || workspaceLoading)
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  if (!actor || !chosenReportingWorkspace) return <NotAuthorized />;
+  const canViewCostReport =
+    actor.isSystemAdmin || actor.workspaceAdminIds.includes(chosenReportingWorkspace);
+  return <ConfiguratorPanel canViewCostReport={canViewCostReport} />;
 }
 
 export function AnalyticsRoute(): JSX.Element {
-  const { actor, actorLoading } = useAppState();
-  if (actorLoading) return <AcquisitionDashboard loadingAccess />;
-  if (!actor?.isSystemAdmin) return <NotAuthorized />;
+  const { actorLoading, chosenReportingWorkspace, workspaceLoading } = useAppState();
+  if (actorLoading || workspaceLoading) return <AcquisitionDashboard loadingAccess />;
+  if (!chosenReportingWorkspace) return <NotAuthorized />;
   return <AcquisitionDashboard />;
 }

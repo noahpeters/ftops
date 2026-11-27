@@ -1,5 +1,6 @@
 export type Env = {
   CABINET_ANALYTICS_SERVICE?: Fetcher;
+  CABINET_ANALYTICS_WORKSPACE_ID?: string;
   CABINET_ANALYTICS_URL?: string;
   CABINET_ANALYTICS_READ_TOKEN?: string;
   DB: D1Database;

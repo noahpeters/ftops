@@ -3,7 +3,7 @@ import type { Env } from "../lib/types";
 import { nowISO } from "../lib/utils";
 import { buildEventFromIngestMessage } from "../processors/ingestQueue";
 import type { IngestQueueMessage } from "@ftops/webhooks";
-import { requireActor } from "../lib/access";
+import { canAdminWorkspace, requireActor } from "../lib/access";
 
 export async function handleAdmin(
   segments: string[],
@@ -16,10 +16,6 @@ export async function handleAdmin(
   if (!actorResult.ok) {
     return actorResult.response;
   }
-  if (!actorResult.actor.isSystemAdmin) {
-    return forbidden("forbidden");
-  }
-
   if (segments.length < 3) {
     return notFound("Route not found");
   }
@@ -38,6 +34,16 @@ export async function handleAdmin(
     .first<Record<string, unknown>>();
   if (!row) {
     return notFound("Ingest request not found");
+  }
+
+  if (
+    typeof row.workspace_id !== "string" ||
+    !canAdminWorkspace(actorResult.actor, row.workspace_id)
+  ) {
+    return notFound("Ingest request not found");
+  }
+  if (row.signature_verified !== 1) {
+    return forbidden("forbidden");
   }
 
   const force = url.searchParams.get("force") === "1";
