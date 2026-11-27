@@ -41,6 +41,7 @@ import { UsersPanel } from "./features/users/UsersPanel";
 import { CustomersPanel } from "./features/customers/CustomersPanel";
 import { getPreferences, setPreference, type UserPreferences } from "./features/preferences/api";
 
+import { AcquisitionDashboard } from "./features/analytics/AcquisitionDashboard";
 import { ConfiguratorPanel } from "./features/configurator/ConfiguratorPanel";
 
 const EXAMPLE_URIS = ["manual://proposal/demo", "shopify://order/example", "qbo://invoice/example"];
@@ -674,6 +675,7 @@ export default function App(): JSX.Element {
       href: "/configurator",
       label: "System",
       items: [
+        { id: "website-analytics", href: "/analytics", label: "Website analytics", icon: "view" },
         { id: "configurator", href: "/configurator", label: "Configurator", icon: "settings" },
         { id: "plan-preview", href: "/plan-preview", label: "Plan Preview", icon: "document" },
         { id: "events", href: "/events", label: "Events Viewer", icon: "history" },
@@ -1378,4 +1380,11 @@ export function ConfiguratorRoute(): JSX.Element {
   if (actorLoading) return <section className={stylex(styles.panel)}>Loading...</section>;
   if (!actor?.isSystemAdmin) return <NotAuthorized />;
   return <ConfiguratorPanel />;
+}
+
+export function AnalyticsRoute(): JSX.Element {
+  const { actor, actorLoading } = useAppState();
+  if (actorLoading) return <AcquisitionDashboard loadingAccess />;
+  if (!actor?.isSystemAdmin) return <NotAuthorized />;
+  return <AcquisitionDashboard />;
 }
