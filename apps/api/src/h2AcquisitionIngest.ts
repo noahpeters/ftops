@@ -1,5 +1,6 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { json, methodNotAllowed, notFound } from "./lib/http";
+import { websiteAcquisitionIntegration } from "./lib/websiteAcquisitionIntegration";
 import type { Env } from "./lib/types";
 
 type EventRow = {
@@ -47,10 +48,11 @@ function isEventRow(value: unknown): value is EventRow {
 }
 
 const insert = `INSERT INTO h2_acquisition_events
-  (workspace_id, id, kind, occurred_at, received_at, visitor_id, session_id, payload)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  (workspace_id, integration_id, id, kind, occurred_at, received_at, visitor_id, session_id, payload)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(kind, id) DO UPDATE SET payload = excluded.payload
   WHERE workspace_id IS NOT excluded.workspace_id
+     OR integration_id IS NOT excluded.integration_id
      OR occurred_at IS NOT excluded.occurred_at
      OR received_at IS NOT excluded.received_at
      OR visitor_id IS NOT excluded.visitor_id
@@ -63,8 +65,9 @@ export class H2AcquisitionIngest extends WorkerEntrypoint<Env> {
   async fetch(request: Request): Promise<Response> {
     if (new URL(request.url).pathname !== "/h2-acquisition") return notFound("Route not found");
     if (request.method !== "POST") return methodNotAllowed(["POST"]);
-    const workspaceId = this.env.CABINET_ANALYTICS_WORKSPACE_ID;
-    if (!workspaceId) return json({ error: "acquisition_workspace_not_configured" }, 503);
+    const integration = await websiteAcquisitionIntegration(this.env);
+    if (!integration?.is_active) return json({ error: "acquisition_integration_unavailable" }, 503);
+    const workspaceId = integration.workspace_id;
     const body = (await request.json().catch(() => null)) as {
       events?: unknown[];
       caughtUp?: boolean;
@@ -82,10 +85,10 @@ export class H2AcquisitionIngest extends WorkerEntrypoint<Env> {
 
     if (body.caughtUp) {
       await this.env.DB.prepare(
-        `INSERT INTO h2_acquisition_delivery_state(workspace_id, caught_up_at) VALUES (?, ?)
-         ON CONFLICT(workspace_id) DO UPDATE SET caught_up_at = excluded.caught_up_at`
+        `INSERT INTO h2_acquisition_delivery_state(workspace_id, integration_id, caught_up_at) VALUES (?, ?, ?)
+         ON CONFLICT(workspace_id) DO UPDATE SET integration_id=excluded.integration_id, caught_up_at=excluded.caught_up_at`
       )
-        .bind(workspaceId, new Date().toISOString())
+        .bind(workspaceId, integration.id, new Date().toISOString())
         .run();
     } else {
       // D1 either accepts the whole batch or rolls it back. The immutable-row
@@ -94,6 +97,7 @@ export class H2AcquisitionIngest extends WorkerEntrypoint<Env> {
         body.events.map((row) =>
           this.env.DB.prepare(insert).bind(
             workspaceId,
+            integration.id,
             row.id,
             row.kind,
             row.occurred_at,

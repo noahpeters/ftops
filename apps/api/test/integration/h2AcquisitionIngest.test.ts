@@ -39,8 +39,13 @@ it("commits unchanged H2 events through the private Cloudflare entrypoint", asyn
             contents: compile("src/h2AcquisitionIngest.ts"),
           },
           { type: "ESModule", path: "lib/http", contents: compile("src/lib/http.ts") },
+          {
+            type: "ESModule",
+            path: "lib/websiteAcquisitionIntegration",
+            contents: compile("src/lib/websiteAcquisitionIntegration.ts"),
+          },
         ],
-        bindings: { CABINET_ANALYTICS_WORKSPACE_ID: "default" },
+        bindings: { H2_ACQUISITION_INTEGRATION_ID: "website-1" },
         d1Databases: { DB: "analytics" },
       },
     ],
@@ -49,9 +54,17 @@ it("commits unchanged H2 events through the private Cloudflare entrypoint", asyn
     const db = await mf.getD1Database("DB", "ftops");
     await db.exec("CREATE TABLE workspaces (id TEXT PRIMARY KEY)");
     await db.exec("INSERT INTO workspaces VALUES ('default')");
-    const migration = readFileSync("migrations/0040_h2_acquisition.sql", "utf8");
-    for (const sql of migration.match(/\s*CREATE TRIGGER\b[\s\S]*?END;|[^;]+;/g) ?? []) {
-      await db.prepare(sql).run();
+    await db.exec(
+      "CREATE TABLE integrations (id TEXT PRIMARY KEY, workspace_id TEXT, provider TEXT, environment TEXT, external_account_id TEXT, is_active INTEGER)"
+    );
+    await db.exec(
+      "INSERT INTO integrations VALUES ('website-1','default','website','production','from-trees.com',1)"
+    );
+    for (const migration of ["0040_h2_acquisition.sql", "0041_h2_acquisition_integration.sql"]) {
+      const sql = readFileSync(`migrations/${migration}`, "utf8").replace(/^--.*$/gm, "");
+      for (const statement of sql.match(/\s*CREATE TRIGGER\b[\s\S]*?END;|[^;]+;/g) ?? []) {
+        await db.prepare(statement).run();
+      }
     }
 
     const row = {
@@ -83,10 +96,14 @@ it("commits unchanged H2 events through the private Cloudflare entrypoint", asyn
     expect((await deliver([{ ...row, received_at: "bad-time" }])).status).toBe(400);
     expect((await deliver([], true)).status).toBe(204);
     const events = await db.prepare("SELECT * FROM h2_acquisition_events").all();
-    expect(events.results).toEqual([{ workspace_id: "default", ...row }]);
+    expect(events.results).toEqual([
+      { workspace_id: "default", integration_id: "website-1", ...row },
+    ]);
     expect(
-      await db.prepare("SELECT workspace_id FROM h2_acquisition_delivery_state").first()
-    ).toEqual({ workspace_id: "default" });
+      await db
+        .prepare("SELECT workspace_id, integration_id FROM h2_acquisition_delivery_state")
+        .first()
+    ).toEqual({ workspace_id: "default", integration_id: "website-1" });
   } finally {
     await mf.dispose();
   }
