@@ -65,6 +65,11 @@ it("loads reports in workerd and rejects upstream redirects without following th
           },
           { type: "ESModule", path: "lib/identity", contents: compile("src/lib/identity.ts") },
           { type: "ESModule", path: "routes/me", contents: compile("src/routes/me.ts") },
+          {
+            type: "ESModule",
+            path: "lib/websiteAcquisitionIntegration",
+            contents: compile("src/lib/websiteAcquisitionIntegration.ts"),
+          },
         ],
         d1Databases: { DB: "reporting-roles" },
         bindings: {
