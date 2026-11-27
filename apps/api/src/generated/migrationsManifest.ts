@@ -41,7 +41,8 @@ export const MIGRATIONS = [
   "0039_customer_qualification.sql",
   "0040_h2_acquisition.sql",
   "0041_h2_acquisition_integration.sql",
-  "0042_inquiry_replies.sql"
+  "0042_inquiry_replies.sql",
+  "0043_h2_inquiry_jobs.sql"
 ] as const;
-export const LATEST_MIGRATION = "0042_inquiry_replies.sql";
-export const MIGRATIONS_COUNT = 42;
+export const LATEST_MIGRATION = "0043_h2_inquiry_jobs.sql";
+export const MIGRATIONS_COUNT = 43;
