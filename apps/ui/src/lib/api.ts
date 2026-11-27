@@ -103,5 +103,7 @@ export async function fetchMe() {
     isSystemAdmin: boolean;
     workspaceIds: string[];
     workspaceAdminIds: string[];
+    cabinetAnalyticsWorkspaceId: string | null;
+    websiteAnalyticsIntegration: { id: string; workspaceId: string } | null;
   }>(buildUrl("/me"));
 }

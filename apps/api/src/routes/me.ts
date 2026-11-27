@@ -1,6 +1,7 @@
 import { json } from "../lib/http";
 import type { Env } from "../lib/types";
-import { requireActor } from "../lib/access";
+import { websiteAcquisitionIntegration } from "../lib/websiteAcquisitionIntegration";
+import { canAccessWorkspace, requireActor } from "../lib/access";
 
 export async function handleMe(
   _segments: string[],
@@ -15,10 +16,20 @@ export async function handleMe(
   }
 
   const { actor } = actorResult;
+  const reportingWorkspaceId = env.CABINET_ANALYTICS_WORKSPACE_ID;
+  const websiteIntegration = await websiteAcquisitionIntegration(env);
   return json({
     email: actor.email,
     isSystemAdmin: actor.isSystemAdmin,
     workspaceIds: actor.workspaceIds,
     workspaceAdminIds: actor.workspaceAdminIds,
+    websiteAnalyticsIntegration:
+      websiteIntegration && canAccessWorkspace(actor, websiteIntegration.workspace_id)
+        ? { id: websiteIntegration.id, workspaceId: websiteIntegration.workspace_id }
+        : null,
+    cabinetAnalyticsWorkspaceId:
+      reportingWorkspaceId && canAccessWorkspace(actor, reportingWorkspaceId)
+        ? reportingWorkspaceId
+        : null,
   });
 }

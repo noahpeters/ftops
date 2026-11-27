@@ -472,10 +472,16 @@ export function IngestPanel({
                         type="button"
                         className={stylex(
                           styles.replayButton,
-                          replayingIds.has(request.id) && styles.replayButtonDisabled
+                          (!request.signature_verified || replayingIds.has(request.id)) &&
+                            styles.replayButtonDisabled
                         )}
                         onClick={(event) => handleReplay(event, request.id)}
-                        disabled={replayingIds.has(request.id)}
+                        disabled={!request.signature_verified || replayingIds.has(request.id)}
+                        title={
+                          request.signature_verified
+                            ? undefined
+                            : "Webhook signature was not verified"
+                        }
                       >
                         {replayingIds.has(request.id) ? "Replaying..." : "Replay"}
                       </button>

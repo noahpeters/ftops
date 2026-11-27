@@ -2,13 +2,17 @@ import { afterEach, expect, it, vi } from "vitest";
 import { handleConfigurator } from "../../src/routes/configurator";
 import { requireActor } from "../../src/lib/access";
 import type { Env } from "../../src/lib/types";
-vi.mock("../../src/lib/access", () => ({ requireActor: vi.fn() }));
+vi.mock("../../src/lib/access", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/lib/access")>()),
+  requireActor: vi.fn(),
+}));
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 const env = {
   CABINET_ANALYTICS_URL: "https://rooms.example",
+  CABINET_ANALYTICS_WORKSPACE_ID: "default",
   CABINET_ANALYTICS_READ_TOKEN: "private-report-token",
 } as Env;
 const request = (method = "GET") =>
@@ -16,21 +20,21 @@ const request = (method = "GET") =>
     method,
     headers: { "Cf-Access-Authenticated-User-Email": "admin@example.com" },
   });
-function admin(value: boolean) {
+function admin(value: boolean, workspaceIds: string[] = [], workspaceAdminIds: string[] = []) {
   vi.mocked(requireActor).mockResolvedValue({
     ok: true,
     actor: {
       email: "admin@example.com",
       isSystemAdmin: value,
-      workspaceIds: [],
-      workspaceAdminIds: [],
+      workspaceIds,
+      workspaceAdminIds,
     },
   });
 }
-it("rejects unauthenticated and non-admin requests before contacting the reporting service", async () => {
+it("rejects unauthenticated and unrelated workspace requests before contacting the reporting service", async () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
-  admin(false);
+  admin(false, ["another-workspace"]);
   expect((await handleConfigurator([], request(), env)).status).toBe(403);
   expect(
     (await handleConfigurator([], new Request("https://ops.example/configurator"), env)).status
@@ -40,7 +44,9 @@ it("rejects unauthenticated and non-admin requests before contacting the reporti
 it("allows only reads and reports a missing connection distinctly", async () => {
   admin(true);
   expect((await handleConfigurator([], request("POST"), env)).status).toBe(405);
-  const response = await handleConfigurator([], request(), {} as Env);
+  const response = await handleConfigurator([], request(), {
+    CABINET_ANALYTICS_WORKSPACE_ID: "default",
+  } as Env);
   expect(response.status).toBe(503);
   expect(await response.json()).toEqual({ error: "configurator_not_connected" });
 });
@@ -140,13 +146,13 @@ it("gates exports and forwards only construction settings over the private bindi
   });
 });
 
-it("serves the pinned installer only to authenticated system administrators", async () => {
+it("serves the pinned installer to authenticated members of the owning workspace", async () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
   admin(false);
-  expect((await handleConfigurator(["extension"], request(), {} as Env)).status).toBe(403);
-  admin(true);
-  const response = await handleConfigurator(["extension"], request(), {} as Env);
+  expect((await handleConfigurator(["extension"], request(), env)).status).toBe(403);
+  admin(false, ["default"]);
+  const response = await handleConfigurator(["extension"], request(), env);
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toBe("no-store");
   const body = (await response.json()) as any;
@@ -160,7 +166,7 @@ it("serves the pinned installer only to authenticated system administrators", as
   expect(fetcher).not.toHaveBeenCalled();
 });
 
-it("restricts economics reports to admins and forwards only slug and revision", async () => {
+it("restricts economics reports to workspace admins and forwards only slug and revision", async () => {
   const fetcher = vi
     .fn()
     .mockResolvedValue(Response.json({ report: { totals: { cost: 100 } }, csv: "report" }));
@@ -169,10 +175,10 @@ it("restricts economics reports to admins and forwards only slug and revision", 
     "https://ops.example/configurator/cost-report?slug=aaaaaaaa&revision=4&margin=0&token=secret",
     { headers: request().headers }
   );
-  admin(false);
+  admin(false, ["default"]);
   expect((await handleConfigurator(["cost-report"], costRequest, boundEnv)).status).toBe(403);
   expect(fetcher).not.toHaveBeenCalled();
-  admin(true);
+  admin(false, ["default"], ["default"]);
   const response = await handleConfigurator(["cost-report"], costRequest, boundEnv);
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toBe("no-store");
@@ -184,7 +190,7 @@ it("restricts economics reports to admins and forwards only slug and revision", 
 });
 
 it("sends only the Pacific calendar window to the private acquisition endpoint", async () => {
-  admin(true);
+  admin(false, ["default"]);
   vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-03T06:00:00Z"));
   const fetcher = vi.fn().mockResolvedValue(Response.json({ totals: { views: 3 } }));
   vi.stubGlobal("fetch", fetcher);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import worker from "../../src/index";
 import { createTestEnv } from "../helpers/miniflare";
@@ -47,4 +47,46 @@ describe("ingest request browsing", () => {
     await expect(detailResponse.json()).resolves.toMatchObject({ id: "EV_quo_1", provider: "quo" });
     await mf.dispose();
   });
+});
+
+it("lets workspace administrators replay verified requests from their own workspace", async () => {
+  const send = vi.fn();
+  const context = await createTestEnv({ env: { EVENT_QUEUE: { send } } });
+  if (!context) return;
+  const { env, db, mf } = context;
+  try {
+    await db.batch([
+      db.prepare(
+        `INSERT INTO users (workspace_id, user_id, email, name, workspace_admin, system_admin)
+         VALUES ('default','admin','admin@test.example','Test Admin',1,0),
+                ('default','member','member@test.example','Test Member',0,0)`
+      ),
+      db.prepare(
+        `INSERT INTO ingest_requests
+         (id,workspace_id,provider,received_at,method,url,headers_json,body_text,signature_verified)
+         VALUES ('owned','default','quickbooks','2026-11-24','POST','/webhook','{}','{}',1),
+                ('foreign','other','quickbooks','2026-11-24','POST','/webhook','{}','{}',1),
+                ('unverified','default','quickbooks','2026-11-24','POST','/webhook','{}','{}',0)`
+      ),
+    ]);
+    const replay = (id: string, role = "admin") =>
+      worker.fetch(
+        new Request(`http://localhost/admin/ingest-requests/${id}/replay`, {
+          method: "POST",
+          headers: { "Cf-Access-Authenticated-User-Email": `${role}@test.example` },
+        }),
+        env,
+        {} as ExecutionContext
+      );
+
+    expect((await replay("foreign")).status).toBe(404);
+    expect((await replay("owned", "member")).status).toBe(404);
+    expect((await replay("unverified")).status).toBe(403);
+    expect(send).not.toHaveBeenCalled();
+    expect((await replay("owned")).status).toBe(200);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0].payload).toMatchObject({ ingestRequestId: "owned" });
+  } finally {
+    await mf.dispose();
+  }
 });

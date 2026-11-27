@@ -1,7 +1,7 @@
 name = "ftops"
 compatibility_date = "2026-01-01"
 compatibility_flags = ["nodejs_compat"]
-main = "src/index.ts"
+main = "src/production.ts"
 workers_dev = false
 
 # Only integration-authenticated website intake is public. Staff API routes are
@@ -61,6 +61,10 @@ enabled = true
 invocation_logs = true
 
 [vars]
+# Workspace that owns the data exposed by the private H2 reporting service.
+CABINET_ANALYTICS_WORKSPACE_ID = "default"
+# Existing production from-trees.com website integration.
+H2_ACQUISITION_INTEGRATION_ID = "d8960b6e-48a4-46bd-89d0-62c2873bb00d"
 INTEGRATIONS_KEY_ID = "v1"
 QBO_REDIRECT_URI = "https://ops.from-trees.com/api/integrations/qbo/callback"
 # Set true for dev-only direct upload fallback (no presigned URLs).

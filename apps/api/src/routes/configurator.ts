@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 import { SKETCHUP_EXTENSION } from "../assets/sketchupExtension";
 import { forbidden, json, methodNotAllowed, notFound } from "../lib/http";
-import { requireActor } from "../lib/access";
+import { canAccessWorkspace, canAdminWorkspace, requireActor } from "../lib/access";
 import type { Env } from "../lib/types";
 
 export async function handleConfigurator(segments: string[], request: Request, env: Env) {
@@ -13,7 +13,9 @@ export async function handleConfigurator(segments: string[], request: Request, e
     return forbidden("forbidden");
   const actor = await requireActor(env, request);
   if (!actor.ok) return actor.response;
-  if (!actor.actor.isSystemAdmin) return forbidden("forbidden");
+  const workspaceId = env.CABINET_ANALYTICS_WORKSPACE_ID;
+  const canViewReport = segments[0] === "cost-report" ? canAdminWorkspace : canAccessWorkspace;
+  if (!workspaceId || !canViewReport(actor.actor, workspaceId)) return forbidden("forbidden");
   if (request.method !== "GET") return methodNotAllowed(["GET"]);
   if (
     segments.length > 1 ||

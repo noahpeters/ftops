@@ -34,8 +34,10 @@ it("loads reports in workerd and rejects upstream redirects without following th
             type: "ESModule",
             path: "index.js",
             contents: `import { handleConfigurator } from './routes/configurator';
+              import { handleMe } from './routes/me';
               export default { fetch(request, env) {
                 const leaf = new URL(request.url).pathname.split('/').pop();
+                if (leaf === "me") return handleMe([], request, env);
                 const segments = ['design','export','extension','cost-report','acquisition'].includes(leaf) ? [leaf] : [];
                 return handleConfigurator(segments, request, env);
               }};`,
@@ -59,10 +61,19 @@ it("loads reports in workerd and rejects upstream redirects without following th
           {
             type: "ESModule",
             path: "lib/access",
-            contents: `export async function requireActor() { return {ok:true,actor:{isSystemAdmin:true}}; }`,
+            contents: compile("src/lib/access.ts"),
+          },
+          { type: "ESModule", path: "lib/identity", contents: compile("src/lib/identity.ts") },
+          { type: "ESModule", path: "routes/me", contents: compile("src/routes/me.ts") },
+          {
+            type: "ESModule",
+            path: "lib/websiteAcquisitionIntegration",
+            contents: compile("src/lib/websiteAcquisitionIntegration.ts"),
           },
         ],
+        d1Databases: { DB: "reporting-roles" },
         bindings: {
+          CABINET_ANALYTICS_WORKSPACE_ID: "default",
           CABINET_ANALYTICS_URL: "https://rooms.example",
           CABINET_ANALYTICS_READ_TOKEN: "test-read-token",
         },
@@ -82,16 +93,52 @@ it("loads reports in workerd and rejects upstream redirects without following th
     ],
   });
   try {
+    const db = await mf.getD1Database("DB", "reporting-api");
+    await db.exec(
+      "CREATE TABLE users (email TEXT, workspace_id TEXT, workspace_admin INTEGER, system_admin INTEGER)"
+    );
+    await db.exec(
+      "INSERT INTO users VALUES ('admin@example.com','default',1,0), ('member@example.com','default',0,0), ('other@example.com','other',1,0)"
+    );
     const headers = { "Cf-Access-Authenticated-User-Email": "admin@example.com" };
+    const memberHeaders = { "Cf-Access-Authenticated-User-Email": "member@example.com" };
+    const otherHeaders = { "Cf-Access-Authenticated-User-Email": "other@example.com" };
+    const memberProfile = await mf.dispatchFetch("https://ops.example/api/me", {
+      headers: memberHeaders,
+    });
+    await expect(memberProfile.json()).resolves.toMatchObject({
+      isSystemAdmin: false,
+      cabinetAnalyticsWorkspaceId: "default",
+    });
+    const otherProfile = await mf.dispatchFetch("https://ops.example/api/me", {
+      headers: otherHeaders,
+    });
+    await expect(otherProfile.json()).resolves.toMatchObject({
+      cabinetAnalyticsWorkspaceId: null,
+    });
     const report = await mf.dispatchFetch("https://ops.example/api/configurator", { headers });
     expect(report.status).toBe(200);
     expect(await report.json()).toEqual({ path: "/admin/dashboard" });
     const acquisition = await mf.dispatchFetch(
       "https://ops.example/api/configurator/acquisition?days=30",
-      { headers }
+      { headers: memberHeaders }
     );
     expect(acquisition.status).toBe(200);
     expect(await acquisition.json()).toEqual({ path: "/admin/acquisition" });
+    expect(
+      (
+        await mf.dispatchFetch("https://ops.example/api/configurator/acquisition?days=30", {
+          headers: otherHeaders,
+        })
+      ).status
+    ).toBe(403);
+    expect(
+      (
+        await mf.dispatchFetch("https://ops.example/api/configurator/cost-report", {
+          headers: memberHeaders,
+        })
+      ).status
+    ).toBe(403);
     const preview = await mf.dispatchFetch(
       "https://ops.example/api/configurator/design?slug=room",
       {

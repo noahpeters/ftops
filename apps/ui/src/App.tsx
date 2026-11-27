@@ -19,7 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Outlet, useLocation, useNavigate, useParams } from "react-router";
+import { Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router";
 import stylex from "~/lib/stylex";
 import { colors, radius } from "./theme/tokens.stylex";
 import { buildUrl, fetchJson, fetchMe, setDebugEmailHeader } from "./lib/api";
@@ -41,6 +41,7 @@ import { UsersPanel } from "./features/users/UsersPanel";
 import { CustomersPanel } from "./features/customers/CustomersPanel";
 import { getPreferences, setPreference, type UserPreferences } from "./features/preferences/api";
 
+import { websiteAnalyticsPath } from "./features/analytics/model";
 import { AcquisitionDashboard } from "./features/analytics/AcquisitionDashboard";
 import { ConfiguratorPanel } from "./features/configurator/ConfiguratorPanel";
 
@@ -227,6 +228,8 @@ type ActorInfo = {
   isSystemAdmin: boolean;
   workspaceIds: string[];
   workspaceAdminIds: string[];
+  cabinetAnalyticsWorkspaceId: string | null;
+  websiteAnalyticsIntegration: { id: string; workspaceId: string } | null;
 };
 
 type AppContextValue = {
@@ -272,6 +275,8 @@ type AppContextValue = {
   selectedWorkspaceId: string | null;
   setSelectedWorkspaceId: (value: string | null) => void;
   actor: ActorInfo | null;
+  chosenReportingWorkspace: string | null;
+  websiteIntegrationId: string | null;
   actorLoading: boolean;
   userPreferences: UserPreferences;
   updateUserPreference: (
@@ -595,7 +600,19 @@ export default function App(): JSX.Element {
     }
   }
 
+  const chosenReportingWorkspace =
+    selectedWorkspaceId && actor?.cabinetAnalyticsWorkspaceId === selectedWorkspaceId
+      ? selectedWorkspaceId
+      : null;
+  const websiteIntegration = actor?.websiteAnalyticsIntegration;
+  const websiteIntegrationId =
+    websiteIntegration?.workspaceId === selectedWorkspaceId
+      ? (websiteIntegration?.id ?? null)
+      : null;
+  const websiteHref = websiteIntegrationId ? websiteAnalyticsPath(websiteIntegrationId) : null;
   const appContextValue: AppContextValue = {
+    chosenReportingWorkspace,
+    websiteIntegrationId,
     recordUri,
     setRecordUri,
     autoRunOnSelect,
@@ -653,6 +670,26 @@ export default function App(): JSX.Element {
         { id: "customers", href: "/customers", label: "Customers", icon: "users" },
         { id: "projects", href: "/projects", label: "Projects", icon: "folder" },
         { id: "tasks", href: "/tasks", label: "Tasks", icon: "check" },
+        ...(websiteHref
+          ? ([
+              {
+                id: "website-analytics",
+                href: websiteHref,
+                label: "Website analytics",
+                icon: "view",
+              },
+            ] satisfies NavigationGroup["items"])
+          : []),
+        ...(chosenReportingWorkspace
+          ? ([
+              {
+                id: "configurator",
+                href: "/configurator",
+                label: "Configurator",
+                icon: "settings",
+              },
+            ] satisfies NavigationGroup["items"])
+          : []),
       ],
     });
   }
@@ -672,11 +709,9 @@ export default function App(): JSX.Element {
   if (isSystemAdmin) {
     navigation.push({
       id: "system",
-      href: "/configurator",
+      href: "/workspaces",
       label: "System",
       items: [
-        { id: "website-analytics", href: "/analytics", label: "Website analytics", icon: "view" },
-        { id: "configurator", href: "/configurator", label: "Configurator", icon: "settings" },
         { id: "plan-preview", href: "/plan-preview", label: "Plan Preview", icon: "document" },
         { id: "events", href: "/events", label: "Events Viewer", icon: "history" },
         { id: "demo", href: "/demo", label: "Demo", icon: "view" },
@@ -729,7 +764,11 @@ export default function App(): JSX.Element {
             <WorkspaceLayout
               title="Navigation"
               groups={navigation}
-              activeId={location.pathname.split("/")[1] ?? ""}
+              activeId={
+                location.pathname === websiteHref
+                  ? "website-analytics"
+                  : (location.pathname.split("/")[1] ?? "")
+              }
               onNavigate={({ href }) => navigate(href)}
             >
               <main className={stylex(styles.mainContent)}>
@@ -1301,7 +1340,8 @@ export function TasksRoute(): JSX.Element {
 }
 
 export function IntegrationsRoute(): JSX.Element {
-  const { selectedWorkspaceId, workspaces, actor, actorLoading } = useAppState();
+  const { selectedWorkspaceId, workspaces, actor, actorLoading, websiteIntegrationId } =
+    useAppState();
   const isWorkspaceAdmin = Boolean(
     actor?.isSystemAdmin ||
     (selectedWorkspaceId && actor?.workspaceAdminIds.includes(selectedWorkspaceId))
@@ -1312,7 +1352,13 @@ export function IntegrationsRoute(): JSX.Element {
   if (!isWorkspaceAdmin) {
     return <NotAuthorized />;
   }
-  return <IntegrationsPanel workspaceId={selectedWorkspaceId} workspaces={workspaces} />;
+  return (
+    <IntegrationsPanel
+      workspaceId={selectedWorkspaceId}
+      workspaces={workspaces}
+      websiteIntegrationId={websiteIntegrationId}
+    />
+  );
 }
 
 export function IngestRoute(): JSX.Element {
@@ -1376,15 +1422,21 @@ function NotAuthorized(): JSX.Element {
 }
 
 export function ConfiguratorRoute(): JSX.Element {
-  const { actor, actorLoading } = useAppState();
-  if (actorLoading) return <section className={stylex(styles.panel)}>Loading...</section>;
-  if (!actor?.isSystemAdmin) return <NotAuthorized />;
-  return <ConfiguratorPanel />;
+  const { actor, actorLoading, chosenReportingWorkspace, workspaceLoading } = useAppState();
+  if (actorLoading || workspaceLoading)
+    return <section className={stylex(styles.panel)}>Loading...</section>;
+  if (!actor || !chosenReportingWorkspace) return <NotAuthorized />;
+  const canViewCostReport =
+    actor.isSystemAdmin || actor.workspaceAdminIds.includes(chosenReportingWorkspace);
+  return <ConfiguratorPanel canViewCostReport={canViewCostReport} />;
 }
 
 export function AnalyticsRoute(): JSX.Element {
-  const { actor, actorLoading } = useAppState();
-  if (actorLoading) return <AcquisitionDashboard loadingAccess />;
-  if (!actor?.isSystemAdmin) return <NotAuthorized />;
-  return <AcquisitionDashboard />;
+  const { actorLoading, websiteIntegrationId, workspaceLoading } = useAppState();
+  const { integrationId } = useParams();
+  if (actorLoading || workspaceLoading) return <AcquisitionDashboard loadingAccess />;
+  if (!websiteIntegrationId || (integrationId && integrationId !== websiteIntegrationId))
+    return <NotAuthorized />;
+  if (!integrationId) return <Navigate to={websiteAnalyticsPath(websiteIntegrationId)} replace />;
+  return <AcquisitionDashboard key={integrationId} integrationId={integrationId} />;
 }
