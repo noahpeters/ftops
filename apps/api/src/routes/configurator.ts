@@ -1,3 +1,4 @@
+import { DateTime } from "luxon";
 import { SKETCHUP_EXTENSION } from "../assets/sketchupExtension";
 import { forbidden, json, methodNotAllowed, notFound } from "../lib/http";
 import { requireActor } from "../lib/access";
@@ -16,7 +17,8 @@ export async function handleConfigurator(segments: string[], request: Request, e
   if (request.method !== "GET") return methodNotAllowed(["GET"]);
   if (
     segments.length > 1 ||
-    (segments[0] && !["design", "export", "extension", "cost-report"].includes(segments[0]))
+    (segments[0] &&
+      !["design", "export", "extension", "cost-report", "acquisition"].includes(segments[0]))
   )
     return notFound("Route not found");
   if (segments[0] === "extension")
@@ -29,11 +31,13 @@ export async function handleConfigurator(segments: string[], request: Request, e
   const target = new URL(
     segments[0] === "cost-report"
       ? "/admin/cost-report"
-      : segments[0] === "export"
-        ? "/admin/export"
-        : segments[0] === "design"
-          ? "/admin/design"
-          : "/admin/dashboard",
+      : segments[0] === "acquisition"
+        ? "/admin/acquisition"
+        : segments[0] === "export"
+          ? "/admin/export"
+          : segments[0] === "design"
+            ? "/admin/design"
+            : "/admin/dashboard",
     env.CABINET_ANALYTICS_URL
   );
   if (target.protocol !== "https:") return json({ error: "configurator_not_connected" }, 503);
@@ -61,10 +65,25 @@ export async function handleConfigurator(segments: string[], request: Request, e
             "shakerPanelThickness",
             "shakerGrooveDepth",
           ]
-        : ["days", "page", "slug"];
+        : segments[0] === "acquisition"
+          ? []
+          : ["days", "page", "slug"];
   for (const key of filters) {
     const value = incoming.searchParams.get(key);
     if (value !== null) target.searchParams.set(key, value);
+  }
+  if (segments[0] === "acquisition") {
+    const days = incoming.searchParams.get("days") ?? "7";
+    if (!["7", "30", "90"].includes(days)) return json({ error: "invalid_days" }, 400);
+    const today = DateTime.now().setZone("America/Los_Angeles").startOf("day");
+    target.searchParams.set(
+      "start",
+      today
+        .minus({ days: Number(days) - 1 })
+        .toUTC()
+        .toISO()!
+    );
+    target.searchParams.set("end", today.plus({ days: 1 }).toUTC().toISO()!);
   }
   try {
     const reportingFetch = env.CABINET_ANALYTICS_SERVICE
@@ -103,6 +122,8 @@ export async function handleConfigurator(segments: string[], request: Request, e
         response.status
       );
     }
+    if (!response.ok && segments[0] === "acquisition")
+      return json({ error: "acquisition_unavailable" }, 503);
     if (!response.ok)
       return json(
         { error: response.status === 404 ? "design_not_found" : "configurator_unavailable" },

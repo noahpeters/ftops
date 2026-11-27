@@ -182,3 +182,24 @@ it("restricts economics reports to admins and forwards only slug and revision", 
   fetcher.mockResolvedValue(Response.json({ error: "design_revision_changed" }, { status: 409 }));
   expect((await handleConfigurator(["cost-report"], costRequest, boundEnv)).status).toBe(409);
 });
+
+it("sends only the Pacific calendar window to the private acquisition endpoint", async () => {
+  admin(true);
+  vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-03T06:00:00Z"));
+  const fetcher = vi.fn().mockResolvedValue(Response.json({ totals: { views: 3 } }));
+  vi.stubGlobal("fetch", fetcher);
+  const acquisition = (days: string) =>
+    new Request(`https://ops.example/configurator/acquisition?days=${days}&start=untrusted`, {
+      headers: { "Cf-Access-Authenticated-User-Email": "admin@example.com" },
+    });
+  expect((await handleConfigurator(["acquisition"], acquisition("365"), env)).status).toBe(400);
+  expect(fetcher).not.toHaveBeenCalled();
+  const response = await handleConfigurator(["acquisition"], acquisition("7"), env);
+  const target = fetcher.mock.calls[0][0] as URL;
+  expect(target.pathname).toBe("/admin/acquisition");
+  expect([...target.searchParams.entries()]).toEqual([
+    ["start", "2026-10-27T07:00:00.000Z"],
+    ["end", "2026-11-03T08:00:00.000Z"],
+  ]);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+});

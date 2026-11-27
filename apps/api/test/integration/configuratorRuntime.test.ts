@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 import { Miniflare } from "miniflare";
 import ts from "typescript";
 import { expect, it } from "vitest";
@@ -9,6 +10,7 @@ it("loads reports in workerd and rejects upstream redirects without following th
     ts.transpileModule(readFileSync(resolve(file), "utf8"), {
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
     }).outputText;
+  const luxonRoot = dirname(createRequire(import.meta.url).resolve("luxon/package.json"));
   const mf = new Miniflare({
     workers: [
       {
@@ -34,7 +36,7 @@ it("loads reports in workerd and rejects upstream redirects without following th
             contents: `import { handleConfigurator } from './routes/configurator';
               export default { fetch(request, env) {
                 const leaf = new URL(request.url).pathname.split('/').pop();
-                const segments = ['design','export','extension','cost-report'].includes(leaf) ? [leaf] : [];
+                const segments = ['design','export','extension','cost-report','acquisition'].includes(leaf) ? [leaf] : [];
                 return handleConfigurator(segments, request, env);
               }};`,
           },
@@ -47,6 +49,11 @@ it("loads reports in workerd and rejects upstream redirects without following th
             type: "ESModule",
             path: "assets/sketchupExtension",
             contents: compile("src/assets/sketchupExtension.ts"),
+          },
+          {
+            type: "ESModule",
+            path: "routes/luxon",
+            contents: readFileSync(resolve(luxonRoot, "build/es6/luxon.mjs"), "utf8"),
           },
           { type: "ESModule", path: "lib/http", contents: compile("src/lib/http.ts") },
           {
@@ -79,6 +86,12 @@ it("loads reports in workerd and rejects upstream redirects without following th
     const report = await mf.dispatchFetch("https://ops.example/api/configurator", { headers });
     expect(report.status).toBe(200);
     expect(await report.json()).toEqual({ path: "/admin/dashboard" });
+    const acquisition = await mf.dispatchFetch(
+      "https://ops.example/api/configurator/acquisition?days=30",
+      { headers }
+    );
+    expect(acquisition.status).toBe(200);
+    expect(await acquisition.json()).toEqual({ path: "/admin/acquisition" });
     const preview = await mf.dispatchFetch(
       "https://ops.example/api/configurator/design?slug=room",
       {
