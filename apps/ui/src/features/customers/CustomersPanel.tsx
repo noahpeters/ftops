@@ -5,6 +5,7 @@ import {
   customerStatuses,
   type CustomerSort,
 } from "./CustomerDirectory";
+import { InquiryReplies } from "./InquiryReplies";
 import { CustomerQualification } from "./CustomerQualification";
 import {
   Badge,
@@ -1094,6 +1095,13 @@ export function CustomersPanel({
                         )}
                       </div>
                     </Panel>
+                    {workspaceId && (
+                      <InquiryReplies
+                        key={workspaceId + detail.customer.id}
+                        workspace={workspaceId}
+                        customer={detail.customer.id}
+                      />
+                    )}
                     <Panel title="Primary contact">
                       {primaryContact ? (
                         <div>

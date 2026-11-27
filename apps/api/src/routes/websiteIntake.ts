@@ -1,3 +1,4 @@
+import { deliver } from "../services/inquiryMail";
 import { classifyCustomer } from "../services/customerQualification";
 import { canAccessWorkspace, requireActor } from "../lib/access";
 import type { Env } from "../lib/types";
@@ -100,18 +101,29 @@ export async function handleWebsiteIntake(
     )
       .bind(integrationId, fields.externalEventId)
       .first<{ id: string; raw_payload: string; reconciliation_status: string }>();
-  const response = (
+  const response = async (
     row: { id: string; raw_payload: string; reconciliation_status: string },
     duplicate: boolean
   ) =>
     canonical(JSON.parse(row.raw_payload)) !== canonical(parsed)
       ? json({ error: "event_id_payload_conflict" }, 409)
       : json(
-          { submissionId: row.id, status: row.reconciliation_status, duplicate },
+          {
+            submissionId: row.id,
+            status: row.reconciliation_status,
+            duplicate,
+            staffNotificationQueued: Boolean(
+              await env.DB.prepare(
+                "SELECT 1 FROM inquiry_mail WHERE submission_id=? AND kind='notification'"
+              )
+                .bind(row.id)
+                .first()
+            ),
+          },
           duplicate ? 200 : 201
         );
   const previous = await replay();
-  if (previous) return response(previous, true);
+  if (previous) return await response(previous, true);
   const id = crypto.randomUUID();
   const customerId = crypto.randomUUID();
   const contactId = crypto.randomUUID();
@@ -263,14 +275,50 @@ export async function handleWebsiteIntake(
       )
     );
   }
+  // Only an explicitly handed-off submission can produce an FTOPS staff alert.
+  // Older storefront revisions still own their alerts during rollout.
+  if (request.headers.get("X-Inquiry-Notification") === "ftops") {
+    const settings = await env.DB.prepare(
+      "SELECT mailbox FROM inquiry_settings WHERE workspace_id=?"
+    )
+      .bind(workspaceId)
+      .first<{ mailbox: string }>();
+    if (
+      !settings?.mailbox ||
+      !env.APP_BASE_URL ||
+      !env.DAILY_SUMMARY_FROM_EMAIL ||
+      !env.RESEND_API_KEY
+    )
+      return json({ error: "inquiry_notifications_not_configured" }, 503);
+    const base = new URL(env.APP_BASE_URL).origin;
+    batch.push(
+      statement(
+        `INSERT INTO inquiry_mail(submission_id,kind,payload)
+      SELECT s.id,'notification',json_object('from',?,'to',?,
+        'subject','New customer inquiry','text',? || char(10) || char(10) ||
+        CASE WHEN s.customer_id IS NULL THEN 'Review unmatched inquiry: ' || ? || '/customers?inquiry=' || s.id
+        ELSE 'Open customer in FTOPS: ' || ? || '/customers/' || s.customer_id || '?inquiry=' || s.id END || '&workspace=' || ?)
+      FROM website_submissions s WHERE s.id=?`,
+        env.DAILY_SUMMARY_FROM_EMAIL,
+        settings.mailbox,
+        "New inquiry from " + name + ".",
+        base,
+        base,
+        encodeURIComponent(workspaceId),
+        id
+      )
+    );
+  }
   try {
     await env.DB.batch(batch);
   } catch (error) {
     const concurrent = await replay();
-    if (concurrent) return response(concurrent, true);
+    if (concurrent) return await response(concurrent, true);
     throw error;
   }
   const stored = (await replay())!;
+  if (request.headers.get("X-Inquiry-Notification") === "ftops")
+    ctx.waitUntil(deliver(env, id, "notification"));
   if (env.AI && typeof ctx?.waitUntil === "function") {
     ctx.waitUntil(
       (async () => {
@@ -285,7 +333,7 @@ export async function handleWebsiteIntake(
       })
     );
   }
-  return response(stored, false);
+  return await response(stored, false);
 }
 
 function validatePayload(value: unknown): {

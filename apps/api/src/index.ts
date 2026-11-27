@@ -1,3 +1,4 @@
+import { retryInquiryMail } from "./services/inquiryMail";
 import { applyCorsHeaders, corsPreflight, getCorsContext } from "./lib/cors";
 import { route } from "./lib/router";
 import type { Env, EventQueuePayload } from "./lib/types";
@@ -78,6 +79,7 @@ export default {
 
   async scheduled(controller: ScheduledController, env: Env, _ctx: ExecutionContext) {
     await Promise.all([
+      retryInquiryMail(env),
       sendDailySummaries(env, new Date(controller.scheduledTime)),
       enqueueDueQuoSyncs(env),
       syncAllQuoConversations(env, new Date(controller.scheduledTime)),

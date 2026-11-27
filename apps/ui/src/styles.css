@@ -20,3 +20,48 @@ button:not([role="tab"]):not([data-button-layout]):not([data-react-aria-pressabl
   height: 36px;
   padding: 6px 10px;
 }
+
+[data-inquiry-form] {
+  margin-block: 1rem;
+}
+[data-inquiry-form] summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+[data-inquiry-form] fieldset {
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+  margin-block: 0.8rem;
+  padding: 1rem;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+}
+[data-inquiry-form] label {
+  display: grid;
+  gap: 0.25rem;
+}
+[data-inquiry-form] label:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+[data-inquiry-form] input:not([type="checkbox"]),
+[data-inquiry-form] textarea,
+[data-inquiry-form] select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.45rem;
+  font: inherit;
+}
+[data-inquiry-form] textarea {
+  resize: vertical;
+}
+[data-inquiry-form] button {
+  justify-self: start;
+}
+[data-inquiry-form] article + article {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #bbb;
+}

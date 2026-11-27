@@ -1,5 +1,6 @@
 ("use client");
 
+import { InquirySettings, UnmatchedInquiry } from "./features/customers/InquiryReplies";
 import {
   Icon,
   Select,
@@ -341,7 +342,12 @@ export default function App(): JSX.Element {
         : false;
       if (!exists) {
         const fallback =
-          result.data.find((workspace) => workspace.slug === "default") ?? result.data[0];
+          result.data.find(
+            (workspace) =>
+              workspace.id === new URLSearchParams(window.location.search).get("workspace")
+          ) ??
+          result.data.find((workspace) => workspace.slug === "default") ??
+          result.data[0];
         setSelectedWorkspaceId(fallback?.id ?? null);
       }
     }
@@ -1231,6 +1237,9 @@ export function TemplatesRoute(): JSX.Element {
   return (
     <section className={stylex(styles.panel)}>
       <h2>Templates</h2>
+      {selectedWorkspaceId && (
+        <InquirySettings key={selectedWorkspaceId} workspace={selectedWorkspaceId} />
+      )}
       <TemplatesPanel
         workspaceId={selectedWorkspaceId}
         selectedTemplateKeyOverride={selectedKey}
@@ -1257,12 +1266,23 @@ export function CustomersRoute(): JSX.Element {
   if (actorLoading) return <section className={stylex(styles.panel)}>Loading...</section>;
   if (!isWorkspaceMember) return <NotAuthorized />;
   return (
-    <CustomersPanel
-      workspaceId={selectedWorkspaceId}
-      customerId={customerId ? decodeURIComponent(customerId) : undefined}
-      initialStatuses={userPreferences.customer_status_filters ?? ["lead", "active"]}
-      onStatusesChange={(statuses) => updateUserPreference("customer_status_filters", statuses)}
-    />
+    <>
+      {!customerId &&
+        selectedWorkspaceId &&
+        typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).has("inquiry") && (
+          <UnmatchedInquiry
+            workspace={selectedWorkspaceId}
+            id={new URLSearchParams(window.location.search).get("inquiry")!}
+          />
+        )}
+      <CustomersPanel
+        workspaceId={selectedWorkspaceId}
+        customerId={customerId ? decodeURIComponent(customerId) : undefined}
+        initialStatuses={userPreferences.customer_status_filters ?? ["lead", "active"]}
+        onStatusesChange={(statuses) => updateUserPreference("customer_status_filters", statuses)}
+      />
+    </>
   );
 }
 

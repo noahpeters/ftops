@@ -1,3 +1,4 @@
+import { handleInquiryReplies } from "../routes/inquiryReplies";
 import { handleWebsiteIntake, handleWebsiteSubmissions } from "../routes/websiteIntake";
 import { handleConfigurator } from "../routes/configurator";
 import { notFound } from "./http";
@@ -88,6 +89,7 @@ async function routesRoot(
       ingest: handleIngest,
       workspaces: handleWorkspaces,
       integrations: handleIntegrations,
+      "inquiry-replies": handleInquiryReplies,
       "website-intake": handleWebsiteIntake,
       "website-submissions": handleWebsiteSubmissions,
       admin: handleAdmin,
