@@ -21,6 +21,7 @@ import {
   percent,
   sourceName,
   useAnalytics,
+  type Counts,
   type Funnel,
   type Overview,
   type Stage,
@@ -126,13 +127,16 @@ const initialTable: TableQuery = { search: "", filters: {}, sort: null, page: 1,
 function Breakdown({
   report,
   source,
+  dimension,
+  onDimension,
   onOpen,
 }: {
   report: Overview;
   source: string;
+  dimension: Dimension;
+  onDimension: (dimension: Dimension) => void;
   onOpen: (dimension: Dimension, value: string) => void;
 }) {
-  const [dimension, setDimension] = useState<Dimension>("source");
   const [query, setQuery] = useState(initialTable);
   const rows =
     dimension === "source"
@@ -173,7 +177,7 @@ function Breakdown({
           value={dimension}
           options={dimensions}
           onChange={(value) => {
-            setDimension(value === "landing" ? "landing" : "source");
+            onDimension(value === "landing" ? "landing" : "source");
             setQuery(initialTable);
           }}
         />
@@ -215,6 +219,8 @@ export function AcquisitionDashboard({
   const [view, setView] = useState("overview");
   const [days, setDays] = useState("7");
   const [grain, setGrain] = useState<Grain>("day");
+  const [measure, setMeasure] = useState<keyof Counts>("sessions");
+  const [dimension, setDimension] = useState<Dimension>("source");
   const [source, setSource] = useState("");
   const [stage, setStage] = useState<Stage>("");
   const [landing, setLanding] = useState("");
@@ -323,6 +329,8 @@ export function AcquisitionDashboard({
                   grain={grain}
                   onGrain={setGrain}
                   filtered={Boolean(source)}
+                  measure={measure}
+                  onMeasure={setMeasure}
                 />
                 <InquiryFunnel funnel={report.funnel} onStep={openSessions} />
               </div>
@@ -330,6 +338,8 @@ export function AcquisitionDashboard({
                 key={`${days}:${source}`}
                 report={report}
                 source={source}
+                dimension={dimension}
+                onDimension={setDimension}
                 onOpen={(dimension, value) => {
                   openSessions("");
                   if (dimension === "source") setSource(value);

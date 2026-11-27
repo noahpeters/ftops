@@ -53,13 +53,16 @@ export function TrafficChart({
   grain,
   onGrain,
   filtered,
+  measure,
+  onMeasure,
 }: {
   series: Point[];
   grain: Grain;
   onGrain: (grain: Grain) => void;
   filtered: boolean;
+  measure: keyof Counts;
+  onMeasure: (measure: keyof Counts) => void;
 }) {
-  const [measure, setMeasure] = useState<keyof Counts>("sessions");
   const [point, setPoint] = useState<number | null>(null);
   const active = filtered && measure === "arrivals" ? "sessions" : measure;
   const shown = measures.filter(({ key }) => !filtered || key !== "arrivals");
@@ -100,7 +103,7 @@ export function TrafficChart({
             key={key}
             variant={active === key ? "secondary" : "ghost"}
             aria-pressed={active === key}
-            onPress={() => setMeasure(key)}
+            onPress={() => onMeasure(key)}
           >
             <span {...sx.props(styles.metric)}>
               <span {...sx.props(styles.totalTitle)}>{label}</span>
