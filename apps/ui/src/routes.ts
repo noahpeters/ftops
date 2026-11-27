@@ -22,6 +22,7 @@ export default [
     route("tasks", "routes/tasks.tsx"),
     route("tasks/kanban", "routes/tasks-kanban.tsx"),
     route("integrations", "routes/integrations.tsx"),
+    route("integrations/:integrationId/analytics", "routes/integration-analytics.tsx"),
     route("ingest", "routes/ingest.tsx"),
     route("workspaces", "routes/workspaces.tsx"),
     route("users", "routes/users.tsx"),
