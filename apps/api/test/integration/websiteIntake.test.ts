@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTestEnv } from "../helpers/miniflare";
 import worker from "../../src/index";
+import { handleH2WebsiteIntake } from "../../src/routes/websiteIntake";
 import { route } from "../../src/lib/router";
 import { encryptSecrets } from "../../src/lib/crypto/secrets";
 import type { Env } from "../../src/lib/types";
@@ -54,6 +55,30 @@ async function setup() {
 }
 
 describe("website intake", () => {
+  it("resolves private queue deliveries against the configured active integration", async () => {
+    const { env, db, mf } = await setup();
+    const ctx = {} as ExecutionContext;
+    const request = () =>
+      new Request("https://ftops.internal/h2-inquiry", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    try {
+      expect((await route(request(), env, ctx)).status).toBe(404);
+      expect((await handleH2WebsiteIntake(request(), env, ctx)).status).toBe(503);
+      env.H2_ACQUISITION_INTEGRATION_ID = "site-b";
+      expect((await handleH2WebsiteIntake(request(), env, ctx)).status).toBe(201);
+      expect((await handleH2WebsiteIntake(request(), env, ctx)).status).toBe(200);
+      expect(
+        await db.prepare("SELECT workspace_id,integration_id FROM website_submissions").first()
+      ).toEqual({ workspace_id: "ws_unknown", integration_id: "site-b" });
+      await db.prepare("UPDATE integrations SET is_active=0 WHERE id='site-b'").run();
+      expect((await handleH2WebsiteIntake(request(), env, ctx)).status).toBe(503);
+    } finally {
+      await mf.dispose();
+    }
+  });
   it("hands notifications off once and sends a member's edited reply with the selected workspace attachment", async () => {
     const { env, db, mf } = await setup();
     env.APP_BASE_URL = "https://ops.example.test";

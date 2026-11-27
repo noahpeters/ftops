@@ -1,3 +1,4 @@
+import { websiteAcquisitionIntegration } from "../lib/websiteAcquisitionIntegration";
 import { deliver } from "../services/inquiryMail";
 import { classifyCustomer } from "../services/customerQualification";
 import { canAccessWorkspace, requireActor } from "../lib/access";
@@ -60,6 +61,25 @@ export async function handleWebsiteIntake(
   ) as { intakeToken?: string };
   if (!secrets.intakeToken || !(await equalToken(token, secrets.intakeToken)))
     return json({ error: "invalid_integration_credential" }, 401);
+  return await acceptWebsiteSubmission(request, env, ctx, integration);
+}
+
+// Invoked exclusively by the H2 service binding. FTOPS resolves the integration
+// and workspace itself, including when a queued delivery is retried.
+export async function handleH2WebsiteIntake(request: Request, env: Env, ctx: ExecutionContext) {
+  if (new URL(request.url).pathname !== "/h2-inquiry") return notFound("Route not found");
+  if (request.method !== "POST") return methodNotAllowed(["POST"]);
+  const integration = await websiteAcquisitionIntegration(env);
+  if (!integration?.is_active) return json({ error: "website_integration_unavailable" }, 503);
+  return await acceptWebsiteSubmission(request, env, ctx, integration);
+}
+
+async function acceptWebsiteSubmission(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  integration: { id: string; workspace_id: string }
+) {
   if (new URL(request.url).search) return badRequest("query_parameters_not_supported");
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json"))
     return json({ error: "application_json_required" }, 415);
