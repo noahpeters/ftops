@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@from-trees/ui";
+import { useNavigate } from "react-router";
+import { websiteAnalyticsPath } from "../analytics/model";
 import { useCallback, useEffect, useState } from "react";
 import stylex from "~/lib/stylex";
 import { colors, radius } from "../../theme/tokens.stylex";
@@ -21,6 +24,7 @@ import type { WorkspaceRow } from "../workspaces/api";
 type IntegrationsPanelProps = {
   workspaceId: string | null;
   workspaces: WorkspaceRow[];
+  websiteIntegrationId: string | null;
 };
 
 const PROVIDERS = [
@@ -89,7 +93,12 @@ const styles = stylex.create({
   },
 });
 
-export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanelProps) {
+export function IntegrationsPanel({
+  workspaceId,
+  workspaces,
+  websiteIntegrationId,
+}: IntegrationsPanelProps) {
+  const navigate = useNavigate();
   const [integrations, setIntegrations] = useState<IntegrationRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [issuedCredential, setIssuedCredential] = useState<{
@@ -618,6 +627,15 @@ export function IntegrationsPanel({ workspaceId, workspaces }: IntegrationsPanel
                     )}
                   </td>
                   <td>
+                    {integration.id === websiteIntegrationId && (
+                      <Button
+                        variant="ghost"
+                        icon="view"
+                        onPress={() => navigate(websiteAnalyticsPath(integration.id))}
+                      >
+                        Website analytics
+                      </Button>
+                    )}
                     {integration.provider === "website" ? (
                       <>
                         <button

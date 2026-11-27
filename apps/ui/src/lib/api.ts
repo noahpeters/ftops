@@ -104,5 +104,6 @@ export async function fetchMe() {
     workspaceIds: string[];
     workspaceAdminIds: string[];
     cabinetAnalyticsWorkspaceId: string | null;
+    websiteAnalyticsIntegration: { id: string; workspaceId: string } | null;
   }>(buildUrl("/me"));
 }

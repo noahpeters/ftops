@@ -5,6 +5,7 @@ import { nowISO } from "../lib/utils";
 import { canAdminWorkspace, requireActor } from "../lib/access";
 import { handleQboIntegration } from "./qboIntegration";
 import { isTrustedMutationOrigin } from "../lib/security";
+import { handleWebsiteAnalytics } from "./websiteAnalytics";
 import { enqueueWorkspaceQuoSync } from "../services/quo";
 import { syncQuoIntegrationConversations } from "../services/quoConversationSync";
 
@@ -18,6 +19,8 @@ export async function handleIntegrations(
   _ctx: ExecutionContext,
   url: URL
 ) {
+  if (segments.length === 2 && segments[1] === "analytics")
+    return await handleWebsiteAnalytics(segments[0], request, env, url);
   const actorResult = await requireActor(env, request);
   if (!actorResult.ok) {
     return actorResult.response;
