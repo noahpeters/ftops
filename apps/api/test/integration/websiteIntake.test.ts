@@ -54,6 +54,122 @@ async function setup() {
 }
 
 describe("website intake", () => {
+  it("hands notifications off once and sends a member's edited reply with the selected workspace attachment", async () => {
+    const { env, db, mf } = await setup();
+    env.APP_BASE_URL = "https://ops.example.test";
+    env.DAILY_SUMMARY_FROM_EMAIL = "sender@example.test";
+    env.RESEND_API_KEY = "test";
+    const jobs: Promise<unknown>[] = [];
+    const ctx = {
+      waitUntil: (job: Promise<unknown>) => jobs.push(job),
+    } as unknown as ExecutionContext;
+    const mail = vi.fn(async () => Response.json({ id: "test-receipt" }));
+    vi.stubGlobal("fetch", mail);
+    const api = (path: string, body?: unknown, member = "admin", binary = false) =>
+      route(
+        new Request("https://ops.example.test/inquiry-replies/default/" + path, {
+          method: body === undefined ? "GET" : "POST",
+          headers: { "X-Debug-User-Email": member + "@example.test" },
+          body: body === undefined ? undefined : binary ? String(body) : JSON.stringify(body),
+        }),
+        env,
+        ctx
+      );
+    const submit = () =>
+      route(
+        new Request("https://ops.example.test/website-intake/site-a", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: "Bearer " + token,
+            "X-Inquiry-Notification": "ftops",
+          },
+          body: JSON.stringify({
+            ...payload,
+            message: JSON.stringify({
+              format: "h2-inquiry-v1",
+              source_kind: "furniture",
+              message: "Walnut table for six",
+            }),
+          }),
+        }),
+        env,
+        ctx
+      );
+    try {
+      for (const [role, admin] of [
+        ["admin", 1],
+        ["staff", 0],
+      ] as const)
+        await db
+          .prepare(
+            "INSERT INTO users(workspace_id,user_id,name,email,workspace_admin,system_admin) VALUES('default',?,?,?,?,0)"
+          )
+          .bind(role, role, role + "@example.test", admin)
+          .run();
+      expect((await submit()).status).toBe(503);
+      expect((await api("settings", { mailbox: "shop@example.test" }, "staff")).status).toBe(403);
+      expect((await api("settings", { mailbox: "shop@example.test" })).ok).toBe(true);
+      const file = (await (
+        await api("files?filename=guide.txt", "project guide", "admin", true)
+      ).json()) as { id: string };
+      expect(
+        (
+          await api("templates", {
+            source: "furniture",
+            subject: "Your table",
+            text: "Hi {{first_name}}, about {{project_description}}.",
+            files: [file.id],
+          })
+        ).ok
+      ).toBe(true);
+      const receipt = (await (await submit()).json()) as {
+        submissionId: string;
+        staffNotificationQueued: boolean;
+      };
+      expect(receipt.staffNotificationQueued).toBe(true);
+      expect((await submit()).status).toBe(200);
+      await Promise.all(jobs);
+      const customer = await db
+        .prepare("SELECT customer_id FROM website_submissions WHERE id=?")
+        .bind(receipt.submissionId)
+        .first<string>("customer_id");
+      expect(mail).toHaveBeenCalledTimes(1);
+      const emails = () =>
+        mail.mock.calls.map((call) =>
+          JSON.parse((call as unknown as [string, RequestInit])[1].body as string)
+        );
+      expect(emails()[0].text).toContain(
+        "/customers/" + customer + "?inquiry=" + receipt.submissionId
+      );
+      const [draft] = (await (await api("customer/" + customer, undefined, "staff")).json()) as {
+        text: string;
+        files: { id: string }[];
+      }[];
+      expect(draft.text).toBe("Hi Original, about Walnut table for six.");
+      expect(draft.files[0].id).toBe(file.id);
+      const send = () =>
+        api(
+          "send/" + receipt.submissionId,
+          { subject: "Walnut samples", text: "We can show you two finishes.", files: [file.id] },
+          "staff"
+        );
+      await Promise.all([send(), send()]);
+      await Promise.all(jobs);
+      expect(mail).toHaveBeenCalledTimes(2);
+      expect(emails()[1]).toMatchObject({
+        to: "person@example.com",
+        reply_to: "shop@example.test",
+        subject: "Walnut samples",
+        text: "We can show you two finishes.",
+        attachments: [{ filename: "guide.txt", content: btoa("project guide") }],
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      await mf.dispose();
+    }
+  });
+
   it("accepts leads independently of background qualification and assesses the stored description", async () => {
     const { env, db, mf } = await setup();
     const tasks: Promise<unknown>[] = [];

@@ -28,6 +28,11 @@ const FORWARDED_HEADER_KEYS = [
 ];
 
 const ALLOWLIST: AllowlistEntry[] = [
+  {
+    methods: new Set(["GET", "POST"]),
+    pattern: /^\/inquiry-replies\/[^/]+\/(?:settings|files|templates|(?:customer|send)\/[^/]+)$/,
+  },
+  { methods: new Set(["GET"]), pattern: /^\/website-submissions\/[^/]+$/ },
   { methods: new Set(["GET"]), pattern: /^\/integrations\/[^/]+\/analytics$/ },
   {
     methods: new Set(["GET"]),
