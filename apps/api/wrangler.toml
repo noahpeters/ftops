@@ -14,7 +14,7 @@ routes = [
 binding = "AI"
 
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 * * * *", "* * * * *"]
 
 [dev]
 inspector_port = 9230
@@ -87,3 +87,9 @@ APP_BASE_URL = "https://ops.from-trees.com"
 [[services]]
 binding = "CABINET_ANALYTICS_SERVICE"
 service = "h2-cabinet-rooms"
+
+# Read and acknowledge durable H2 inquiries; retry state lives in FTOPS D1.
+[[services]]
+binding = "H2_INQUIRY_QUEUE"
+service = "h2-cabinet-rooms"
+entrypoint = "H2InquiryQueue"

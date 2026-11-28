@@ -1,3 +1,4 @@
+import { processH2Inquiries } from "../../src/services/h2InquiryQueue";
 import { describe, expect, it, vi } from "vitest";
 import { createTestEnv } from "../helpers/miniflare";
 import worker from "../../src/index";
@@ -55,6 +56,74 @@ async function setup() {
 }
 
 describe("website intake", () => {
+  it("pulls without a wakeup, replays a lost transfer receipt, and retries only unfinished destinations in FTOPS", async () => {
+    const { env, db, mf } = await setup();
+    env.H2_ACQUISITION_INTEGRATION_ID = "site-a";
+    env.RESEND_API_KEY = "test";
+    const record = {
+      id: payload.externalEventId,
+      notifyStaff: false,
+      intake: payload,
+      acknowledgement: { event: "inquiry.received", email: "person@example.com" },
+      destinations: ["ftops", "resend"].map((kind) => ({
+        kind,
+        state: "pending",
+        attempts: 0,
+        nextAttempt: 0,
+      })),
+    };
+    let transferred = false,
+      loseReceipt = true;
+    env.H2_INQUIRY_QUEUE = {
+      fetch: async (input: RequestInfo | URL) => {
+        if (String(input).endsWith("/pending")) return Response.json(transferred ? [] : [record]);
+        // Both jobs already exist before H2 can acknowledge the transfer.
+        expect(await db.prepare("SELECT count(*) AS n FROM h2_inquiry_jobs").first("n")).toBe(2);
+        if (loseReceipt) {
+          loseReceipt = false;
+          return new Response(null, { status: 503 });
+        }
+        transferred = true;
+        return Response.json({ received: true });
+      },
+    } as Fetcher;
+    const provider = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 429 }))
+      .mockResolvedValueOnce(Response.json({ object: "event", event: "inquiry.received" }));
+    vi.stubGlobal("fetch", provider);
+    const ctx = {} as ExecutionContext;
+    try {
+      await processH2Inquiries(env, ctx);
+      await processH2Inquiries(env, ctx);
+      expect(transferred).toBe(true);
+      expect(provider).toHaveBeenCalledTimes(1);
+      expect(await db.prepare("SELECT count(*) AS n FROM website_submissions").first("n")).toBe(1);
+      expect(
+        await db
+          .prepare("SELECT state,next_attempt FROM h2_inquiry_jobs WHERE kind='resend'")
+          .first()
+      ).toMatchObject({ state: "pending", next_attempt: expect.any(Number) });
+      await db.prepare("UPDATE h2_inquiry_jobs SET next_attempt=0 WHERE kind='resend'").run();
+      await Promise.all([processH2Inquiries(env, ctx), processH2Inquiries(env, ctx)]);
+      expect(provider).toHaveBeenCalledTimes(2);
+      expect(
+        await db.prepare("SELECT count(*) AS n FROM h2_inquiry_jobs WHERE state='sent'").first("n")
+      ).toBe(2);
+      // A crashed acknowledgement may already have reached the customer.
+      await db
+        .prepare("UPDATE h2_inquiry_jobs SET state='sending',lease_until=0 WHERE kind='resend'")
+        .run();
+      await processH2Inquiries(env, ctx);
+      expect(
+        await db.prepare("SELECT state FROM h2_inquiry_jobs WHERE kind='resend'").first("state")
+      ).toBe("review");
+      expect(provider).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+      await mf.dispose();
+    }
+  });
   it("resolves private queue deliveries against the configured active integration", async () => {
     const { env, db, mf } = await setup();
     const ctx = {} as ExecutionContext;

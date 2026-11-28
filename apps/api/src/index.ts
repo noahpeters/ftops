@@ -1,3 +1,4 @@
+import { processH2Inquiries } from "./services/h2InquiryQueue";
 import { retryInquiryMail } from "./services/inquiryMail";
 import { applyCorsHeaders, corsPreflight, getCorsContext } from "./lib/cors";
 import { route } from "./lib/router";
@@ -77,7 +78,11 @@ export default {
     }
   },
 
-  async scheduled(controller: ScheduledController, env: Env, _ctx: ExecutionContext) {
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    if (controller.cron === "* * * * *") {
+      await processH2Inquiries(env, ctx);
+      return;
+    }
     await Promise.all([
       retryInquiryMail(env),
       sendDailySummaries(env, new Date(controller.scheduledTime)),

@@ -1,4 +1,5 @@
 export type Env = {
+  H2_INQUIRY_QUEUE?: Fetcher;
   CABINET_ANALYTICS_SERVICE?: Fetcher;
   CABINET_ANALYTICS_WORKSPACE_ID?: string;
   H2_ACQUISITION_INTEGRATION_ID?: string;
