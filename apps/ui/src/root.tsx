@@ -17,7 +17,7 @@ export default function Root(): JSX.Element {
     <html lang="en">
       <head suppressHydrationWarning>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
         {import.meta.env.DEV && (
           <link rel="stylesheet" href="/virtual:stylex.css" suppressHydrationWarning />
         )}
