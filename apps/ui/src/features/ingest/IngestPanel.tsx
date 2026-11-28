@@ -29,7 +29,7 @@ const EMAIL_STATUSES = [
 
 const styles = stylex.create({
   panel: {
-    padding: "24px 32px",
+    padding: { default: "24px 32px", "@media (max-width: 640px)": "12px 4px" },
   },
   actions: {
     display: "flex",
@@ -42,7 +42,10 @@ const styles = stylex.create({
   },
   layout: {
     display: "grid",
-    gridTemplateColumns: "2fr 1fr",
+    gridTemplateColumns: {
+      default: "minmax(0, 2fr) minmax(0, 1fr)",
+      "@media (max-width: 960px)": "minmax(0, 1fr)",
+    },
     gap: "16px",
     marginTop: "16px",
   },

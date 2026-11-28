@@ -14,7 +14,7 @@ import {
 
 const styles = stylex.create({
   panel: {
-    padding: "24px 32px",
+    padding: { default: "24px 32px", "@media (max-width: 640px)": "12px 4px" },
   },
   header: {
     display: "flex",
@@ -32,7 +32,7 @@ const styles = stylex.create({
   form: {
     display: "grid",
     gap: spacing.md,
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
     marginBottom: spacing.lg,
   },
   field: {

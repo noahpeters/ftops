@@ -19,7 +19,7 @@
     "ci": "npm run verify"
   },
   "dependencies": {
-    "@from-trees/ui": "file:../../vendor/from-trees-ui-0.16.2-0dc27ee.tgz",
+    "@from-trees/ui": "file:../../vendor/from-trees-ui-0.16.2-f96a581.tgz",
     "@react-router/cloudflare": "^7.0.0",
     "@stylexjs/stylex": "0.19.1",
     "luxon": "^3.7.2",

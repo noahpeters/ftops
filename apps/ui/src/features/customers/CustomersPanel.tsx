@@ -74,7 +74,10 @@ type NoteUpload = {
 };
 
 const styles = stylex.create({
-  panel: { padding: { default: "24px 32px", "@media (max-width: 600px)": "16px" }, minWidth: 0 },
+  panel: {
+    padding: { default: "24px 32px", "@media (max-width: 640px)": "12px 4px" },
+    minWidth: 0,
+  },
   titleRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -109,8 +112,6 @@ const styles = stylex.create({
   phoneLink: { color: color.accent, textDecoration: "underline" },
   markdown: { lineHeight: 1.5, overflowWrap: "anywhere" },
   noteFeedback: { display: "grid", gap: space.sm, overflowWrap: "anywhere" },
-  detailTabs: { display: { default: "block", "@media (max-width: 760px)": "none" } },
-  mobileTabPicker: { display: { default: "none", "@media (max-width: 760px)": "block" } },
   attachmentLink: {
     display: "grid",
     gap: "6px",
@@ -1025,27 +1026,13 @@ export function CustomersPanel({
             <>
               <div className={stylex(styles.panelStack)}>
                 {error && <Status tone="danger">{error}</Status>}
-                <div className={stylex(styles.detailTabs)}>
-                  <SegmentedControl
-                    label="Customer sections"
-                    value={activeTab}
-                    onChange={(value) => setActiveTab(value as CustomerTab)}
-                    options={tabOptions}
-                  />
-                </div>
-                <div className={stylex(styles.mobileTabPicker)}>
-                  <Select
-                    label="Customer section"
-                    value={activeTab}
-                    onChange={(event) => setActiveTab(event.target.value as CustomerTab)}
-                  >
-                    {tabOptions.map(({ value, label }) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+                <SegmentedControl
+                  label="Customer sections"
+                  narrowBehavior="select"
+                  value={activeTab}
+                  onChange={(value) => setActiveTab(value as CustomerTab)}
+                  options={tabOptions}
+                />
                 {activeTab === "summary" && (
                   <>
                     <Panel

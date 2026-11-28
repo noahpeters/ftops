@@ -65,3 +65,32 @@ button:not([role="tab"]):not([data-button-layout]):not([data-react-aria-pressabl
   padding-top: 1rem;
   border-top: 1px solid #bbb;
 }
+
+:where(pre) {
+  max-inline-size: 100%;
+  overflow: auto;
+}
+
+[data-inquiry-form] legend {
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  :where(input, select, textarea) {
+    box-sizing: border-box;
+    max-inline-size: 100%;
+  }
+}
+
+@media (pointer: coarse) {
+  :where(input:not([type="checkbox"], [type="radio"]), select, textarea),
+  [data-inquiry-form] :is(input:not([type="checkbox"]), select, textarea) {
+    font-size: 16px;
+  }
+
+  button:not([role="tab"]):not([data-button-layout]):not([data-react-aria-pressable]) {
+    height: auto;
+    min-height: 44px;
+  }
+}

@@ -26,7 +26,7 @@ const LANE_CONFIG: Array<{ key: LaneKey; label: string }> = [
 
 const styles = stylex.create({
   panel: {
-    padding: "24px 32px",
+    padding: { default: "24px 32px", "@media (max-width: 640px)": "12px 4px" },
   },
   header: {
     display: "flex",
@@ -49,6 +49,7 @@ const styles = stylex.create({
   },
   lane: {
     flex: "1 1 240px",
+    minWidth: 0,
     border: `1px solid ${colors.border}`,
     borderRadius: radius.md,
     backgroundColor: colors.surface,

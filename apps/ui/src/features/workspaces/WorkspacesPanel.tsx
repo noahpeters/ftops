@@ -15,7 +15,7 @@ const SLUG_REGEX = /^[a-z0-9-]{3,40}$/;
 
 const styles = stylex.create({
   panel: {
-    padding: "24px 32px",
+    padding: { default: "24px 32px", "@media (max-width: 640px)": "12px 4px" },
   },
   error: {
     color: colors.errorText,

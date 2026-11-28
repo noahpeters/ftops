@@ -6,6 +6,7 @@ import "./styles.css";
 const styles = stylex.create({
   body: {
     backgroundColor: colors.background,
+    margin: { default: null, "@media (max-width: 640px)": 0 },
     color: colors.text,
     fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
