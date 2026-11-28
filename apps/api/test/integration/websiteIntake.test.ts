@@ -1,3 +1,4 @@
+import { handleApiProxyRequest } from "../../../ui/src/worker/apiProxy";
 import { processH2Inquiries } from "../../src/services/h2InquiryQueue";
 import { describe, expect, it, vi } from "vitest";
 import { createTestEnv } from "../helpers/miniflare";
@@ -148,7 +149,7 @@ describe("website intake", () => {
       await mf.dispose();
     }
   });
-  it("hands notifications off once and sends a member's edited reply with the selected workspace attachment", async () => {
+  it("hands notifications off once and sends a member's edited reply with CC, template, and message attachments", async () => {
     const { env, db, mf } = await setup();
     env.APP_BASE_URL = "https://ops.example.test";
     env.DAILY_SUMMARY_FROM_EMAIL = "sender@example.test";
@@ -160,14 +161,20 @@ describe("website intake", () => {
     const mail = vi.fn(async () => Response.json({ id: "test-receipt" }));
     vi.stubGlobal("fetch", mail);
     const api = (path: string, body?: unknown, member = "admin", binary = false) =>
-      route(
-        new Request("https://ops.example.test/inquiry-replies/default/" + path, {
+      handleApiProxyRequest(
+        new Request("https://ops.example.test/api/inquiry-replies/default/" + path, {
           method: body === undefined ? "GET" : "POST",
           headers: { "X-Debug-User-Email": member + "@example.test" },
-          body: body === undefined ? undefined : binary ? String(body) : JSON.stringify(body),
+          body:
+            body === undefined
+              ? undefined
+              : body instanceof FormData
+                ? body
+                : binary
+                  ? String(body)
+                  : JSON.stringify(body),
         }),
-        env,
-        ctx
+        { API: { fetch: (request) => route(request as Request, env, ctx) } }
       );
     const submit = () =>
       route(
@@ -240,24 +247,65 @@ describe("website intake", () => {
         text: string;
         files: { id: string }[];
       }[];
+      expect(draft).toMatchObject({
+        from: "hello@fromtrees.studio",
+        replyTo: "staff@example.test",
+        cc: ["staff@example.test"],
+      });
       expect(draft.text).toBe("Hi Original, about Walnut table for six.");
       expect(draft.files[0].id).toBe(file.id);
-      const send = () =>
-        api(
-          "send/" + receipt.submissionId,
-          { subject: "Walnut samples", text: "We can show you two finishes.", files: [file.id] },
-          "staff"
+      const send = (cc: string[], attachment = new Blob(["walnut photos"])) => {
+        const form = new FormData();
+        form.set(
+          "reply",
+          JSON.stringify({
+            subject: "Walnut samples",
+            text: "We can show you two finishes.",
+            files: [file.id],
+            cc,
+            from: "spoof@example.test",
+            reply_to: "spoof@example.test",
+          })
         );
-      await Promise.all([send(), send()]);
+        form.append("attachment", attachment, "samples.txt");
+        return api("send/" + receipt.submissionId, form, "staff");
+      };
+      expect((await send(["invalid-address"])).status).toBe(400);
+      expect((await send([], new Blob([new Uint8Array(5 * 1024 * 1024)]))).status).toBe(400);
+      const cc = [
+        "Design@example.test",
+        "design@example.test",
+        "STAFF@example.test",
+        "PERSON@example.com",
+      ];
+      const responses = await Promise.all([send(cc), send(cc)]);
+      expect(responses.map((response) => response.status)).toEqual([202, 202]);
       await Promise.all(jobs);
       expect(mail).toHaveBeenCalledTimes(2);
       expect(emails()[1]).toMatchObject({
         to: "person@example.com",
-        reply_to: "shop@example.test",
+        from: "hello@fromtrees.studio",
+        reply_to: "staff@example.test",
+        cc: ["staff@example.test", "Design@example.test"],
         subject: "Walnut samples",
         text: "We can show you two finishes.",
-        attachments: [{ filename: "guide.txt", content: btoa("project guide") }],
+        attachments: [
+          { filename: "guide.txt", content: btoa("project guide") },
+          { filename: "samples.txt", content: btoa("walnut photos") },
+        ],
       });
+      const [sent] = (await (await api("customer/" + customer)).json()) as unknown[];
+      expect(sent).toMatchObject({
+        state: "sent",
+        from: "hello@fromtrees.studio",
+        replyTo: "staff@example.test",
+        cc: ["staff@example.test", "Design@example.test"],
+        files: [{ filename: "guide.txt" }, { filename: "samples.txt" }],
+      });
+      expect(
+        (await env.R2_CUSTOMER_EMAILS_BUCKET.list({ prefix: "inquiry-replies/" })).objects
+      ).toHaveLength(1);
+      expect(await (await api("settings")).json()).toMatchObject({ files: [{ id: file.id }] });
     } finally {
       vi.unstubAllGlobals();
       await mf.dispose();

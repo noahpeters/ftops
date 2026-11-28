@@ -142,13 +142,17 @@ export async function handleApiProxyRequest(request: Request, env: ApiProxyEnv):
   upstream.search = url.search;
 
   const headers = buildProxyHeaders(request.headers);
-  const body = await readBody(request);
-
-  const upstreamRequest = new Request(upstream.toString(), {
+  const isReplyUpload =
+    /^\/inquiry-replies\/[^/]+\/send\/[^/]+$/.test(path) &&
+    headers.get("content-type")?.startsWith("multipart/form-data");
+  // Stream reply uploads to the API so its size checks can bound memory use.
+  const init = {
     method: request.method,
     headers,
-    body,
-  });
+    body: isReplyUpload ? request.body : await readBody(request),
+    duplex: "half",
+  };
+  const upstreamRequest = new Request(upstream.toString(), init);
 
   return await env.API.fetch(upstreamRequest);
 }

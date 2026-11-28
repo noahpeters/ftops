@@ -6,7 +6,7 @@ export const defaultTemplate = {
   files: "[]",
 };
 
-export type FileRef = { id: string; filename: string; bytes: number };
+export type FileRef = { id: string; filename: string; bytes: number; replyUpload?: true };
 export type Template = typeof defaultTemplate;
 export type Submission = {
   id: string;
@@ -47,6 +47,7 @@ export type Mail = {
   text: string;
   files?: FileRef[];
   reply_to?: string;
+  cc?: string[];
 };
 export async function deliver(env: Env, id: string, kind: string) {
   const now = Date.now();
@@ -70,7 +71,8 @@ export async function deliver(env: Env, id: string, kind: string) {
     const { files = [], ...message } = JSON.parse(job.payload) as Mail;
     const attachments = [];
     for (const file of files) {
-      const object = await env.R2_CUSTOMER_EMAILS_BUCKET.get("inquiry-templates/" + file.id);
+      const prefix = file.replyUpload ? "inquiry-replies/" : "inquiry-templates/";
+      const object = await env.R2_CUSTOMER_EMAILS_BUCKET.get(prefix + file.id);
       if (!object) throw new Error("attachment_unavailable");
       const bytes = new Uint8Array(await object.arrayBuffer());
       let binary = "";
