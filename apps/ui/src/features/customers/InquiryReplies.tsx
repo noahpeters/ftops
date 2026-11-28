@@ -10,17 +10,24 @@ type Settings = {
   files: FileRef[];
   defaultTemplate: Template;
 };
-type Inquiry = {
+type Reply = {
+  state: string | null;
+  from: string;
+  replyTo?: string;
+  cc: string[];
+  subject: string;
+  text: string;
+  files: FileRef[];
+};
+type Inquiry = Reply & {
   id: string;
   email: string;
   source: string;
   project: string;
   received: string;
-  state: string | null;
-  subject: string;
-  text: string;
-  files: FileRef[];
 };
+const attachmentLimit = 5 * 1024 * 1024;
+const attachmentCountLimit = 12;
 const sources = [
   "default",
   "contact",
@@ -112,7 +119,7 @@ export function InquirySettings({ workspace }: { workspace: string }) {
   return (
     <details data-inquiry-form>
       <summary>Inquiry email settings</summary>
-      <p>Choose the team inbox for new inquiry alerts and customer replies.</p>
+      <p>Choose the team inbox for new inquiry alerts.</p>
       <fieldset disabled={busy || !settings}>
         <label>
           Team email
@@ -248,15 +255,16 @@ export function InquiryReplies({ workspace, customer }: { workspace: string; cus
               key={row.id}
               row={row}
               focus={row.id === target}
-              send={async (subject, text, files) => {
-                const result = await call<{ state: string }>(
-                  endpoint(workspace, "send/" + row.id),
-                  post({ subject, text, files })
-                );
+              send={async (subject, text, files, cc, attachments) => {
+                const body = new FormData();
+                body.set("reply", JSON.stringify({ subject, text, files, cc }));
+                for (const file of attachments) body.append("attachment", file);
+                const result = await call<Reply>(endpoint(workspace, "send/" + row.id), {
+                  method: "POST",
+                  body,
+                });
                 setRevision((v) => v + 1);
-                setRows((prev) =>
-                  prev.map((x) => (x.id === row.id ? { ...x, state: result.state } : x))
-                );
+                setRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, ...result } : x)));
               }}
             />
           ))}
@@ -272,14 +280,32 @@ function InquiryDraft({
 }: {
   row: Inquiry;
   focus: boolean;
-  send: (subject: string, text: string, files: string[]) => Promise<void>;
+  send: (
+    subject: string,
+    text: string,
+    files: string[],
+    cc: string[],
+    attachments: File[]
+  ) => Promise<void>;
 }) {
   const [open, setOpen] = useState(focus),
     [subject, setSubject] = useState(row.subject),
     [text, setText] = useState(row.text),
     [files, setFiles] = useState(row.files.map((f) => f.id)),
+    [additionalCc, setAdditionalCc] = useState(""),
+    [attachments, setAttachments] = useState<File[]>([]),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const selectedTemplates = row.files.filter((f) => files.includes(f.id));
+  const totalBytes =
+    selectedTemplates.reduce((total, file) => total + file.bytes, 0) +
+    attachments.reduce((total, file) => total + file.size, 0);
+  const attachmentError =
+    totalBytes > attachmentLimit
+      ? "Attachments together must fit within 5 MB."
+      : selectedTemplates.length + attachments.length > attachmentCountLimit
+        ? "A response can have up to 12 attachments."
+        : "";
   return (
     <article>
       <strong>{labels[row.source] || row.source}</strong> ·{" "}
@@ -295,6 +321,9 @@ function InquiryDraft({
                 : "Delivery needs review"}
           </summary>
           <p>To {row.email}</p>
+          {row.from && <p>From {row.from}</p>}
+          {row.replyTo && <p>Reply-To {row.replyTo}</p>}
+          {!!row.cc.length && <p>CC {row.cc.join(", ")}</p>}
           <strong>{row.subject}</strong>
           <p style={{ whiteSpace: "pre-wrap" }}>{row.text}</p>
           {row.files.map((f) => (
@@ -304,6 +333,16 @@ function InquiryDraft({
       ) : open ? (
         <fieldset disabled={busy}>
           <legend>Reply to {row.email}</legend>
+          <p>From {row.from}</p>
+          <p>Reply-To {row.replyTo}</p>
+          <p>CC {row.cc.join(", ")} (automatically included)</p>
+          <TextInput
+            label="Additional CC addresses"
+            value={additionalCc}
+            onChange={(event) => setAdditionalCc(event.target.value)}
+            placeholder="Separate email addresses with commas"
+            disabled={busy}
+          />
           <TextInput
             label="Subject"
             value={subject}
@@ -329,14 +368,42 @@ function InquiryDraft({
               {f.filename}
             </label>
           ))}
+          <label>
+            Add attachments to this response (5 MB combined)
+            <input
+              type="file"
+              multiple
+              onChange={(event) => {
+                const picked = Array.from(event.currentTarget.files ?? []);
+                event.currentTarget.value = "";
+                setError("");
+                setAttachments((previous) => [...previous, ...picked.filter((file) => file.size)]);
+                if (picked.some((file) => !file.size)) setError("Empty files cannot be attached.");
+              }}
+            />
+          </label>
+          {attachments.map((file, index) => (
+            <div key={index}>
+              {file.name}{" "}
+              <Button
+                isDisabled={busy}
+                onPress={() => setAttachments((previous) => previous.filter((_, i) => i !== index))}
+              >
+                Remove {file.name}
+              </Button>
+            </div>
+          ))}
+          {attachmentError && <p role="alert">{attachmentError}</p>}
           <Button
             variant="primary"
             busy={busy}
-            isDisabled={!subject.trim() || !text.trim()}
+            isDisabled={!subject.trim() || !text.trim() || !!attachmentError}
             onPress={async () => {
               setBusy(true);
+              setError("");
               try {
-                await send(subject, text, files);
+                const cc = additionalCc.split(/[,;\s]+/).filter(Boolean);
+                await send(subject, text, files, cc, attachments);
               } catch (e) {
                 setError(errorText(e));
               } finally {
