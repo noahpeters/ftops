@@ -10,6 +10,7 @@ const styles = stylex.create({
   },
   container: {
     width: "100%",
+    boxSizing: "border-box",
     maxWidth: "760px",
     margin: "0 auto",
     padding: `${spacing.xl} ${spacing.lg}`,

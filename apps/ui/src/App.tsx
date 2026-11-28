@@ -50,20 +50,20 @@ const EXAMPLE_URIS = ["manual://proposal/demo", "shopify://order/example", "qbo:
 
 const styles = stylex.create({
   app: {
-    height: "calc(100dvh - 16px)",
+    height: { default: "calc(100dvh - 16px)", "@media (max-width: 640px)": "100dvh" },
     display: "flex",
     flexDirection: "column",
     backgroundColor: color.canvas,
     color: color.ink,
   },
   workspaceBody: { flexGrow: 1, minHeight: 0, minWidth: 0 },
-  mainContent: { minWidth: 0 },
+  mainContent: { minWidth: 0, overflowWrap: "anywhere" },
   appHeader: {
     display: "flex",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: space.md,
-    padding: "10px 16px",
+    gap: { default: space.md, "@media (max-width: 640px)": space.sm },
+    padding: { default: "10px 16px", "@media (max-width: 640px)": "8px 12px" },
     backgroundColor: color.surface,
     borderBottom: `1px solid ${color.border}`,
   },
@@ -74,7 +74,11 @@ const styles = stylex.create({
     fontWeight: 650,
     fontSize: "19px",
   },
-  workspaceSelect: { minWidth: 0, maxWidth: "min(260px, 100%)" },
+  workspaceSelect: {
+    minWidth: 0,
+    maxWidth: "min(260px, 100%)",
+    flex: { default: null, "@media (max-width: 640px)": "1 1 0" },
+  },
   logout: {
     marginInlineStart: "auto",
     padding: "8px 4px",
@@ -82,11 +86,14 @@ const styles = stylex.create({
     color: color.ink,
   },
   panel: {
-    padding: "24px 32px",
+    padding: { default: "24px 32px", "@media (max-width: 640px)": "12px 4px" },
   },
   previewLayout: {
     display: "grid",
-    gridTemplateColumns: "280px 1fr",
+    gridTemplateColumns: {
+      default: "280px minmax(0, 1fr)",
+      "@media (max-width: 960px)": "minmax(0, 1fr)",
+    },
     gap: "24px",
     alignItems: "flex-start",
   },

@@ -1,3 +1,4 @@
+import { Button, TextArea, TextInput } from "@from-trees/ui";
 import { useEffect, useState } from "react";
 import { buildUrl, fetchJson } from "../../lib/api";
 
@@ -303,14 +304,19 @@ function InquiryDraft({
       ) : open ? (
         <fieldset disabled={busy}>
           <legend>Reply to {row.email}</legend>
-          <label>
-            Subject
-            <input value={subject} onChange={(e) => setSubject(e.target.value)} />
-          </label>
-          <label>
-            Message
-            <textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} />
-          </label>
+          <TextInput
+            label="Subject"
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+            disabled={busy}
+          />
+          <TextArea
+            label="Message"
+            rows={8}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            disabled={busy}
+          />
           {row.files.map((f) => (
             <label key={f.id}>
               <input
@@ -323,9 +329,11 @@ function InquiryDraft({
               {f.filename}
             </label>
           ))}
-          <button
-            disabled={!subject.trim() || !text.trim()}
-            onClick={async () => {
+          <Button
+            variant="primary"
+            busy={busy}
+            isDisabled={!subject.trim() || !text.trim()}
+            onPress={async () => {
               setBusy(true);
               try {
                 await send(subject, text, files);
@@ -337,12 +345,14 @@ function InquiryDraft({
             }}
           >
             Send response
-          </button>
-          <button onClick={() => setOpen(false)}>Close draft</button>
+          </Button>
+          <Button isDisabled={busy} onPress={() => setOpen(false)}>
+            Close draft
+          </Button>
           {error && <p role="alert">{error}</p>}
         </fieldset>
       ) : (
-        <button onClick={() => setOpen(true)}>Respond to inquiry</button>
+        <Button onPress={() => setOpen(true)}>Respond to inquiry</Button>
       )}
     </article>
   );

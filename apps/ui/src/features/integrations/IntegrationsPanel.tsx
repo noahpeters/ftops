@@ -37,7 +37,7 @@ const ENVIRONMENTS = ["sandbox", "production"];
 
 const styles = stylex.create({
   panel: {
-    padding: "24px 32px",
+    padding: { default: "24px 32px", "@media (max-width: 640px)": "12px 4px" },
   },
   muted: {
     color: colors.textSubtle,

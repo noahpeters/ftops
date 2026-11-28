@@ -6,6 +6,8 @@ const styles = stylex.create({
     display: "flex",
     flexDirection: "column",
     gap: "6px",
+    minWidth: 0,
+    maxWidth: "100%",
   },
 });
 
@@ -21,17 +23,15 @@ export function ScenarioPicker({
   onSelect,
 }: ScenarioPickerProps): JSX.Element {
   return (
-    <div className={stylex(styles.picker)}>
-      <label>
-        Scenario
-        <select value={selectedId} onChange={(event) => onSelect(event.target.value)}>
-          {scenarios.map((scenario) => (
-            <option key={scenario.id} value={scenario.id}>
-              {scenario.name}
-            </option>
-          ))}
-        </select>
-      </label>
-    </div>
+    <label className={stylex(styles.picker)}>
+      Scenario
+      <select value={selectedId} onChange={(event) => onSelect(event.target.value)}>
+        {scenarios.map((scenario) => (
+          <option key={scenario.id} value={scenario.id}>
+            {scenario.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -1,32 +1,23 @@
 import stylex from "~/lib/stylex";
 export const styles = stylex.create({
   dashboard: {
-    padding: "32px",
+    padding: { default: "32px", "@media (max-width: 540px)": "20px 14px" },
     maxWidth: "1560px",
     margin: "auto",
     color: "#302f29",
-    "@media (max-width: 540px)": {
-      padding: "20px 14px",
-    },
   },
   heading: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: { default: "center", "@media (max-width: 900px)": "start" },
     gap: "24px",
     marginBottom: "28px",
-    "@media (max-width: 900px)": {
-      alignItems: "start",
-      flexDirection: "column",
-    },
+    flexDirection: { default: null, "@media (max-width: 900px)": "column" },
   },
   title: {
-    fontSize: "30px",
+    fontSize: { default: "30px", "@media (max-width: 540px)": "25px" },
     letterSpacing: "-0.04em",
     margin: "4px 0 8px",
-    "@media (max-width: 540px)": {
-      fontSize: "25px",
-    },
   },
   intro: {
     color: "#706d64",
@@ -46,6 +37,7 @@ export const styles = stylex.create({
   },
   controls: {
     display: "flex",
+    flexWrap: "wrap",
     gap: "10px",
     alignItems: "end",
   },
@@ -94,24 +86,18 @@ export const styles = stylex.create({
   },
   metrics: {
     display: "grid",
-    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
-    gap: "12px",
-    "@media (max-width: 1200px)": {
-      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gridTemplateColumns: {
+      default: "repeat(6, minmax(0, 1fr))",
+      "@media (max-width: 1200px)": "repeat(3, minmax(0, 1fr))",
+      "@media (max-width: 540px)": "repeat(2, minmax(0, 1fr))",
     },
-    "@media (max-width: 540px)": {
-      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-      gap: "8px",
-    },
+    gap: { default: "12px", "@media (max-width: 540px)": "8px" },
   },
   metric: {
     backgroundColor: "#fffdf8",
     border: "1px solid #e0dbd0",
     borderRadius: "8px",
-    padding: "18px 16px",
-    "@media (max-width: 540px)": {
-      padding: "14px",
-    },
+    padding: { default: "18px 16px", "@media (max-width: 540px)": "14px" },
   },
   metricLabel: {
     fontSize: "12px",
@@ -138,22 +124,19 @@ export const styles = stylex.create({
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "1fr 1.2fr",
-    gap: "18px",
-    "@media (max-width: 900px)": {
-      gridTemplateColumns: "1fr",
+    gridTemplateColumns: {
+      default: "minmax(0, 1fr) minmax(0, 1.2fr)",
+      "@media (max-width: 900px)": "1fr",
     },
+    gap: "18px",
   },
   card: {
     backgroundColor: "#fffdf8",
     border: "1px solid #e0dbd0",
     borderRadius: "10px",
-    padding: "22px",
+    padding: { default: "22px", "@media (max-width: 540px)": "16px" },
     marginBottom: "20px",
     minWidth: "0",
-    "@media (max-width: 540px)": {
-      padding: "16px",
-    },
   },
   cardHeading: {
     display: "flex",
@@ -161,9 +144,7 @@ export const styles = stylex.create({
     alignItems: "start",
     gap: "16px",
     marginBottom: "18px",
-    "@media (max-width: 540px)": {
-      flexWrap: "wrap",
-    },
+    flexWrap: { default: null, "@media (max-width: 540px)": "wrap" },
   },
   cardTitle: {
     fontSize: "17px",
@@ -238,17 +219,13 @@ export const styles = stylex.create({
   },
   designs: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gridTemplateColumns: {
+      default: "repeat(4, minmax(0, 1fr))",
+      "@media (max-width: 1200px)": "repeat(3, minmax(0, 1fr))",
+      "@media (max-width: 900px)": "repeat(2, minmax(0, 1fr))",
+      "@media (max-width: 540px)": "1fr",
+    },
     gap: "16px",
-    "@media (max-width: 1200px)": {
-      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    },
-    "@media (max-width: 900px)": {
-      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    },
-    "@media (max-width: 540px)": {
-      gridTemplateColumns: "1fr",
-    },
   },
   design: {
     height: "auto",
@@ -319,7 +296,8 @@ export const styles = stylex.create({
     border: "1px solid #d7d0c1",
     borderRadius: "12px",
     padding: "24px",
-    width: "min(700px, 85vw)",
+    boxSizing: "border-box",
+    width: "min(700px, calc(100% - 24px))",
     color: "#302f29",
     backgroundColor: "#fffdf8",
     "::backdrop": {
@@ -350,8 +328,6 @@ export const styles = stylex.create({
     },
   },
   paginationMeta: {
-    "@media (max-width: 540px)": {
-      display: "none",
-    },
+    display: { default: null, "@media (max-width: 540px)": "none" },
   },
 });

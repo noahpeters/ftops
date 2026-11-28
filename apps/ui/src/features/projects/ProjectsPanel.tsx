@@ -21,11 +21,14 @@ type ContextLookup = Record<string, { title?: string | null }>;
 
 const styles = stylex.create({
   panel: {
-    padding: "24px 32px",
+    padding: { default: "24px 32px", "@media (max-width: 640px)": "12px 4px" },
   },
   layout: {
     display: "grid",
-    gridTemplateColumns: "280px 1fr",
+    gridTemplateColumns: {
+      default: "280px minmax(0, 1fr)",
+      "@media (max-width: 960px)": "minmax(0, 1fr)",
+    },
     gap: "16px",
   },
   sidebar: {
@@ -39,6 +42,7 @@ const styles = stylex.create({
   },
   actions: {
     display: "flex",
+    flexWrap: "wrap",
     gap: "8px",
   },
   error: {
@@ -82,6 +86,7 @@ const styles = stylex.create({
   },
   projectHeader: {
     display: "flex",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: "12px",
@@ -139,6 +144,7 @@ const styles = stylex.create({
   },
   taskActions: {
     display: "flex",
+    flexWrap: "wrap",
     gap: "8px",
     alignItems: "center",
   },

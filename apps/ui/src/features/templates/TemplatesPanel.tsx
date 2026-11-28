@@ -34,6 +34,7 @@ const styles = stylex.create({
   },
   search: {
     display: "flex",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: "8px",
   },
@@ -51,7 +52,10 @@ const styles = stylex.create({
   },
   layout: {
     display: "grid",
-    gridTemplateColumns: "320px 1fr",
+    gridTemplateColumns: {
+      default: "320px minmax(0, 1fr)",
+      "@media (max-width: 960px)": "minmax(0, 1fr)",
+    },
     gap: "16px",
   },
   list: {
@@ -175,6 +179,7 @@ const styles = stylex.create({
   },
   ruleHeader: {
     display: "flex",
+    flexWrap: "wrap",
     gap: "8px",
     alignItems: "center",
     marginBottom: "8px",
